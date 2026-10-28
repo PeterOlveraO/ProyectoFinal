@@ -7,6 +7,9 @@ using Unity.Cinemachine.TargetTracking;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
+using UnityEngine.UI;
 
 namespace Game.EditorTools
 {
@@ -16,6 +19,8 @@ namespace Game.EditorTools
     /// Deja la escena así:
     ///   World > Terrain      (WorldTerrain: mundo finito de bloques, carga por radio cuadrado)
     ///         > Player       (esfera temporal con CharacterController; adapta el antiguo Trainer)
+    ///         > HUD          (Canvas con el joystick táctil; solo visible en móvil)
+    ///         > EventSystem  (Input System UI module)
     ///         > Iso VCam     (Cinemachine: sigue al Player con rotación fija 30, 45, 0)
     ///         > CameraRig    (cámara ortográfica con CinemachineBrain)
     ///         > Sun          (luz direccional)
@@ -63,6 +68,10 @@ namespace Game.EditorTools
             player.transform.SetParent(world.transform, false);
             BuildPlayer(player, settings);
             SetObject(terrain, "player", player.transform);
+
+            // --- Controles táctiles ----------------------------------------
+            var joystick = BuildMobileControls(world.transform);
+            SetObject(player.GetComponent<PlayerSphereController>(), "joystick", joystick);
 
             // --- Cámara (adapta la existente) ------------------------------
             var rig = FindOrCreate("CameraRig", world.transform);
@@ -153,6 +162,50 @@ namespace Game.EditorTools
             controller.slopeLimit = 45f;
 
             GetOrAdd<PlayerSphereController>(player);
+        }
+
+        /// <summary>
+        /// HUD con el joystick flotante en la mitad inferior izquierda de la pantalla.
+        /// El joystick se oculta solo fuera de móvil (ver VirtualJoystick.showInEditor).
+        /// </summary>
+        static VirtualJoystick BuildMobileControls(Transform world)
+        {
+            var hud = FindOrCreate("HUD", world);
+            var canvas = GetOrAdd<Canvas>(hud);
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 10;
+
+            var scaler = GetOrAdd<CanvasScaler>(hud);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
+            GetOrAdd<GraphicRaycaster>(hud);
+
+            var zone = GameObject.Find("Joystick");
+            if (zone == null)
+            {
+                zone = new GameObject("Joystick", typeof(RectTransform));
+                zone.transform.SetParent(hud.transform, false);
+            }
+
+            var rect = (RectTransform)zone.transform;
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = new Vector2(0.5f, 0.6f);
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+
+            var joystick = GetOrAdd<VirtualJoystick>(zone);
+
+            // EventSystem con el módulo del Input System (el proyecto usa solo el Input System nuevo).
+            var eventSystem = Object.FindAnyObjectByType<EventSystem>();
+            var esGo = eventSystem != null ? eventSystem.gameObject : FindOrCreate("EventSystem", world);
+            GetOrAdd<EventSystem>(esGo);
+            var legacyModule = esGo.GetComponent<StandaloneInputModule>();
+            if (legacyModule != null) Object.DestroyImmediate(legacyModule);
+            GetOrAdd<InputSystemUIInputModule>(esGo);
+
+            return joystick;
         }
 
         static void ConfigureIsometricCamera(Camera cam)

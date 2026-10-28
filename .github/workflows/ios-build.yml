@@ -1,10 +1,10 @@
 # Build de iOS: Unity exporta el proyecto de Xcode (Linux) y macOS lo compila a un .ipa SIN firmar.
 #
 # Secretos necesarios (Settings > Secrets and variables > Actions):
-#   UNITY_LICENSE   contenido del archivo Unity_lic.ulf (licencia Personal)
 #   UNITY_EMAIL     correo de la cuenta de Unity
 #   UNITY_PASSWORD  contraseña de la cuenta de Unity
-# (Con licencia Pro: UNITY_SERIAL en lugar de UNITY_LICENSE.)
+# Con eso basta para una licencia Personal. Pro/Plus: añadir UNITY_SERIAL.
+# Enterprise: UNITY_LICENSE (.ulf).
 #
 # El .ipa no está firmado: se instala re-firmándolo con AltStore / Sideloadly o con
 # un certificado y perfil de Apple propios.

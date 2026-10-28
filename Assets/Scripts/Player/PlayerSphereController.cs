@@ -6,7 +6,7 @@ namespace Game.Player
 {
     /// <summary>
     /// Jugador TEMPORAL: esfera de 1 unidad con CharacterController.
-    ///   - WASD / flechas, relativo al ángulo Y de la cámara activa.
+    ///   - WASD / flechas (o el joystick táctil en móvil), relativo al ángulo Y de la cámara activa.
     ///   - Gravedad. stepOffset 0.55 sube un nivel (0.5) pero no dos (1.0).
     ///   - R, o caer por debajo de respawnHeight, lo devuelve al bloque central.
     /// </summary>
@@ -17,6 +17,9 @@ namespace Game.Player
         [SerializeField] float moveSpeed = 5f;
         [SerializeField] float gravity = 20f;
         [SerializeField] float respawnHeight = -10f;
+
+        [Tooltip("Joystick táctil (móvil). Opcional: sin él solo se usa el teclado.")]
+        [SerializeField] VirtualJoystick joystick;
 
         CharacterController _controller;
         float _verticalSpeed;
@@ -43,7 +46,14 @@ namespace Game.Player
                 return;
             }
 
-            Vector3 move = Quaternion.Euler(0f, CameraYaw(), 0f) * ReadInput(keyboard);
+            Vector3 input = ReadInput(keyboard);
+            if (joystick != null)
+            {
+                Vector2 stick = joystick.Value;
+                input += new Vector3(stick.x, 0f, stick.y);
+            }
+
+            Vector3 move = Quaternion.Euler(0f, CameraYaw(), 0f) * input;
             if (move.sqrMagnitude > 1f) move.Normalize();
 
             if (_controller.isGrounded && _verticalSpeed < 0f) _verticalSpeed = -1f;
