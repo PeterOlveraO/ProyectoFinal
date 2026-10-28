@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 59e35b8eb27fda5a9a2b1f0a25c30c1a, type: 3}
+  m_Name: TerrainSettings
+  m_EditorClassIdentifier: Game.Terrain::Game.Terrain.TerrainSettings
+  chunkSize: 16
+  chunksX: 10
+  chunksZ: 10
+  blockSize: 1
+  stepHeight: 0.5
+  maxLevel: 4
+  seed: 12345
+  noiseScale: 0.06
+  octaves: 3
+  persistence: 0.5
+  lacunarity: 2
+  contrast: 1.6
+  flatRadius: 12
+  flatBlend: 8
+  flatLevel: 1
+  loadRadius: 3

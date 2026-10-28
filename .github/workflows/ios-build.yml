@@ -1,0 +1,102 @@
+# Build de iOS: Unity exporta el proyecto de Xcode (Linux) y macOS lo compila a un .ipa SIN firmar.
+#
+# Secretos necesarios (Settings > Secrets and variables > Actions):
+#   UNITY_LICENSE   contenido del archivo Unity_lic.ulf (licencia Personal)
+#   UNITY_EMAIL     correo de la cuenta de Unity
+#   UNITY_PASSWORD  contraseña de la cuenta de Unity
+# (Con licencia Pro: UNITY_SERIAL en lugar de UNITY_LICENSE.)
+#
+# El .ipa no está firmado: se instala re-firmándolo con AltStore / Sideloadly o con
+# un certificado y perfil de Apple propios.
+name: iOS Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore:
+      - main
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unity-export:
+    name: Exportar proyecto de Xcode (Unity)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-iOS-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-iOS-
+
+      - name: Liberar espacio en disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - uses: game-ci/unity-builder@v6
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        with:
+          targetPlatform: iOS
+          buildMethod: Game.EditorTools.CIBuild.BuildIOS
+          buildName: iOS
+          versioning: None
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xcode-project
+          path: build/iOS
+          retention-days: 3
+
+  xcode-ipa:
+    name: Compilar .ipa (Xcode)
+    needs: unity-export
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: xcode-project
+          path: build/iOS
+
+      - name: Compilar sin firmar
+        run: |
+          PROJECT_DIR="$(dirname "$(find build/iOS -maxdepth 3 -name '*.xcodeproj' | head -n 1)")"
+          echo "Proyecto de Xcode: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
+          chmod +x process_symbols.sh MapFileParser.sh 2>/dev/null || true
+          xcodebuild \
+            -project Unity-iPhone.xcodeproj \
+            -scheme Unity-iPhone \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Empaquetar .ipa
+        run: |
+          APP="$(find "$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' | head -n 1)"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          cd "$RUNNER_TEMP/ipa"
+          zip -qry ProyectoFinal-unsigned.ipa Payload
+          ls -lh ProyectoFinal-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ProyectoFinal-ipa
+          path: ${{ runner.temp }}/ipa/ProyectoFinal-unsigned.ipa
+          retention-days: 14
