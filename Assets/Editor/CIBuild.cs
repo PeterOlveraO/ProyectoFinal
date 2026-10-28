@@ -41,8 +41,30 @@ namespace Game.EditorTools
             Debug.Log("[CIBuild] iOS: " + report.summary.result + " -> " + path +
                       " (" + report.summary.totalErrors + " errores)");
 
+            ReportSummary(report.summary);
+
             if (Application.isBatchMode)
                 EditorApplication.Exit(report.summary.result == BuildResult.Succeeded ? 0 : 1);
+        }
+
+        /// <summary>
+        /// GameCI (unity-builder v6) revisa el log y marca el build como fallido si no encuentra
+        /// "Build succeeded!" o la sección "# Build results #", aunque Unity haya salido con 0.
+        /// </summary>
+        static void ReportSummary(BuildSummary summary)
+        {
+            Console.WriteLine(
+                "\n###########################\n" +
+                "#      Build results      #\n" +
+                "###########################\n\n" +
+                "Duration: " + summary.totalTime + "\n" +
+                "Warnings: " + summary.totalWarnings + "\n" +
+                "Errors: " + summary.totalErrors + "\n" +
+                "Size: " + summary.totalSize + " bytes\n");
+
+            Console.WriteLine(summary.result == BuildResult.Succeeded
+                ? "Build succeeded!"
+                : "Build failed! (" + summary.result + ")");
         }
 
         static string GetArgument(string name)
