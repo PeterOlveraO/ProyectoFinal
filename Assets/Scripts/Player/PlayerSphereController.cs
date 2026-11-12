@@ -1,3 +1,6 @@
+using Game.Combat;
+using Game.Core;
+using Game.Enemies;
 using Game.Terrain;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -5,10 +8,13 @@ using UnityEngine.InputSystem;
 namespace Game.Player
 {
     /// <summary>
-    /// Jugador TEMPORAL: esfera de 1 unidad con CharacterController.
+    /// Controlador del jugador: CharacterController invisible + sprite Pokémon.
     ///   - WASD / flechas (o el joystick táctil en móvil), relativo al ángulo Y de la cámara activa.
     ///   - Gravedad. stepOffset 0.55 sube un nivel (0.5) pero no dos (1.0).
     ///   - R, o caer por debajo de respawnHeight, lo devuelve al bloque central.
+    ///   - Vida: 100. Cada enemigo que lo toca le resta 10 de vida por segundo.
+    ///   - Poder especial (Espacio o botón del HUD): invencibilidad temporal y elimina a
+    ///     todos los enemigos vivos, con 10 s de recarga.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     [DisallowMultipleComponent]
@@ -18,16 +24,76 @@ namespace Game.Player
         [SerializeField] float gravity = 20f;
         [SerializeField] float respawnHeight = -10f;
 
+        [Header("Vida")]
+        [Tooltip("Vida máxima del jugador.")]
+        [SerializeField, Min(1)] int maxHealth = 100;
+
+        [Tooltip("Duración de la invencibilidad al pulsar Espacio (segundos).")]
+        [SerializeField, Min(0.1f)] float invincibleDuration = 5f;
+
+        [Tooltip("Tiempo de recarga del poder especial (segundos).")]
+        [SerializeField, Min(0f)] float powerCooldown = 10f;
+
+        [Tooltip("Tiempo sin recibir daño tras reaparecer, para no quedar atrapado sobre un enemigo.")]
+        [SerializeField, Min(0f)] float respawnProtection = 1.5f;
+
         [Tooltip("Joystick táctil (móvil). Opcional: sin él solo se usa el teclado.")]
         [SerializeField] VirtualJoystick joystick;
 
         CharacterController _controller;
         float _verticalSpeed;
+        Vector3 _lastSafePosition;
+        bool _hasSafePosition;
+        float _invincibleUntil;
+        float _protectedUntil;
+        float _powerReadyAt;
+
+        float _health;
+        bool _alive = true;
+
+        public static PlayerSphereController Instance { get; private set; }
+
+        public int MaxHealth => maxHealth;
+
+        /// <summary>Vida actual redondeada hacia arriba (0 solo cuando está derrotado).</summary>
+        public int Health => Mathf.Clamp(Mathf.CeilToInt(_health), 0, maxHealth);
+
+        /// <summary>Vida normalizada 0..1, para la barra del HUD.</summary>
+        public float Health01 => maxHealth > 0 ? Mathf.Clamp01(_health / maxHealth) : 0f;
+
+        public bool IsAlive => _alive;
+        public bool IsDamaged => _alive && _health < maxHealth;
+
+        public bool IsInvincible => Time.time < _invincibleUntil;
+
+        /// <summary>Inmune al daño tras reaparecer, pero no mata enemigos al tocarlos.</summary>
+        public bool IsProtected => !_alive || Time.time < _protectedUntil;
+
+        /// <summary>Segundos que le quedan al poder especial para volver a estar disponible.</summary>
+        public float PowerCooldownRemaining => Mathf.Max(0f, _powerReadyAt - Time.time);
+
+        /// <summary>Duración total de la recarga (para dibujar la barra circular del botón).</summary>
+        public float PowerCooldownDuration => Mathf.Max(0.01f, powerCooldown);
+
+        /// <summary>Segundos que le quedan de invencibilidad al poder.</summary>
+        public float InvincibilityRemaining => Mathf.Max(0f, _invincibleUntil - Time.time);
+
+        public bool IsPowerReady => PowerCooldownRemaining <= 0f;
 
         void Awake()
         {
+            Instance = this;
             _controller = GetComponent<CharacterController>();
+            _health = maxHealth;
         }
+
+        void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        /// <summary>Asigna el joystick de movimiento desde el bootstrap de la escena.</summary>
+        public void SetJoystick(VirtualJoystick value) => joystick = value;
 
         void Start()
         {
@@ -38,7 +104,12 @@ namespace Game.Player
 
         void Update()
         {
+            // Con un menú abierto o tras la derrota no se lee entrada.
+            if (GameFlow.Blocked || GameFlow.Over || !_alive) return;
+
             var keyboard = Keyboard.current;
+
+            if (keyboard != null && keyboard.spaceKey.wasPressedThisFrame) ActivateInvincibility();
 
             if ((keyboard != null && keyboard.rKey.wasPressedThisFrame) || transform.position.y < respawnHeight)
             {
@@ -61,22 +132,119 @@ namespace Game.Player
 
             Vector3 velocity = move * moveSpeed + Vector3.up * _verticalSpeed;
             _controller.Move(velocity * Time.deltaTime);
+
+            // Guarda el último punto pisado fuera del agua: ahí vuelve si cae a un lago.
+            var terrain = WorldTerrain.Instance;
+            if (_controller.isGrounded && (terrain == null || !terrain.IsLakeAtWorld(transform.position)))
+            {
+                _lastSafePosition = transform.position;
+                _hasSafePosition = true;
+            }
         }
 
-        /// <summary>Coloca la esfera apoyada sobre el bloque central del mundo.</summary>
+        // ---------------------------------------------------------------- Vida
+
+        /// <summary>
+        /// Resta vida de forma continua. Los enemigos llaman a esto cada frame con
+        /// <c>dañoPorSegundo * Time.deltaTime</c> mientras siguen tocando al jugador.
+        /// </summary>
+        public void TakeDamage(float amount)
+        {
+            if (!_alive || amount <= 0f) return;
+            if (IsInvincible || IsProtected) return;
+
+            _health -= amount;
+            if (_health <= 0f)
+            {
+                _health = 0f;
+                Die();
+            }
+        }
+
+        /// <summary>Cura al jugador (se usará al empezar una ronda nueva).</summary>
+        public void Heal(int amount)
+        {
+            if (!_alive || amount <= 0) return;
+            _health = Mathf.Min(maxHealth, _health + amount);
+        }
+
+        void Die()
+        {
+            if (!_alive) return;
+
+            _alive = false;
+            _verticalSpeed = 0f;
+            _invincibleUntil = 0f;
+
+            HitBurst.Spawn(transform.position + Vector3.up * 0.6f,
+                           new Color(1f, 0.25f, 0.3f, 1f), 18, 1.2f);
+        }
+
+        /// <summary>Deja al jugador con la vida al máximo y lo devuelve al spawn.</summary>
+        public void Revive()
+        {
+            _health = maxHealth;
+            _alive = true;
+            _invincibleUntil = 0f;
+            Respawn();
+        }
+
+        // ------------------------------------------------------ Poder especial
+
+        /// <summary>
+        /// Poder especial (botón sobre el joystick de ataque o tecla Espacio):
+        /// invencibilidad temporal y elimina a todos los enemigos de la zona.
+        /// Devuelve false si todavía está en recarga.
+        /// </summary>
+        public bool ActivateInvincibility()
+        {
+            if (!_alive || Time.time < _powerReadyAt) return false;
+
+            _invincibleUntil = Time.time + invincibleDuration;
+            _powerReadyAt = Time.time + powerCooldown;
+            EnemyTriangle.KillAll();
+            return true;
+        }
+
+        // ------------------------------------------------------------ Respawn
+
+        /// <summary>Coloca la esfera sobre el bloque central del mundo.</summary>
         public void Respawn()
         {
             var terrain = WorldTerrain.Instance;
             if (terrain == null || terrain.Map == null) return;
 
+            float halfHeight = _controller.height * 0.5f;
+            Teleport(terrain.SpawnPosition +
+                     Vector3.up * (halfHeight - _controller.center.y + _controller.skinWidth));
+
+            // El punto seguro anterior pertenece a otra vida.
+            _hasSafePosition = false;
+            _protectedUntil = Time.time + respawnProtection;
+        }
+
+        /// <summary>Devuelve al jugador al último punto seguro (usado al caer a un lago).</summary>
+        public void RespawnToSafePoint()
+        {
+            if (!_hasSafePosition)
+            {
+                Respawn();
+                return;
+            }
+
+            Teleport(_lastSafePosition + Vector3.up * 0.1f);
+        }
+
+        void Teleport(Vector3 position)
+        {
             // El CharacterController ignora cambios de posición mientras está activo.
             _controller.enabled = false;
-            float halfHeight = _controller.height * 0.5f;
-            transform.position = terrain.SpawnPosition +
-                                 Vector3.up * (halfHeight - _controller.center.y + _controller.skinWidth);
+            transform.position = position;
             _controller.enabled = true;
             _verticalSpeed = 0f;
         }
+
+        // -------------------------------------------------------------- Entrada
 
         static Vector3 ReadInput(Keyboard keyboard)
         {

@@ -11,11 +11,13 @@ namespace Game.Terrain
         public readonly List<Vector3> Normals = new List<Vector3>(4096);
         public readonly List<Vector2> UVs = new List<Vector2>(4096);
 
-        /// <summary>Triángulos por submesh: 0..maxLevel = tapas de cada nivel, maxLevel+1 = costados.</summary>
+        /// <summary>Submeshes: 0..2 tapas de zona 1..3, 3..5 costados de zona 1..3.</summary>
         public List<int>[] Triangles = new List<int>[0];
 
         public int SubMeshCount => Triangles.Length;
-        public int SideSubMesh => Triangles.Length - 1;
+        public int ZoneCount => 3;
+        public int TopSubMesh(int zone) => Mathf.Clamp(zone, 1, ZoneCount) - 1;
+        public int SideSubMesh(int zone) => ZoneCount + Mathf.Clamp(zone, 1, ZoneCount) - 1;
 
         public void Reset(int subMeshCount)
         {
@@ -37,7 +39,7 @@ namespace Game.Terrain
 
     /// <summary>
     /// Malla escalonada de un chunk con solo las caras visibles:
-    ///   - Tapa superior de cada bloque, a level * stepHeight.
+    ///   - Tapa superior de cada bloque, a level * stepHeight, con material de su zona.
     ///   - Costados únicamente donde el vecino es más bajo, una cara por nivel de desnivel.
     ///     Los vecinos se leen del mapa GLOBAL, así que en las uniones entre chunks no se
     ///     generan caras ocultas.
@@ -50,11 +52,13 @@ namespace Game.Terrain
         /// <summary>Nivel que se usa como fondo fuera del mundo.</summary>
         public const int BorderBottomLevel = -1;
 
+        /// <summary>Submeshes totales: 3 tapas + 3 costados (uno por zona).</summary>
+        public const int SubMeshCount = 6;
+
         public static void Build(HeightMap map, int chunkX, int chunkZ, int chunkSize,
-                                 float blockSize, float stepHeight, int maxLevel, ChunkMeshData data)
+                                 float blockSize, float stepHeight, ChunkMeshData data)
         {
-            data.Reset(maxLevel + 2);
-            var sides = data.Triangles[data.SideSubMesh];
+            data.Reset(SubMeshCount);
 
             int originX = chunkX * chunkSize;
             int originZ = chunkZ * chunkSize;
@@ -68,19 +72,22 @@ namespace Game.Terrain
                     if (!map.Contains(gx, gz)) continue;
 
                     int level = map.Get(gx, gz);
+                    int zone = map.GetZone(gx, gz);
                     float y = level * stepHeight;
                     float x0 = lx * blockSize;
                     float x1 = x0 + blockSize;
                     float z0 = lz * blockSize;
                     float z1 = z0 + blockSize;
 
-                    // Tapa.
-                    AddQuad(data, data.Triangles[Mathf.Clamp(level, 0, maxLevel)],
+                    // Tapa (material de la zona).
+                    AddQuad(data, data.Triangles[data.TopSubMesh(zone)],
                             new Vector3(x0, y, z0), new Vector3(x1, y, z0),
                             new Vector3(x1, y, z1), new Vector3(x0, y, z1),
                             Vector3.up, false);
 
                     // Costados hacia vecinos más bajos (o hacia el borde del mundo).
+                    var sides = data.Triangles[data.SideSubMesh(zone)];
+
                     for (int k = NeighborLevel(map, gx - 1, gz); k < level; k++)
                         AddQuad(data, sides,
                                 new Vector3(x0, k * stepHeight, z0), new Vector3(x0, (k + 1) * stepHeight, z0),

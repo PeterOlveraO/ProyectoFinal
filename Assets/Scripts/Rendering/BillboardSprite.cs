@@ -16,6 +16,9 @@ namespace Game.Rendering
         [Tooltip("Recalcular cada frame. Déjalo apagado con cámara isométrica fija.")]
         [SerializeField] bool continuous;
 
+        /// <summary>Permite activar el seguimiento continuo desde código (enemigos que giran).</summary>
+        public void SetContinuous(bool value) => continuous = value;
+
         void Start()
         {
             if (!continuous) Align();

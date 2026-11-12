@@ -29,11 +29,24 @@ namespace Game.Terrain.Tests
             settings.chunksZ = 10;
             settings.blockSize = 1f;
             settings.stepHeight = 0.5f;
-            settings.maxLevel = 4;
+            settings.maxLevel = 8;
             settings.flatRadius = 12f;
             settings.flatBlend = 8f;
             settings.flatLevel = 1;
             settings.seed = seed;
+
+            settings.zone1Radius = 36f;
+            settings.zone2Radius = 58f;
+            settings.zone1ReliefLevels = 4;
+            settings.zone2BaseLevel = 6;
+            settings.zone3BaseLevel = 0;
+            settings.ringReliefLevels = 2;
+            settings.rampWidth = 10f;
+            settings.rampHalfAngle = 9f;
+
+            settings.lakeCount = 3;
+            settings.lakeRadius = 4;
+            settings.lakeDepth = 2;
             return settings;
         }
 
@@ -132,6 +145,67 @@ namespace Game.Terrain.Tests
         }
 
         // ---------------------------------------------------------------
+        // Zonas y lagos
+        // ---------------------------------------------------------------
+
+        [Test]
+        public void HeightMap_ZonesAreConcentricAndDifferInHeight()
+        {
+            var settings = CreateSettings();
+            HeightMap map = HeightMapGenerator.Generate(settings);
+
+            int cx = map.Width / 2;
+            int cz = map.Depth / 2;
+
+            Assert.AreEqual(1, map.GetZone(cx, cz), "El centro debe ser zona 1.");
+            Assert.AreEqual(2, map.GetZone(cx + 45, cz), "A 45 bloques del centro debe empezar la zona 2.");
+            Assert.AreEqual(3, map.GetZone(cx + 68, cz), "A 68 bloques del centro debe empezar la zona 3.");
+
+            int zone1Level = map.Get(cx, cz);
+            int zone2Level = map.Get(cx + 45, cz);
+            int zone3Level = map.Get(cx + 68, cz);
+
+            Assert.Greater(zone2Level, zone1Level + 2, "La zona 2 debe ser claramente más alta que la 1.");
+            Assert.Less(zone3Level, zone2Level - 2, "La zona 3 debe ser claramente más baja que la 2.");
+        }
+
+        [Test]
+        public void HeightMap_HasRampsBetweenZones()
+        {
+            var settings = CreateSettings();
+            HeightMap map = HeightMapGenerator.Generate(settings);
+
+            int cz = map.Depth / 2;
+            int previous = map.Get(26, cz);
+
+            // Hacia +X hay una rampa: el nivel nunca sube más de un bloque a la vez.
+            for (int x = 27; x <= 68; x++)
+            {
+                int level = map.Get(x, cz);
+                Assert.LessOrEqual(Mathf.Abs(level - previous), 1,
+                    $"Escalón de {Mathf.Abs(level - previous)} bloques en x={x} (rampa +X).");
+                previous = level;
+            }
+        }
+
+        [Test]
+        public void HeightMap_LakesAreTwoBlocksDeep()
+        {
+            var settings = CreateSettings();
+            HeightMap map = HeightMapGenerator.Generate(settings);
+
+            Assert.Greater(map.Lakes.Count, 0, "Debería generarse al menos un lago.");
+
+            foreach (var lake in map.Lakes)
+            {
+                Assert.AreEqual(settings.lakeDepth, lake.RimLevel - lake.BottomLevel,
+                    "El lago debe tener exactamente la profundidad configurada.");
+                Assert.Less(lake.BottomLevel, lake.RimLevel);
+                Assert.AreEqual(lake.BottomLevel, map.Get(lake.Center.x, lake.Center.y));
+            }
+        }
+
+        // ---------------------------------------------------------------
         // Chunk mesh building
         // ---------------------------------------------------------------
 
@@ -139,7 +213,6 @@ namespace Game.Terrain.Tests
         public void ChunkMesh_FlatInteriorChunk_Has1024Vertices()
         {
             const int chunkSize = 16;
-            const int maxLevel = 4;
 
             var map = new HeightMap(48, 48);
             for (int z = 0; z < map.Depth; z++)
@@ -151,7 +224,7 @@ namespace Game.Terrain.Tests
             }
 
             var data = new ChunkMeshData();
-            ChunkMeshBuilder.Build(map, 1, 1, chunkSize, 1f, 0.5f, maxLevel, data);
+            ChunkMeshBuilder.Build(map, 1, 1, chunkSize, 1f, 0.5f, data);
 
             // Interior chunk: every neighbor is at the same level, so only the 256 tops are emitted.
             Assert.AreEqual(chunkSize * chunkSize * 4, data.Vertices.Count);
@@ -178,7 +251,7 @@ namespace Game.Terrain.Tests
             map.Set(1, 1, 2);
 
             var data = new ChunkMeshData();
-            ChunkMeshBuilder.Build(map, 0, 0, 3, 1f, 0.5f, 4, data);
+            ChunkMeshBuilder.Build(map, 0, 0, 3, 1f, 0.5f, data);
 
             // Expected breakdown (4 vertices per quad):
             //   9 tops                                   -> 9 * 4        = 36
@@ -205,7 +278,7 @@ namespace Game.Terrain.Tests
             {
                 var data = new ChunkMeshData();
                 ChunkMeshBuilder.Build(map, chunk.x, chunk.z, settings.chunkSize,
-                    settings.blockSize, settings.stepHeight, settings.maxLevel, data);
+                    settings.blockSize, settings.stepHeight, data);
 
                 List<Vector3> v = data.Vertices;
                 List<Vector3> n = data.Normals;
@@ -239,7 +312,7 @@ namespace Game.Terrain.Tests
 
             var data = new ChunkMeshData();
             ChunkMeshBuilder.Build(map, 4, 4, settings.chunkSize,
-                settings.blockSize, settings.stepHeight, settings.maxLevel, data);
+                settings.blockSize, settings.stepHeight, data);
 
             Assert.AreEqual(data.Vertices.Count, data.Normals.Count);
             Assert.AreEqual(data.Vertices.Count, data.UVs.Count);

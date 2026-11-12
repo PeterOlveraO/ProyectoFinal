@@ -27,6 +27,13 @@ namespace Game.Player
         [Tooltip("Mostrar también en el editor / PC (útil para probar con el ratón).")]
         [SerializeField] bool showInEditor;
 
+        [Header("Aspecto")]
+        [SerializeField] Color backgroundTint = new Color(1f, 1f, 1f, 0.25f);
+        [SerializeField] Color handleTint = new Color(1f, 1f, 1f, 0.62f);
+
+        [Tooltip("Deja el mando visible en reposo (centrado en su zona) en lugar de ocultarlo hasta tocarlo.")]
+        [SerializeField] bool pinned;
+
         RectTransform _area;
         RectTransform _background;
         RectTransform _handle;
@@ -57,9 +64,34 @@ namespace Game.Player
             catcher.raycastTarget = true;
 
             // El fondo se ancla al pivote de la zona: así anchoredPosition = punto local del toque.
-            _background = CreateCircle("Background", _area, _area.pivot, radius * 2f, new Color(1f, 1f, 1f, 0.25f));
-            _handle = CreateCircle("Handle", _background, new Vector2(0.5f, 0.5f), radius * 0.9f, new Color(1f, 1f, 1f, 0.6f));
-            _background.gameObject.SetActive(false);
+            _background = CreateCircle("Background", _area, _area.pivot, radius * 2f, backgroundTint);
+            _handle = CreateCircle("Handle", _background, new Vector2(0.5f, 0.5f), radius * 0.9f, handleTint);
+
+            if (pinned)
+            {
+                _background.anchoredPosition = Vector2.zero;
+                _background.gameObject.SetActive(true);
+            }
+            else
+            {
+                _background.gameObject.SetActive(false);
+            }
+        }
+
+        /// <summary>Configuración usada por el bootstrap de la escena (editor).</summary>
+        public void SetShowInEditor(bool value) => showInEditor = value;
+
+        /// <summary>Muestra el mando en reposo para que el jugador vea dónde tocar.</summary>
+        public void SetPinned(bool value) => pinned = value;
+
+        /// <summary>Radio del recorrido del mando en píxeles de referencia.</summary>
+        public void SetRadius(float value) => radius = Mathf.Max(24f, value);
+
+        /// <summary>Colores del fondo y del mando (mover = azul, atacar = naranja).</summary>
+        public void SetColors(Color background, Color handle)
+        {
+            backgroundTint = background;
+            handleTint = handle;
         }
 
         void OnDisable()
@@ -103,7 +135,17 @@ namespace Game.Player
             _pointerId = int.MinValue;
             _value = Vector2.zero;
             if (_handle != null) _handle.anchoredPosition = Vector2.zero;
-            if (_background != null) _background.gameObject.SetActive(false);
+
+            if (_background == null) return;
+            if (pinned)
+            {
+                _background.anchoredPosition = Vector2.zero;
+                _background.gameObject.SetActive(true);
+            }
+            else
+            {
+                _background.gameObject.SetActive(false);
+            }
         }
 
         Camera EventCamera()

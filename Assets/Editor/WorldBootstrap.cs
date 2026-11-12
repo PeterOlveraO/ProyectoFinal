@@ -99,7 +99,7 @@ namespace Game.EditorTools
             AssetDatabase.SaveAssets();
 
             Debug.Log("[WorldBootstrap] Escena lista: terreno " + settings.chunksX + "x" + settings.chunksZ +
-                      " chunks de " + settings.chunkSize + " bloques, jugador esfera, cámara " + IsoRotation);
+                      " chunks de " + settings.chunkSize + " bloques, jugador sprite, cámara " + IsoRotation);
         }
 
         static TerrainSettings LoadOrCreateTerrainSettings()
@@ -142,16 +142,11 @@ namespace Game.EditorTools
             player.transform.position = new Vector3(settings.chunksX * half, settings.flatLevel * settings.stepHeight + 0.55f,
                                                     settings.chunksZ * half);
 
-            var filter = GetOrAdd<MeshFilter>(player);
-            if (filter.sharedMesh == null || filter.sharedMesh.name != "Sphere")
-            {
-                var primitive = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                filter.sharedMesh = primitive.GetComponent<MeshFilter>().sharedMesh;
-                Object.DestroyImmediate(primitive);
-            }
-
-            var renderer = GetOrAdd<MeshRenderer>(player);
-            renderer.sharedMaterial = LoadOrCreatePlayerMaterial();
+            // El jugador es un sprite 2D: sin malla ni material 3D.
+            var oldFilter = player.GetComponent<MeshFilter>();
+            if (oldFilter != null) Object.DestroyImmediate(oldFilter);
+            var oldRenderer = player.GetComponent<MeshRenderer>();
+            if (oldRenderer != null) Object.DestroyImmediate(oldRenderer);
 
             var controller = GetOrAdd<CharacterController>(player);
             controller.radius = 0.5f;

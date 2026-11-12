@@ -3,12 +3,14 @@ using UnityEngine;
 namespace Game.Terrain
 {
     /// <summary>
-    /// Mundo finito de chunksX × chunksZ chunks.
+    /// Mundo finito de chunksX × chunksZ chunks dividido en tres zonas concéntricas
+    /// (ver <see cref="HeightMapGenerator"/>).
     ///
     /// Al iniciar genera el mapa de niveles y TODOS los chunks (malla + MeshCollider).
     /// Después solo activa/desactiva: quedan activos los chunks a distancia de Chebyshev
     /// ≤ loadRadius del chunk del jugador (un cuadrado, no un círculo). El recálculo ocurre
     /// únicamente cuando el jugador cambia de chunk. loadRadius = 0 deja todo activo.
+    /// También crea el agua y los volúmenes de los lagos.
     /// </summary>
     [DefaultExecutionOrder(-50)]
     [DisallowMultipleComponent]
@@ -25,6 +27,7 @@ namespace Game.Terrain
         GameObject[] _chunks = new GameObject[0];
         Mesh[] _meshes = new Mesh[0];
         Material[] _materials;
+        Material _waterMaterial;
         Vector2Int _playerChunk;
         bool _hasPlayerChunk;
         int _activeCount;
@@ -34,6 +37,8 @@ namespace Game.Terrain
         public int ChunkCount => _chunks.Length;
         public int ActiveChunkCount => _activeCount;
         public float ChunkWorldSize => settings.chunkSize * settings.blockSize;
+        public float BlockSize => settings.blockSize;
+        public float StepHeight => settings.stepHeight;
 
         public Transform Player
         {
@@ -69,6 +74,7 @@ namespace Game.Terrain
             foreach (var mesh in _meshes)
                 if (mesh != null) Destroy(mesh);
             TerrainMaterials.Destroy(_materials);
+            if (_waterMaterial != null) Destroy(_waterMaterial);
         }
 
         void Update()
@@ -104,6 +110,34 @@ namespace Game.Terrain
             return transform.position + new Vector3((x + 0.5f) * settings.blockSize, y, (z + 0.5f) * settings.blockSize);
         }
 
+        /// <summary>Zona (1..3) del bloque que contiene la posición de mundo.</summary>
+        public int ZoneAtWorld(Vector3 worldPosition)
+        {
+            Vector3 local = worldPosition - transform.position;
+            int x = Mathf.FloorToInt(local.x / settings.blockSize);
+            int z = Mathf.FloorToInt(local.z / settings.blockSize);
+            return _map.Contains(x, z) ? _map.GetZone(x, z) : 0;
+        }
+
+        /// <summary>True si la posición está sobre el agua de un lago.</summary>
+        public bool IsLakeAtWorld(Vector3 worldPosition)
+        {
+            if (_map == null) return false;
+
+            Vector3 local = worldPosition - transform.position;
+            float bx = local.x / settings.blockSize;
+            float bz = local.z / settings.blockSize;
+
+            foreach (var lake in _map.Lakes)
+            {
+                float dx = bx - (lake.Center.x + 0.5f);
+                float dz = bz - (lake.Center.y + 0.5f);
+                float radius = lake.Radius + 0.5f;
+                if (dx * dx + dz * dz <= radius * radius) return true;
+            }
+            return false;
+        }
+
         public GameObject GetChunk(int chunkX, int chunkZ)
         {
             if (chunkX < 0 || chunkZ < 0 || chunkX >= settings.chunksX || chunkZ >= settings.chunksZ) return null;
@@ -115,7 +149,7 @@ namespace Game.Terrain
         void Generate()
         {
             _map = HeightMapGenerator.Generate(settings);
-            _materials = TerrainMaterials.Create(settings.maxLevel);
+            _materials = TerrainMaterials.Create(settings);
 
             int count = settings.chunksX * settings.chunksZ;
             _chunks = new GameObject[count];
@@ -129,7 +163,7 @@ namespace Game.Terrain
                 for (int cx = 0; cx < settings.chunksX; cx++)
                 {
                     ChunkMeshBuilder.Build(_map, cx, cz, settings.chunkSize, settings.blockSize,
-                                           settings.stepHeight, settings.maxLevel, data);
+                                           settings.stepHeight, data);
 
                     var mesh = new Mesh { name = "Chunk_" + cx + "_" + cz };
                     ChunkMeshBuilder.Apply(data, mesh);
@@ -137,11 +171,17 @@ namespace Game.Terrain
                     var go = new GameObject(mesh.name);
                     go.transform.SetParent(transform, false);
                     go.transform.localPosition = new Vector3(cx * size, 0f, cz * size);
-                    go.isStatic = true;
+
+                    // Sin static batching: cada chunk conserva su propia malla y sus bounds,
+                    // imprescindibles para poder descartar por frustum chunk a chunk.
 
                     go.AddComponent<MeshFilter>().sharedMesh = mesh;
-                    go.AddComponent<MeshRenderer>().sharedMaterials = _materials;
+                    var chunkRenderer = go.AddComponent<MeshRenderer>();
+                    chunkRenderer.sharedMaterials = _materials;
                     go.AddComponent<MeshCollider>().sharedMesh = mesh;
+
+                    // El renderer se apaga cuando el chunk sale del frustum; el collider sigue.
+                    VisibilityCuller.RegisterTerrain(chunkRenderer);
 
                     int index = cz * settings.chunksX + cx;
                     _chunks[index] = go;
@@ -149,8 +189,58 @@ namespace Game.Terrain
                 }
             }
 
+            CreateLakes();
+
+            if (GetComponent<VisibilityCuller>() == null) gameObject.AddComponent<VisibilityCuller>();
+
             _activeCount = count;
             _hasPlayerChunk = false;
+        }
+
+        /// <summary>Agua y volumen de respawn de cada lago generado por el mapa.</summary>
+        void CreateLakes()
+        {
+            if (_map.Lakes.Count == 0) return;
+
+            _waterMaterial = TerrainMaterials.CreateWaterMaterial();
+
+            var root = new GameObject("Lakes");
+            root.transform.SetParent(transform, false);
+
+            for (int i = 0; i < _map.Lakes.Count; i++)
+            {
+                var lake = _map.Lakes[i];
+                float diameter = lake.Radius * 2f * settings.blockSize;
+                float rimY = lake.RimLevel * settings.stepHeight;
+                float bottomY = lake.BottomLevel * settings.stepHeight;
+                var center = transform.position + new Vector3(
+                    (lake.Center.x + 0.5f) * settings.blockSize, 0f, (lake.Center.y + 0.5f) * settings.blockSize);
+
+                // Lámina de agua, justo por debajo del borde.
+                var water = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                water.name = "Lake_" + i + "_Water";
+                water.transform.SetParent(root.transform, true);
+                water.transform.position = center + Vector3.up * (rimY - settings.stepHeight * 0.25f);
+                water.transform.localScale = new Vector3(diameter, settings.stepHeight * 0.15f, diameter);
+                var waterCollider = water.GetComponent<Collider>();
+                if (waterCollider != null) Destroy(waterCollider);
+                water.GetComponent<MeshRenderer>().sharedMaterial = _waterMaterial;
+
+                // Volumen que devuelve al jugador a un punto seguro si cae al lago.
+                var triggerGo = new GameObject("Lake_" + i + "_Trigger");
+                triggerGo.transform.SetParent(root.transform, true);
+                triggerGo.transform.position = center + Vector3.up * ((rimY + bottomY) * 0.5f);
+
+                var box = triggerGo.AddComponent<BoxCollider>();
+                box.isTrigger = true;
+                box.size = new Vector3(diameter * 0.8f, Mathf.Max(0.1f, rimY - bottomY), diameter * 0.8f);
+
+                var body = triggerGo.AddComponent<Rigidbody>();
+                body.isKinematic = true;
+                body.useGravity = false;
+
+                triggerGo.AddComponent<LakeVolume>();
+            }
         }
 
         // ---------------------------------------------------------------- Carga

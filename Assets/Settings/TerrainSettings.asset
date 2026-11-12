@@ -17,7 +17,7 @@ MonoBehaviour:
   chunksZ: 10
   blockSize: 1
   stepHeight: 0.5
-  maxLevel: 4
+  maxLevel: 8
   seed: 12345
   noiseScale: 0.06
   octaves: 3
@@ -27,4 +27,28 @@ MonoBehaviour:
   flatRadius: 12
   flatBlend: 8
   flatLevel: 1
-  loadRadius: 3
+  loadRadius: 5
+  zone1Radius: 36
+  zone2Radius: 58
+  zone1ReliefLevels: 4
+  zone2BaseLevel: 6
+  zone3BaseLevel: 0
+  ringReliefLevels: 2
+  rampWidth: 10
+  rampHalfAngle: 9
+  zone1Color: {r: 0.3, g: 0.55, b: 0.28, a: 1}
+  zone2Color: {r: 0.8, g: 0.52, b: 0.18, a: 1}
+  zone3Color: {r: 0.3, g: 0.45, b: 0.75, a: 1}
+  lakeCount: 3
+  lakeRadius: 4
+  lakeDepth: 2
+  zone1MaxAlive: 20
+  zone1SpawnInterval: 3
+  zone1SpawnBatch: 2
+  zone2MaxAlive: 40
+  zone2SpawnInterval: 2
+  zone2SpawnBatch: 3
+  zone3MaxAlive: 100
+  zone3SpawnInterval: 1
+  zone3SpawnBatch: 6
+  enemyChaseSpeed: 2.5

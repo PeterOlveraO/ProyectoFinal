@@ -20,6 +20,9 @@ namespace Game.World
         [Tooltip("Evita que la pantalla se apague durante la partida.")]
         [SerializeField] bool neverSleep = true;
 
+        [Tooltip("Fuerza la orientación horizontal en móvil (el juego no se juega en vertical).")]
+        [SerializeField] bool forceLandscape = true;
+
         void Awake()
         {
             if (!Application.isMobilePlatform) return;
@@ -27,6 +30,15 @@ namespace Game.World
             Application.targetFrameRate = targetFrameRate;
             if (disableVSync) QualitySettings.vSyncCount = 0;
             if (neverSleep) Screen.sleepTimeout = SleepTimeout.NeverSleep;
+
+            if (forceLandscape)
+            {
+                Screen.autorotateToPortrait = false;
+                Screen.autorotateToPortraitUpsideDown = false;
+                Screen.autorotateToLandscapeLeft = true;
+                Screen.autorotateToLandscapeRight = true;
+                Screen.orientation = ScreenOrientation.AutoRotation;
+            }
         }
     }
 }

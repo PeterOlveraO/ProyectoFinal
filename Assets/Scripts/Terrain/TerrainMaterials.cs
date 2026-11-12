@@ -4,31 +4,57 @@ using UnityEngine.Rendering;
 namespace Game.Terrain
 {
     /// <summary>
-    /// Materiales grises temporales del terreno, generados por código:
+    /// Materiales del terreno generados por código:
     ///   - Textura de cuadrícula (filtro Point) que marca el contorno de cada cara de bloque.
-    ///   - Una tapa por nivel, más clara cuanto más alto; costados más oscuros.
+    ///   - Una tapa por zona, con el color de esa zona, y un costado más oscuro de la misma gama.
     ///   - URP Lit si hay pipeline asignado, Standard si no.
-    /// El orden coincide con los submeshes de <see cref="ChunkMeshBuilder"/>.
+    /// El orden coincide con los submeshes de <see cref="ChunkMeshBuilder"/>:
+    /// 0..2 tapas de zona 1..3, 3..5 costados de zona 1..3.
     /// </summary>
     public static class TerrainMaterials
     {
         const int GridTextureSize = 16;
 
-        public static Material[] Create(int maxLevel)
+        public static Material[] Create(TerrainSettings settings)
         {
             var texture = CreateGridTexture();
             var shader = FindShader();
 
-            var materials = new Material[maxLevel + 2];
-            for (int level = 0; level <= maxLevel; level++)
+            var zoneColors = new[]
             {
-                float t = maxLevel > 0 ? (float)level / maxLevel : 1f;
-                float gray = Mathf.Lerp(0.45f, 0.85f, t);
-                materials[level] = CreateMaterial(shader, texture, new Color(gray, gray, gray, 1f), "Terrain_Top_" + level);
+                settings.zone1Color,
+                settings.zone2Color,
+                settings.zone3Color
+            };
+
+            var materials = new Material[ChunkMeshBuilder.SubMeshCount];
+            for (int zone = 1; zone <= 3; zone++)
+            {
+                Color top = zoneColors[zone - 1];
+                Color side = Color.Lerp(top, Color.black, 0.45f);
+
+                materials[zone - 1] = CreateMaterial(shader, texture, top, "Terrain_Zone" + zone + "_Top");
+                materials[3 + zone - 1] = CreateMaterial(shader, texture, side, "Terrain_Zone" + zone + "_Side");
             }
 
-            materials[maxLevel + 1] = CreateMaterial(shader, texture, new Color(0.3f, 0.3f, 0.3f, 1f), "Terrain_Side");
             return materials;
+        }
+
+        /// <summary>Agua opaca de los lagos (azul, algo brillante).</summary>
+        public static Material CreateWaterMaterial()
+        {
+            var shader = FindShader();
+            if (shader == null) shader = Shader.Find("Unlit/Color");
+
+            var water = new Material(shader)
+            {
+                name = "Water",
+                color = new Color(0.10f, 0.42f, 0.72f, 1f)
+            };
+            if (water.HasProperty("_Smoothness")) water.SetFloat("_Smoothness", 0.75f);
+            if (water.HasProperty("_Glossiness")) water.SetFloat("_Glossiness", 0.75f);
+            if (water.HasProperty("_Metallic")) water.SetFloat("_Metallic", 0.1f);
+            return water;
         }
 
         /// <summary>Destruye los materiales y la textura compartida creados por <see cref="Create"/>.</summary>

@@ -1,0 +1,345 @@
+using Game.Economy;
+using Game.Player;
+using Game.Rendering;
+using Game.Rounds;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace Game.UI
+{
+    /// <summary>
+    /// HUD de la partida: vida del jugador, ronda actual, enemigos restantes, puntos
+    /// (economía interna) y monedas (economía global). También muestra el cartel de
+    /// ronda y la pantalla de derrota con el resumen de la run.
+    ///
+    /// Se construye por código sobre el Canvas del HUD y no necesita imágenes.
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class RunHud : MonoBehaviour
+    {
+        RectTransform _statusPanel;
+        Image _healthFill;
+        Text _healthLabel;
+        Text _roundLabel;
+        Text _enemiesLabel;
+        Text _pointsLabel;
+        Text _coinsLabel;
+
+        CanvasGroup _banner;
+        Text _bannerTitle;
+        Text _bannerSubtitle;
+        float _bannerTimer;
+        RoundManager.RoundPhase _bannerPhase = (RoundManager.RoundPhase)(-1);
+        int _bannerRound = -1;
+
+        Image _damageFlash;
+        float _flashAmount;
+        int _lastHealth = -1;
+
+        GameObject _gameOverRoot;
+        Text _gameOverStats;
+
+        void Start()
+        {
+            Build();
+        }
+
+        void Update()
+        {
+            var round = RoundManager.Instance;
+            var player = PlayerSphereController.Instance;
+            var menu = GameMenuController.Instance;
+
+            bool playing = menu == null || menu.IsPlaying;
+            bool gameOver = round != null && round.Phase == RoundManager.RoundPhase.GameOver;
+
+            if (_statusPanel != null)
+                _statusPanel.gameObject.SetActive(true);
+
+            UpdateHealth(player);
+            UpdateNumbers(round, player);
+            UpdateBanner(round, playing);
+            UpdateFlash();
+            UpdateGameOver(round, gameOver);
+        }
+
+        // ------------------------------------------------------------- Construcción
+
+        void Build()
+        {
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas == null)
+            {
+                Debug.LogWarning("[RunHud] No hay Canvas padre.", this);
+                enabled = false;
+                return;
+            }
+
+            var root = UIFactory.CreateRect("RunHud", canvas.transform);
+            UIFactory.Stretch(root);
+
+            // Flash rojo al recibir daño (detrás del resto del HUD).
+            _damageFlash = UIFactory.CreateImage("DamageFlash", root, null,
+                                                new Color(1f, 0.1f, 0.12f, 0f), false);
+            UIFactory.Stretch(_damageFlash.rectTransform);
+
+            BuildStatusPanel(root);
+            BuildBanner(root);
+
+            // La pantalla de derrota vive en su propio Canvas por encima de todo el HUD.
+            var overlay = UIFactory.CreateCanvas("UI_GameOver", 120);
+            BuildGameOver((RectTransform)overlay.transform);
+        }
+
+        void BuildStatusPanel(Transform parent)
+        {
+            _statusPanel = UIFactory.CreateRect("RunStatus", parent);
+            UIFactory.Place(_statusPanel, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                            new Vector2(24f, -24f), new Vector2(470f, 184f));
+
+            var background = UIFactory.CreateImage("Background", _statusPanel,
+                                                   ProceduralSprites.RoundedRect,
+                                                   new Color(0.06f, 0.03f, 0.12f, 0.74f), false, true);
+            UIFactory.Stretch(background.rectTransform);
+            UIFactory.AddOutline(background, new Color(1f, 1f, 1f, 0.12f), 2f);
+
+            var healthTitle = UIFactory.CreateText("HealthTitle", _statusPanel, "VIDA", 26,
+                                                   UIFactory.Sun, TextAnchor.MiddleLeft);
+            UIFactory.Place(healthTitle.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                            new Vector2(22f, -14f), new Vector2(200f, 30f));
+
+            _healthLabel = UIFactory.CreateText("HealthValue", _statusPanel, "100 / 100", 24,
+                                                UIFactory.Cream, TextAnchor.MiddleRight);
+            UIFactory.Place(_healthLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                            new Vector2(248f, -14f), new Vector2(200f, 30f));
+
+            var barBackground = UIFactory.CreateImage("HealthBarBackground", _statusPanel,
+                                                      ProceduralSprites.RoundedRect,
+                                                      new Color(0.10f, 0.05f, 0.20f, 0.95f), false, true);
+            UIFactory.Place(barBackground.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                            new Vector2(22f, -46f), new Vector2(426f, 30f));
+
+            _healthFill = UIFactory.CreateImage("HealthBarFill", barBackground.rectTransform,
+                                                ProceduralSprites.RoundedRect, UIFactory.Lime, false, true);
+            UIFactory.Stretch(_healthFill.rectTransform, 4f);
+            _healthFill.type = Image.Type.Filled;
+            _healthFill.fillMethod = Image.FillMethod.Horizontal;
+            _healthFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            _healthFill.fillAmount = 1f;
+
+            _roundLabel = UIFactory.CreateText("Round", _statusPanel, "RONDA 1", 28,
+                                               UIFactory.Sun, TextAnchor.MiddleLeft);
+            UIFactory.Place(_roundLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                            new Vector2(22f, -86f), new Vector2(260f, 34f));
+
+            _enemiesLabel = UIFactory.CreateText("Enemies", _statusPanel, "0 / 6", 24,
+                                                 UIFactory.Cream, TextAnchor.MiddleRight);
+            UIFactory.Place(_enemiesLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                            new Vector2(248f, -86f), new Vector2(200f, 30f));
+
+            _pointsLabel = UIFactory.CreateText("Points", _statusPanel, "PUNTOS 0", 24,
+                                                UIFactory.Lime, TextAnchor.MiddleLeft);
+            UIFactory.Place(_pointsLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                            new Vector2(22f, -130f), new Vector2(260f, 30f));
+
+            _coinsLabel = UIFactory.CreateText("Coins", _statusPanel, "MONEDAS 0", 24,
+                                               UIFactory.Sun, TextAnchor.MiddleRight);
+            UIFactory.Place(_coinsLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                            new Vector2(248f, -130f), new Vector2(200f, 30f));
+        }
+
+        void BuildBanner(Transform parent)
+        {
+            var rect = UIFactory.CreateRect("RoundBanner", parent);
+            UIFactory.Place(rect, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                            new Vector2(0f, -130f), new Vector2(1100f, 190f));
+
+            _banner = rect.gameObject.AddComponent<CanvasGroup>();
+            _banner.alpha = 0f;
+            _banner.blocksRaycasts = false;
+            _banner.interactable = false;
+
+            _bannerTitle = UIFactory.CreateText("Title", rect, "RONDA 1", 78, UIFactory.Sun);
+            UIFactory.Place(_bannerTitle.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                            new Vector2(0f, 0f), new Vector2(1100f, 110f));
+            UIFactory.AddOutline(_bannerTitle, UIFactory.Ink, 6f);
+
+            _bannerSubtitle = UIFactory.CreateText("Subtitle", rect, "", 32, UIFactory.Cream);
+            UIFactory.Place(_bannerSubtitle.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                            new Vector2(0f, -112f), new Vector2(1100f, 56f));
+            UIFactory.AddOutline(_bannerSubtitle, new Color(0f, 0f, 0f, 0.55f), 2f);
+        }
+
+        void BuildGameOver(Transform parent)
+        {
+            var root = UIFactory.CreateRect("GameOver", parent);
+            UIFactory.Stretch(root);
+            _gameOverRoot = root.gameObject;
+
+            var dim = UIFactory.CreateImage("Dim", root, null, new Color(0.03f, 0.01f, 0.07f, 0.86f), true);
+            UIFactory.Stretch(dim.rectTransform);
+
+            var card = UIFactory.CreateCard(root, new Vector2(980f, 660f),
+                                            UIFactory.DeepViolet, UIFactory.Coral);
+            UIFactory.Place(card, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                            Vector2.zero, new Vector2(980f, 660f));
+
+            var title = UIFactory.CreateText("Title", card, "DERROTADO", 96, UIFactory.Coral);
+            UIFactory.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                            new Vector2(0f, 228f), new Vector2(900f, 130f));
+            UIFactory.AddOutline(title, UIFactory.Ink, 6f);
+
+            _gameOverStats = UIFactory.CreateText("Stats", card, "", 34, UIFactory.Cream);
+            UIFactory.Place(_gameOverStats.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                            new Vector2(0f, 42f), new Vector2(860f, 270f));
+
+            var retry = UIFactory.CreateButton(card, "RetryButton", "REINTENTAR", UIFactory.Lime,
+                                               new Vector2(400f, 104f), Retry, 40);
+            UIFactory.Place((RectTransform)retry.transform, new Vector2(0.5f, 0.5f),
+                            new Vector2(0.5f, 0.5f), new Vector2(-215f, -218f), new Vector2(400f, 104f));
+
+            var menu = UIFactory.CreateButton(card, "MenuButton", "MENÚ", UIFactory.Sky,
+                                              new Vector2(400f, 104f), BackToMenu, 42);
+            UIFactory.Place((RectTransform)menu.transform, new Vector2(0.5f, 0.5f),
+                            new Vector2(0.5f, 0.5f), new Vector2(215f, -218f), new Vector2(400f, 104f));
+
+            _gameOverRoot.SetActive(false);
+        }
+
+        // ---------------------------------------------------------------- Estado
+
+        void UpdateHealth(PlayerSphereController player)
+        {
+            if (_healthFill == null || player == null) return;
+
+            float ratio = player.Health01;
+            _healthFill.fillAmount = ratio;
+            _healthFill.color = Color.Lerp(UIFactory.Coral, UIFactory.Lime, ratio);
+            _healthLabel.text = player.Health + " / " + player.MaxHealth;
+
+            if (_lastHealth >= 0 && player.Health < _lastHealth) _flashAmount = 0.5f;
+            _lastHealth = player.Health;
+        }
+
+        void UpdateNumbers(RoundManager round, PlayerSphereController player)
+        {
+            if (round == null || round.Phase == RoundManager.RoundPhase.Idle)
+            {
+                if (_roundLabel != null) _roundLabel.text = "RONDA 1";
+                if (_enemiesLabel != null) _enemiesLabel.text = "0 / 0";
+                if (_pointsLabel != null) _pointsLabel.text = "PUNTOS 0";
+                if (_coinsLabel != null) _coinsLabel.text = "MONEDAS " + PlayerEconomy.Coins;
+                return;
+            }
+
+            _roundLabel.text = "RONDA " + round.Round;
+            _enemiesLabel.text = round.EnemiesDefeatedThisRound + " / " + round.EnemiesThisRound;
+            _pointsLabel.text = "PUNTOS " + round.Points;
+            _coinsLabel.text = "MONEDAS " + PlayerEconomy.Coins;
+        }
+
+        void UpdateBanner(RoundManager round, bool playing)
+        {
+            if (_banner == null) return;
+
+            if (!playing || round == null || round.Phase == RoundManager.RoundPhase.Idle)
+            {
+                _banner.alpha = 0f;
+                return;
+            }
+
+            var phase = round.Phase;
+
+            if (phase != _bannerPhase || round.Round != _bannerRound)
+            {
+                _bannerPhase = phase;
+                _bannerRound = round.Round;
+
+                switch (phase)
+                {
+                    case RoundManager.RoundPhase.Preparing:
+                        SetBanner("RONDA " + round.Round,
+                                  "Prepárate… " + Mathf.CeilToInt(round.PreparationRemaining));
+                        _bannerTimer = 999f;
+                        break;
+
+                    case RoundManager.RoundPhase.Fighting:
+                        SetBanner("RONDA " + round.Round,
+                                  "Elimina a " + round.EnemiesThisRound + " enemigos");
+                        _bannerTimer = 2.2f;
+                        break;
+
+                    case RoundManager.RoundPhase.Clearing:
+                        SetBanner("¡RONDA SUPERADA!",
+                                  "+" + round.LastRoundBonusPoints + " puntos  ·  +" +
+                                  round.LastRoundBonusCoins + " monedas");
+                        _bannerTimer = 999f;
+                        break;
+
+                    default:
+                        _bannerTimer = 0f;
+                        break;
+                }
+            }
+
+            if (phase == RoundManager.RoundPhase.Preparing)
+                _bannerSubtitle.text = "Prepárate… " + Mathf.CeilToInt(round.PreparationRemaining);
+
+            if (phase == RoundManager.RoundPhase.Fighting || phase == RoundManager.RoundPhase.Clearing)
+                _bannerTimer -= Time.unscaledDeltaTime;
+
+            _banner.alpha = Mathf.Clamp01(_bannerTimer);
+        }
+
+        void SetBanner(string title, string subtitle)
+        {
+            _bannerTitle.text = title;
+            _bannerSubtitle.text = subtitle;
+        }
+
+        void UpdateFlash()
+        {
+            if (_damageFlash == null) return;
+
+            _flashAmount = Mathf.Max(0f, _flashAmount - 2.5f * Time.unscaledDeltaTime);
+            _damageFlash.color = new Color(1f, 0.1f, 0.12f, _flashAmount * 0.45f);
+        }
+
+        void UpdateGameOver(RoundManager round, bool gameOver)
+        {
+            if (_gameOverRoot == null) return;
+
+            if (gameOver && !_gameOverRoot.activeSelf)
+            {
+                _gameOverStats.text =
+                    "Rondas superadas: " + round.RoundsPassed +
+                    "\nEnemigos derrotados: " + round.EnemiesDefeated +
+                    "\nPuntos de la partida: " + round.Points +
+                    "\nMonedas ganadas: " + round.CoinsEarned +
+                    "\n\nMonedas totales: " + PlayerEconomy.Coins;
+
+                _gameOverRoot.SetActive(true);
+                _banner.alpha = 0f;
+            }
+            else if (!gameOver && _gameOverRoot.activeSelf)
+            {
+                _gameOverRoot.SetActive(false);
+            }
+        }
+
+        // ---------------------------------------------------------------- Acciones
+
+        void Retry()
+        {
+            _gameOverRoot.SetActive(false);
+            _lastHealth = -1;
+            RoundManager.Instance?.StartRun();
+        }
+
+        void BackToMenu()
+        {
+            _gameOverRoot.SetActive(false);
+            GameMenuController.Instance?.ShowMainMenu();
+        }
+    }
+}
