@@ -180,8 +180,8 @@ namespace Game.Terrain
                     chunkRenderer.sharedMaterials = _materials;
                     go.AddComponent<MeshCollider>().sharedMesh = mesh;
 
-                    // El renderer se apaga cuando el chunk sale del frustum; el collider sigue.
-                    VisibilityCuller.RegisterTerrain(chunkRenderer);
+                    // La carga por radio ya limita los chunks. No apagar su renderer con un
+                    // segundo frustum: en iOS la cámara puede actualizarse después del culler.
 
                     int index = cz * settings.chunksX + cx;
                     _chunks[index] = go;

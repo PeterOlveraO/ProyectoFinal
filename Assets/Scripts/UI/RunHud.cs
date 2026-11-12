@@ -24,6 +24,10 @@ namespace Game.UI
         Text _enemiesLabel;
         Text _pointsLabel;
         Text _coinsLabel;
+        Text _cashLabel;
+        Button _drinkButton;
+        Text _drinkLabel;
+        int _nearbyDrink = -1;
 
         CanvasGroup _banner;
         Text _bannerTitle;
@@ -61,6 +65,7 @@ namespace Game.UI
             UpdateBanner(round, playing);
             UpdateFlash();
             UpdateGameOver(round, gameOver);
+            UpdateDrink(round, player, playing && !gameOver && (menu == null || !menu.IsPaused));
         }
 
         // ------------------------------------------------------------- Construcción
@@ -85,6 +90,7 @@ namespace Game.UI
 
             BuildStatusPanel(root);
             BuildBanner(root);
+            BuildDrinkButton(root);
 
             // La pantalla de derrota vive en su propio Canvas por encima de todo el HUD.
             var overlay = UIFactory.CreateCanvas("UI_GameOver", 120);
@@ -95,7 +101,7 @@ namespace Game.UI
         {
             _statusPanel = UIFactory.CreateRect("RunStatus", parent);
             UIFactory.Place(_statusPanel, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(24f, -24f), new Vector2(470f, 184f));
+                            new Vector2(24f, -24f), new Vector2(470f, 220f));
 
             var background = UIFactory.CreateImage("Background", _statusPanel,
                                                    ProceduralSprites.RoundedRect,
@@ -146,6 +152,41 @@ namespace Game.UI
                                                UIFactory.Sun, TextAnchor.MiddleRight);
             UIFactory.Place(_coinsLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
                             new Vector2(248f, -130f), new Vector2(200f, 30f));
+
+            _cashLabel = UIFactory.CreateText("RunCash", _statusPanel, "PARTIDA $0  ·  EV 0", 23,
+                                              UIFactory.Cream, TextAnchor.MiddleLeft);
+            UIFactory.Place(_cashLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                            new Vector2(22f, -172f), new Vector2(430f, 30f));
+        }
+
+        void BuildDrinkButton(Transform parent)
+        {
+            _drinkButton = UIFactory.CreateButton(parent, "BuyDrink", "", UIFactory.Sky,
+                                                   new Vector2(650f, 100f), BuyDrink, 28);
+            UIFactory.Place((RectTransform)_drinkButton.transform, new Vector2(.5f, 0f), new Vector2(.5f, 0f),
+                            new Vector2(0f, 35f), new Vector2(650f, 100f));
+            _drinkLabel = _drinkButton.GetComponentInChildren<Text>();
+            _drinkButton.gameObject.SetActive(false);
+        }
+
+        void UpdateDrink(RoundManager round, PlayerSphereController player, bool playing)
+        {
+            var stations = round != null ? round.GetComponent<DrinkStations>() : null;
+            _nearbyDrink = playing && player != null && stations != null && round.Phase != RoundManager.RoundPhase.Idle
+                ? stations.NearbyOffer(player.transform.position) : -1;
+            if (_drinkButton == null) return;
+            _drinkButton.gameObject.SetActive(_nearbyDrink >= 0);
+            if (_nearbyDrink < 0) return;
+            _drinkLabel.text = stations.Has((DrinkType)_nearbyDrink) ?
+                "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · ADQUIRIDA" :
+                "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · $" + DrinkStations.Prices[_nearbyDrink];
+            _drinkButton.interactable = !stations.Has((DrinkType)_nearbyDrink) &&
+                                         round.RunCash >= DrinkStations.Prices[_nearbyDrink];
+        }
+
+        void BuyDrink()
+        {
+            RoundManager.Instance?.GetComponent<DrinkStations>()?.Buy(_nearbyDrink);
         }
 
         void BuildBanner(Transform parent)
@@ -229,6 +270,7 @@ namespace Game.UI
                 if (_enemiesLabel != null) _enemiesLabel.text = "0 / 0";
                 if (_pointsLabel != null) _pointsLabel.text = "PUNTOS 0";
                 if (_coinsLabel != null) _coinsLabel.text = "MONEDAS " + PlayerEconomy.Coins;
+                if (_cashLabel != null) _cashLabel.text = "PARTIDA $0  ·  EV " + PlayerEconomy.SkillPoints;
                 return;
             }
 
@@ -236,6 +278,7 @@ namespace Game.UI
             _enemiesLabel.text = round.EnemiesDefeatedThisRound + " / " + round.EnemiesThisRound;
             _pointsLabel.text = "PUNTOS " + round.Points;
             _coinsLabel.text = "MONEDAS " + PlayerEconomy.Coins;
+            _cashLabel.text = "PARTIDA $" + round.RunCash + "  ·  EV " + PlayerEconomy.SkillPoints;
         }
 
         void UpdateBanner(RoundManager round, bool playing)
@@ -316,6 +359,7 @@ namespace Game.UI
                     "\nEnemigos derrotados: " + round.EnemiesDefeated +
                     "\nPuntos de la partida: " + round.Points +
                     "\nMonedas ganadas: " + round.CoinsEarned +
+                    "\nPuntos EV obtenidos: " + round.SkillPointsDropped +
                     "\n\nMonedas totales: " + PlayerEconomy.Coins;
 
                 _gameOverRoot.SetActive(true);

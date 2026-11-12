@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
+using Game.Terrain;
 
 namespace Game.EditorTools
 {
@@ -24,6 +25,12 @@ namespace Game.EditorTools
         public static void BuildIOS()
         {
             string path = GetArgument("-customBuildPath") ?? "build/iOS/iOS";
+
+            var terrain = AssetDatabase.LoadAssetAtPath<TerrainSettings>("Assets/Settings/TerrainSettings.asset");
+            if (terrain == null || terrain.terrainMaterial == null || terrain.terrainMaterial.shader == null)
+                throw new BuildFailedException("Falta TerrainSettings o M_TerrainBase: el terreno no se verá en iPhone.");
+            if (!System.IO.File.Exists(Scenes[0]))
+                throw new BuildFailedException("La escena World no existe en " + Scenes[0]);
 
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.iOS, BundleId);
             PlayerSettings.iOS.appleEnableAutomaticSigning = false;

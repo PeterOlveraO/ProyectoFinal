@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using Game.Terrain;
+using UnityEditor;
 
 namespace Game.Terrain.Tests
 {
@@ -208,6 +209,35 @@ namespace Game.Terrain.Tests
         // ---------------------------------------------------------------
         // Chunk mesh building
         // ---------------------------------------------------------------
+
+        [Test]
+        public void IOS_TerrainAssetReferencesURPMaterialAndBuildScene()
+        {
+            var settings = AssetDatabase.LoadAssetAtPath<TerrainSettings>("Assets/Settings/TerrainSettings.asset");
+            Assert.IsNotNull(settings);
+            Assert.IsNotNull(settings.terrainMaterial, "iOS necesita el material como asset referenciado.");
+            Assert.IsNotNull(settings.terrainMaterial.shader);
+            Assert.IsTrue(settings.terrainMaterial.shader.name.Contains("Universal Render Pipeline"));
+            Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<SceneAsset>("Assets/Scenes/World.unity"));
+
+            Material[] materials = TerrainMaterials.Create(settings);
+            try
+            {
+                Assert.AreEqual(ChunkMeshBuilder.SubMeshCount, materials.Length);
+                foreach (var material in materials)
+                {
+                    Assert.IsNotNull(material.shader);
+                    Assert.AreEqual(settings.terrainMaterial.shader, material.shader);
+                }
+            }
+            finally
+            {
+                var texture = materials[0] != null ? materials[0].mainTexture : null;
+                foreach (var material in materials)
+                    if (material != null) UnityEngine.Object.DestroyImmediate(material);
+                if (texture != null) UnityEngine.Object.DestroyImmediate(texture);
+            }
+        }
 
         [Test]
         public void ChunkMesh_FlatInteriorChunk_Has1024Vertices()

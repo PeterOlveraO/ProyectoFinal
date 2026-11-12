@@ -2,6 +2,7 @@ using Game.Core;
 using Game.Economy;
 using Game.Rendering;
 using Game.Rounds;
+using Game.Pokemon;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -34,6 +35,14 @@ namespace Game.UI
         RectTransform _mainPanel;
         RectTransform _pausePanel;
         RectTransform _settingsPanel;
+        RectTransform _collectionPanel;
+        RectTransform _skillsPanel;
+        Text _collectionInfo;
+        Image _pokemonPreview;
+        Text _skillsInfo;
+        Button _buyPokemonButton;
+        Button[] _skillButtons;
+        int _collectionIndex;
         GameObject _pauseButton;
 
         Text _volumeValue;
@@ -45,6 +54,7 @@ namespace Game.UI
         bool _playing;
         bool _paused;
         bool _settingsOpen;
+        bool _subMenuOpen;
 
         float _volume = 0.8f;
         int _quality;
@@ -91,6 +101,8 @@ namespace Game.UI
                 return;
             }
 
+            if (_subMenuOpen) { CloseSubMenu(); return; }
+
             if (!_playing) return;
             if (_paused) Resume();
             else Pause();
@@ -102,6 +114,7 @@ namespace Game.UI
             _playing = false;
             _paused = false;
             _settingsOpen = false;
+            _subMenuOpen = false;
 
             GameFlow.Over = false;
             GameFlow.Blocked = true;
@@ -120,6 +133,7 @@ namespace Game.UI
             _playing = true;
             _paused = false;
             _settingsOpen = false;
+            _subMenuOpen = false;
 
             GameFlow.Over = false;
             GameFlow.Blocked = false;
@@ -188,11 +202,20 @@ namespace Game.UI
 #endif
         }
 
+        public void AbandonRun()
+        {
+            if (!_playing) return;
+            RoundManager.Instance?.AbandonRun();
+            ShowMainMenu();
+        }
+
         void HideAllPanels()
         {
             _mainPanel.gameObject.SetActive(false);
             _pausePanel.gameObject.SetActive(false);
             _settingsPanel.gameObject.SetActive(false);
+            _collectionPanel.gameObject.SetActive(false);
+            _skillsPanel.gameObject.SetActive(false);
         }
 
         void ShowPanel(RectTransform panel)
@@ -217,9 +240,13 @@ namespace Game.UI
             BuildMainMenu();
             BuildPauseMenu();
             BuildSettingsMenu();
+            BuildCollectionMenu();
+            BuildSkillsMenu();
 
             _pausePanel.gameObject.SetActive(false);
             _settingsPanel.gameObject.SetActive(false);
+            _collectionPanel.gameObject.SetActive(false);
+            _skillsPanel.gameObject.SetActive(false);
         }
 
         void BuildPauseButton()
@@ -288,18 +315,27 @@ namespace Game.UI
             var play = UIFactory.CreateButton(root, "PlayButton", "JUGAR", UIFactory.Lime,
                                              new Vector2(640f, 116f), StartGame, 50);
             UIFactory.Place((RectTransform)play.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, 15f), new Vector2(640f, 116f));
+                            new Vector2(0.5f, 0.5f), new Vector2(0f, 45f), new Vector2(640f, 116f));
+
+            var collection = UIFactory.CreateButton(root, "CollectionButton", "POKÉMON", UIFactory.Sky,
+                                                    new Vector2(310f, 90f), OpenCollection, 36);
+            UIFactory.Place((RectTransform)collection.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(-165f, -75f), new Vector2(310f, 90f));
+            var skills = UIFactory.CreateButton(root, "SkillsButton", "ÁRBOL EV", UIFactory.Lime,
+                                                new Vector2(310f, 90f), OpenSkills, 36);
+            UIFactory.Place((RectTransform)skills.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(165f, -75f), new Vector2(310f, 90f));
 
             var settings = UIFactory.CreateButton(root, "SettingsButton", "CONFIGURACIÓN", UIFactory.Sky,
                                                  new Vector2(640f, 116f),
                                                  () => OpenSettings(SettingsOrigin.MainMenu), 40);
             UIFactory.Place((RectTransform)settings.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, -120f), new Vector2(640f, 116f));
+                            new Vector2(0.5f, 0.5f), new Vector2(0f, -185f), new Vector2(640f, 96f));
 
             var quit = UIFactory.CreateButton(root, "QuitButton", "SALIR", UIFactory.Coral,
                                               new Vector2(640f, 116f), QuitGame, 46);
             UIFactory.Place((RectTransform)quit.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, -255f), new Vector2(640f, 116f));
+                            new Vector2(0.5f, 0.5f), new Vector2(0f, -300f), new Vector2(640f, 96f));
 
             var footer = UIFactory.CreateText("Footer", root, "v1.0  ·  Peter Games", 24,
                                               new Color(1f, 1f, 1f, 0.65f));
@@ -370,10 +406,134 @@ namespace Game.UI
             UIFactory.Place((RectTransform)settings.transform, new Vector2(0.5f, 0.5f),
                             new Vector2(0.5f, 0.5f), new Vector2(0f, -100f), new Vector2(600f, 110f));
 
-            var quit = UIFactory.CreateButton(card, "QuitButton", "SALIR", UIFactory.Coral,
-                                              new Vector2(600f, 110f), QuitGame, 44);
+            var quit = UIFactory.CreateButton(card, "QuitButton", "SALIR DE PARTIDA", UIFactory.Coral,
+                                               new Vector2(600f, 110f), AbandonRun, 40);
             UIFactory.Place((RectTransform)quit.transform, new Vector2(0.5f, 0.5f),
                             new Vector2(0.5f, 0.5f), new Vector2(0f, -230f), new Vector2(600f, 110f));
+        }
+
+        void OpenCollection()
+        {
+            _subMenuOpen = true;
+            RefreshCollection();
+            ShowPanel(_collectionPanel);
+        }
+
+        void OpenSkills()
+        {
+            _subMenuOpen = true;
+            RefreshSkills();
+            ShowPanel(_skillsPanel);
+        }
+
+        void CloseSubMenu()
+        {
+            _subMenuOpen = false;
+            ShowPanel(_mainPanel);
+        }
+
+        void BuildCollectionMenu()
+        {
+            _collectionPanel = CreateOverlay("CollectionMenu");
+            var dim = UIFactory.CreateImage("Dim", _collectionPanel, null, UIFactory.DeepViolet, true);
+            UIFactory.Stretch(dim.rectTransform);
+            var title = UIFactory.CreateText("Title", _collectionPanel, "COLECCIÓN POKÉMON", 72, UIFactory.Sun);
+            UIFactory.Place(title.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0, 340), new Vector2(1400, 110));
+            _collectionInfo = UIFactory.CreateText("Info", _collectionPanel, "", 36, UIFactory.Cream);
+            UIFactory.Place(_collectionInfo.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(225, 110), new Vector2(1000, 300));
+            _pokemonPreview = UIFactory.CreateImage("PokemonPreview", _collectionPanel, null, Color.white);
+            UIFactory.Place(_pokemonPreview.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(-510, 110), new Vector2(270, 270));
+            _pokemonPreview.preserveAspect = true;
+            var previous = UIFactory.CreateButton(_collectionPanel, "Previous", "◀", UIFactory.Sky,
+                                                   new Vector2(180, 90), () => ChangeSelection(-1), 42);
+            UIFactory.Place((RectTransform)previous.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(-290, -100), new Vector2(180, 90));
+            var next = UIFactory.CreateButton(_collectionPanel, "Next", "▶", UIFactory.Sky,
+                                               new Vector2(180, 90), () => ChangeSelection(1), 42);
+            UIFactory.Place((RectTransform)next.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(290, -100), new Vector2(180, 90));
+            _buyPokemonButton = UIFactory.CreateButton(_collectionPanel, "BuyOrSelect", "", UIFactory.Lime,
+                                                       new Vector2(510, 100), BuyOrSelectPokemon, 36);
+            UIFactory.Place((RectTransform)_buyPokemonButton.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0, -245), new Vector2(510, 100));
+            var back = UIFactory.CreateButton(_collectionPanel, "Back", "VOLVER", UIFactory.Coral,
+                                              new Vector2(360, 85), CloseSubMenu, 36);
+            UIFactory.Place((RectTransform)back.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0, -370), new Vector2(360, 85));
+        }
+
+        void ChangeSelection(int delta)
+        {
+            int count = PokemonCollection.Count;
+            if (count == 0) return;
+            _collectionIndex = (_collectionIndex + delta + count) % count;
+            RefreshCollection();
+        }
+
+        void BuyOrSelectPokemon()
+        {
+            if (PokemonCollection.IsOwned(_collectionIndex)) PokemonCollection.Select(_collectionIndex);
+            else PokemonCollection.Buy(_collectionIndex);
+            RefreshCollection();
+        }
+
+        void RefreshCollection()
+        {
+            int count = PokemonCollection.Count;
+            if (count == 0) { _collectionInfo.text = "No hay sprites en Resources/PokemonSprites"; _buyPokemonButton.interactable = false; return; }
+            _collectionIndex = Mathf.Clamp(_collectionIndex, 0, count - 1);
+            _pokemonPreview.sprite = PokemonCollection.GetSprite(_collectionIndex);
+            bool owned = PokemonCollection.IsOwned(_collectionIndex);
+            _collectionInfo.text = PokemonCollection.GetName(_collectionIndex) + "  (" + (_collectionIndex + 1) + "/" + count + ")\n" +
+                                   (owned ? "DESBLOQUEADO" : "BLOQUEADO") +
+                                   "\nMonedas: " + PlayerEconomy.Coins + "  ·  Precio: " + PokemonCollection.Price;
+            _buyPokemonButton.GetComponentInChildren<Text>().text = owned ?
+                (PokemonCollection.Selected == _collectionIndex ? "EQUIPADO" : "EQUIPAR") : "COMPRAR";
+            _buyPokemonButton.interactable = owned || PlayerEconomy.Coins >= PokemonCollection.Price;
+        }
+
+        void BuildSkillsMenu()
+        {
+            _skillsPanel = CreateOverlay("SkillsMenu");
+            var dim = UIFactory.CreateImage("Dim", _skillsPanel, null, UIFactory.DeepViolet, true);
+            UIFactory.Stretch(dim.rectTransform);
+            var title = UIFactory.CreateText("Title", _skillsPanel, "ÁRBOL DE EVs", 72, UIFactory.Sun);
+            UIFactory.Place(title.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0, 390), new Vector2(1300, 100));
+            _skillsInfo = UIFactory.CreateText("Info", _skillsPanel, "", 32, UIFactory.Cream);
+            UIFactory.Place(_skillsInfo.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0, 270), new Vector2(1300, 90));
+            _skillButtons = new Button[4];
+            string[] names = { "SALUD", "ATAQUE", "DEFENSA", "VELOCIDAD" };
+            for (int i = 0; i < names.Length; i++)
+            {
+                int stat = i;
+                var button = UIFactory.CreateButton(_skillsPanel, "EV_" + names[i], "", UIFactory.Sky,
+                                                     new Vector2(720, 100), () => { PlayerEconomy.BuyEV(stat); RefreshSkills(); }, 36);
+                UIFactory.Place((RectTransform)button.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                                new Vector2(0, 135 - i * 115), new Vector2(720, 100));
+                _skillButtons[i] = button;
+            }
+            var back = UIFactory.CreateButton(_skillsPanel, "Back", "VOLVER", UIFactory.Coral,
+                                              new Vector2(360, 85), CloseSubMenu, 36);
+            UIFactory.Place((RectTransform)back.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0, -375), new Vector2(360, 85));
+        }
+
+        void RefreshSkills()
+        {
+            _skillsInfo.text = PokemonCollection.GetName(PokemonCollection.Selected) + " · Puntos: " + PlayerEconomy.SkillPoints +
+                               "  ·  30% de probabilidad por enemigo";
+            string[] names = { "SALUD", "ATAQUE", "DEFENSA", "VELOCIDAD" };
+            for (int i = 0; i < 4; i++)
+            {
+                _skillButtons[i].GetComponentInChildren<Text>().text = names[i] + "  " + PlayerEconomy.EVLevel(i) +
+                    "/10  ·  " + PlayerEconomy.EVCost(i) + " pt";
+                _skillButtons[i].interactable = PlayerEconomy.CanBuyEV(i);
+            }
         }
 
         void BuildSettingsMenu()

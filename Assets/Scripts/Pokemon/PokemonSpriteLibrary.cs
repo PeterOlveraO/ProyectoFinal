@@ -23,6 +23,14 @@ namespace Game.Pokemon
             get { EnsureLoaded(); return _pool.Length; }
         }
 
+        public static Sprite At(int index)
+        {
+            EnsureLoaded();
+            return index >= 0 && index < _pool.Length ? _pool[index] : null;
+        }
+
+        public static void SetPlayerIndex(int index) => _playerIndex = index;
+
         /// <summary>Sprite aleatorio para el personaje principal.</summary>
         public static Sprite RandomForPlayer()
         {

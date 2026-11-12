@@ -1,5 +1,7 @@
 using Game.Combat;
 using Game.Core;
+using Game.Economy;
+using Game.Rounds;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -39,7 +41,9 @@ namespace Game.Player
         Vector3 _lastAim = Vector3.forward;
 
         public Vector3 LastAimDirection => _lastAim;
-        public int Damage => damage;
+        public int Damage => damage + PlayerEconomy.EVLevel(1) +
+            (RoundManager.Instance != null && RoundManager.Instance.GetComponent<DrinkStations>() != null &&
+             RoundManager.Instance.GetComponent<DrinkStations>().Has(DrinkType.Power) ? 3 : 0);
 
         /// <summary>Asigna el joystick de ataque desde el bootstrap de la escena.</summary>
         public void SetJoystick(VirtualJoystick value) => joystick = value;
@@ -69,7 +73,9 @@ namespace Game.Player
             _lastAim = worldDirection;
 
             _timer += Time.deltaTime;
-            if (_timer < fireInterval) return;
+            var drinks = RoundManager.Instance != null ? RoundManager.Instance.GetComponent<DrinkStations>() : null;
+            float interval = drinks != null && drinks.Has(DrinkType.RapidFire) ? fireInterval * .7f : fireInterval;
+            if (_timer < interval) return;
 
             _timer = 0f;
             Fire();
@@ -78,7 +84,7 @@ namespace Game.Player
         void Fire()
         {
             Vector3 origin = transform.position + Vector3.up * muzzleHeight + _lastAim * 0.55f;
-            AttackProjectile.Spawn(origin, _lastAim, projectileSpeed, range, damage, projectileColor);
+            AttackProjectile.Spawn(origin, _lastAim, projectileSpeed, range, Damage, projectileColor);
         }
 
         bool TryReadAim(out Vector3 worldDirection)

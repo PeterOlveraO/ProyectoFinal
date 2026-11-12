@@ -2,6 +2,8 @@ using Game.Combat;
 using Game.Core;
 using Game.Enemies;
 using Game.Terrain;
+using Game.Economy;
+using Game.Rounds;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -53,16 +55,18 @@ namespace Game.Player
 
         public static PlayerSphereController Instance { get; private set; }
 
-        public int MaxHealth => maxHealth;
+        public int MaxHealth => maxHealth + PlayerEconomy.EVLevel(0) * 10 +
+                                (RoundManager.Instance != null && RoundManager.Instance.GetComponent<DrinkStations>() != null &&
+                                 RoundManager.Instance.GetComponent<DrinkStations>().Has(DrinkType.Vitality) ? 50 : 0);
 
         /// <summary>Vida actual redondeada hacia arriba (0 solo cuando está derrotado).</summary>
-        public int Health => Mathf.Clamp(Mathf.CeilToInt(_health), 0, maxHealth);
+        public int Health => Mathf.Clamp(Mathf.CeilToInt(_health), 0, MaxHealth);
 
         /// <summary>Vida normalizada 0..1, para la barra del HUD.</summary>
-        public float Health01 => maxHealth > 0 ? Mathf.Clamp01(_health / maxHealth) : 0f;
+        public float Health01 => MaxHealth > 0 ? Mathf.Clamp01(_health / MaxHealth) : 0f;
 
         public bool IsAlive => _alive;
-        public bool IsDamaged => _alive && _health < maxHealth;
+        public bool IsDamaged => _alive && _health < MaxHealth;
 
         public bool IsInvincible => Time.time < _invincibleUntil;
 
@@ -84,7 +88,7 @@ namespace Game.Player
         {
             Instance = this;
             _controller = GetComponent<CharacterController>();
-            _health = maxHealth;
+            _health = MaxHealth;
         }
 
         void OnDestroy()
@@ -130,7 +134,10 @@ namespace Game.Player
             if (_controller.isGrounded && _verticalSpeed < 0f) _verticalSpeed = -1f;
             _verticalSpeed -= gravity * Time.deltaTime;
 
-            Vector3 velocity = move * moveSpeed + Vector3.up * _verticalSpeed;
+            var drinks = RoundManager.Instance != null ? RoundManager.Instance.GetComponent<DrinkStations>() : null;
+            float speedMultiplier = 1f + PlayerEconomy.EVLevel(3) * .04f;
+            if (drinks != null && drinks.Has(DrinkType.Sprint)) speedMultiplier *= 1.3f;
+            Vector3 velocity = move * (moveSpeed * speedMultiplier) + Vector3.up * _verticalSpeed;
             _controller.Move(velocity * Time.deltaTime);
 
             // Guarda el último punto pisado fuera del agua: ahí vuelve si cae a un lago.
@@ -153,7 +160,10 @@ namespace Game.Player
             if (!_alive || amount <= 0f) return;
             if (IsInvincible || IsProtected) return;
 
-            _health -= amount;
+            var drinks = RoundManager.Instance != null ? RoundManager.Instance.GetComponent<DrinkStations>() : null;
+            float reduction = Mathf.Min(.65f, PlayerEconomy.EVLevel(2) * .04f +
+                (drinks != null && drinks.Has(DrinkType.Armor) ? .25f : 0f));
+            _health -= amount * (1f - reduction);
             if (_health <= 0f)
             {
                 _health = 0f;
@@ -165,7 +175,7 @@ namespace Game.Player
         public void Heal(int amount)
         {
             if (!_alive || amount <= 0) return;
-            _health = Mathf.Min(maxHealth, _health + amount);
+            _health = Mathf.Min(MaxHealth, _health + amount);
         }
 
         void Die()
@@ -183,7 +193,7 @@ namespace Game.Player
         /// <summary>Deja al jugador con la vida al máximo y lo devuelve al spawn.</summary>
         public void Revive()
         {
-            _health = maxHealth;
+            _health = MaxHealth;
             _alive = true;
             _invincibleUntil = 0f;
             Respawn();
@@ -198,7 +208,7 @@ namespace Game.Player
         /// </summary>
         public bool ActivateInvincibility()
         {
-            if (!_alive || Time.time < _powerReadyAt) return false;
+            if (!GameFlow.Playing || !_alive || Time.time < _powerReadyAt) return false;
 
             _invincibleUntil = Time.time + invincibleDuration;
             _powerReadyAt = Time.time + powerCooldown;

@@ -28,7 +28,8 @@ namespace Game.Pokemon
 
         void Start()
         {
-            var sprite = PokemonSpriteLibrary.RandomForPlayer();
+            var sprite = PokemonCollection.GetSprite(PokemonCollection.Selected);
+            PokemonSpriteLibrary.SetPlayerIndex(PokemonCollection.Selected);
             if (sprite == null) return;
 
             _renderer = PokemonVisuals.CreateBillboard(transform, "Pokemon Visual", sprite, height, false);
@@ -46,6 +47,13 @@ namespace Game.Pokemon
         void Update()
         {
             if (_renderer == null) return;
+
+            var selected = PokemonCollection.Selected;
+            if (_renderer.sprite != PokemonCollection.GetSprite(selected))
+            {
+                _renderer.sprite = PokemonCollection.GetSprite(selected);
+                PokemonSpriteLibrary.SetPlayerIndex(selected);
+            }
 
             UpdateFacing();
 

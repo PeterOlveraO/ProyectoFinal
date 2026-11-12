@@ -23,7 +23,6 @@ namespace Game.Terrain
         public static Material[] Create(TerrainSettings settings)
         {
             var texture = CreateGridTexture();
-            var shader = FindShader(settings);
 
             var zoneColors = new[]
             {
@@ -38,8 +37,8 @@ namespace Game.Terrain
                 Color top = zoneColors[zone - 1];
                 Color side = Color.Lerp(top, Color.black, 0.45f);
 
-                materials[zone - 1] = CreateMaterial(shader, texture, top, "Terrain_Zone" + zone + "_Top");
-                materials[3 + zone - 1] = CreateMaterial(shader, texture, side, "Terrain_Zone" + zone + "_Side");
+                materials[zone - 1] = CreateMaterial(settings, texture, top, "Terrain_Zone" + zone + "_Top");
+                materials[3 + zone - 1] = CreateMaterial(settings, texture, side, "Terrain_Zone" + zone + "_Side");
             }
 
             return materials;
@@ -48,13 +47,9 @@ namespace Game.Terrain
         /// <summary>Agua opaca de los lagos (azul, algo brillante).</summary>
         public static Material CreateWaterMaterial(TerrainSettings settings)
         {
-            var shader = FindShader(settings);
-
-            var water = new Material(shader)
-            {
-                name = "Water",
-                color = new Color(0.10f, 0.42f, 0.72f, 1f)
-            };
+            var water = NewMaterial(settings);
+            water.name = "Water";
+            water.color = new Color(0.10f, 0.42f, 0.72f, 1f);
             if (water.HasProperty("_Smoothness")) water.SetFloat("_Smoothness", 0.75f);
             if (water.HasProperty("_Glossiness")) water.SetFloat("_Glossiness", 0.75f);
             if (water.HasProperty("_Metallic")) water.SetFloat("_Metallic", 0.1f);
@@ -93,9 +88,20 @@ namespace Game.Terrain
             return Shader.Find("Standard");
         }
 
-        static Material CreateMaterial(Shader shader, Texture2D texture, Color color, string name)
+        static Material NewMaterial(TerrainSettings settings)
         {
-            var material = new Material(shader) { name = name, mainTexture = texture, color = color };
+            // Clonar el material referenciado conserva variantes y propiedades del shader URP
+            // en el player iOS, a diferencia de crear uno solo a partir de Shader.Find.
+            return settings != null && settings.terrainMaterial != null
+                ? new Material(settings.terrainMaterial) : new Material(FindShader(settings));
+        }
+
+        static Material CreateMaterial(TerrainSettings settings, Texture2D texture, Color color, string name)
+        {
+            var material = NewMaterial(settings);
+            material.name = name;
+            material.mainTexture = texture;
+            material.color = color;
             if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0f);
             if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0f);
             return material;

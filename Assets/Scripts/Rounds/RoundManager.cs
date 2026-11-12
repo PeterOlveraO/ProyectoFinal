@@ -107,6 +107,9 @@ namespace Game.Rounds
 
         public int Points { get; private set; }
         public int CoinsEarned { get; private set; }
+        /// <summary>Dinero gastable solo durante esta partida; no afecta la cartera global.</summary>
+        public int RunCash { get; private set; }
+        public int SkillPointsDropped { get; private set; }
         public int EnemiesDefeated { get; private set; }
         public int RoundsPassed { get; private set; }
 
@@ -119,6 +122,7 @@ namespace Game.Rounds
         void Awake()
         {
             Instance = this;
+            if (GetComponent<DrinkStations>() == null) gameObject.AddComponent<DrinkStations>();
 
             // Los valores del inspector tienen prioridad; solo se corrigen si quedaron raros.
             spawnRadiusMax = Mathf.Max(spawnRadiusMax, spawnRadiusMin + 1f);
@@ -182,9 +186,12 @@ namespace Game.Rounds
         public void StartRun()
         {
             ClearEnemies();
+            GetComponent<DrinkStations>()?.ResetRun();
 
             Points = 0;
             CoinsEarned = 0;
+            RunCash = 0;
+            SkillPointsDropped = 0;
             EnemiesDefeated = 0;
             RoundsPassed = 0;
             LastRoundBonusPoints = 0;
@@ -212,6 +219,26 @@ namespace Game.Rounds
             AliveCount = 0;
             PlayerEconomy.Flush();
             Changed?.Invoke();
+        }
+
+        public void AbandonRun()
+        {
+            if (_phase == RoundPhase.Idle || _phase == RoundPhase.GameOver) return;
+            _phase = RoundPhase.GameOver;
+            GameFlow.Over = true;
+            GameFlow.Blocked = true;
+            ClearEnemies();
+            PlayerEconomy.RegisterLoss();
+            PlayerEconomy.Flush();
+            Changed?.Invoke();
+        }
+
+        public bool SpendRunCash(int amount)
+        {
+            if (_phase == RoundPhase.Idle || _phase == RoundPhase.GameOver || amount < 0 || RunCash < amount) return false;
+            RunCash -= amount;
+            Changed?.Invoke();
+            return true;
         }
 
         void StartRound(int round)
@@ -265,6 +292,7 @@ namespace Game.Rounds
 
             Points += LastRoundBonusPoints;
             CoinsEarned += LastRoundBonusCoins;
+            RunCash += LastRoundBonusCoins;
 
             PlayerEconomy.AddCoins(LastRoundBonusCoins);
             PlayerEconomy.RegisterRoundWon();
@@ -281,6 +309,7 @@ namespace Game.Rounds
             _phase = RoundPhase.GameOver;
             GameFlow.Over = true;
             GameFlow.Blocked = true;
+            PlayerEconomy.RegisterLoss();
             PlayerEconomy.Flush();
             Changed?.Invoke();
         }
@@ -290,13 +319,20 @@ namespace Game.Rounds
         /// <summary>Lo llama un enemigo justo antes de destruirse. Suma puntos y monedas.</summary>
         public void NotifyEnemyKilled(EnemyTriangle enemy)
         {
-            if (_phase == RoundPhase.Idle || _phase == RoundPhase.GameOver) return;
-            if (_phase == RoundPhase.Fighting || _phase == RoundPhase.Preparing)
-                _defeatedThisRound++;
+            if (_phase != RoundPhase.Fighting || enemy == null || GameFlow.Over) return;
+            _defeatedThisRound++;
 
             EnemiesDefeated++;
             Points += pointsPerKill;
             CoinsEarned += coinsPerKill;
+            RunCash += coinsPerKill;
+
+            if (UnityEngine.Random.value < 0.30f)
+            {
+                SkillPointsDropped++;
+                PlayerEconomy.AddSkillPoint();
+                HitBurst.Spawn(enemy.transform.position + Vector3.up, new Color(.4f, .8f, 1f), 8, .8f);
+            }
 
             PlayerEconomy.AddCoins(coinsPerKill);
             PlayerEconomy.RegisterEnemyDefeated();
