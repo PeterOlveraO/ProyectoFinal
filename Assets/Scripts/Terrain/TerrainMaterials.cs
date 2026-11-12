@@ -7,9 +7,14 @@ namespace Game.Terrain
     /// Materiales del terreno generados por código:
     ///   - Textura de cuadrícula (filtro Point) que marca el contorno de cada cara de bloque.
     ///   - Una tapa por zona, con el color de esa zona, y un costado más oscuro de la misma gama.
-    ///   - URP Lit si hay pipeline asignado, Standard si no.
+    ///   - URP Lit.
     /// El orden coincide con los submeshes de <see cref="ChunkMeshBuilder"/>:
     /// 0..2 tapas de zona 1..3, 3..5 costados de zona 1..3.
+    ///
+    /// El shader se toma de <see cref="TerrainSettings.terrainMaterial"/> y no de <c>Shader.Find</c>:
+    /// en un build Unity elimina los shaders que ningún asset referencia, así que
+    /// <c>Shader.Find("Universal Render Pipeline/Lit")</c> devuelve null en el dispositivo y el
+    /// terreno se queda sin dibujar (se veían los personajes, pero no el mapa).
     /// </summary>
     public static class TerrainMaterials
     {
@@ -18,7 +23,7 @@ namespace Game.Terrain
         public static Material[] Create(TerrainSettings settings)
         {
             var texture = CreateGridTexture();
-            var shader = FindShader();
+            var shader = FindShader(settings);
 
             var zoneColors = new[]
             {
@@ -41,10 +46,9 @@ namespace Game.Terrain
         }
 
         /// <summary>Agua opaca de los lagos (azul, algo brillante).</summary>
-        public static Material CreateWaterMaterial()
+        public static Material CreateWaterMaterial(TerrainSettings settings)
         {
-            var shader = FindShader();
-            if (shader == null) shader = Shader.Find("Unlit/Color");
+            var shader = FindShader(settings);
 
             var water = new Material(shader)
             {
@@ -72,13 +76,21 @@ namespace Game.Terrain
             if (texture != null) Object.Destroy(texture);
         }
 
-        static Shader FindShader()
+        static Shader FindShader(TerrainSettings settings)
         {
-            Shader shader = null;
+            // El shader tiene que venir de un asset incluido en el build. Shader.Find solo
+            // funciona en el editor: al compilar, Unity descarta el shader si ningún asset
+            // lo referencia y en el iPhone devuelve null (terreno invisible, personajes sí).
+            if (settings != null && settings.terrainMaterial != null && settings.terrainMaterial.shader != null)
+                return settings.terrainMaterial.shader;
+
+            Debug.LogError(
+                "[TerrainMaterials] TerrainSettings.terrainMaterial está vacío. " +
+                "Asigna Assets/Materials/M_TerrainBase.mat; sin él el terreno no se verá en el build.");
+
             if (GraphicsSettings.currentRenderPipeline != null)
-                shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null) shader = Shader.Find("Standard");
-            return shader;
+                return Shader.Find("Universal Render Pipeline/Lit");
+            return Shader.Find("Standard");
         }
 
         static Material CreateMaterial(Shader shader, Texture2D texture, Color color, string name)

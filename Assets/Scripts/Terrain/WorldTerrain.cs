@@ -202,7 +202,7 @@ namespace Game.Terrain
         {
             if (_map.Lakes.Count == 0) return;
 
-            _waterMaterial = TerrainMaterials.CreateWaterMaterial();
+            _waterMaterial = TerrainMaterials.CreateWaterMaterial(settings);
 
             var root = new GameObject("Lakes");
             root.transform.SetParent(transform, false);

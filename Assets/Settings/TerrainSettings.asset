@@ -39,6 +39,7 @@ MonoBehaviour:
   zone1Color: {r: 0.3, g: 0.55, b: 0.28, a: 1}
   zone2Color: {r: 0.8, g: 0.52, b: 0.18, a: 1}
   zone3Color: {r: 0.3, g: 0.45, b: 0.75, a: 1}
+  terrainMaterial: {fileID: 2100000, guid: b3f5b0c1a6d94f0a8e2c7d41f9b6a530, type: 2}
   lakeCount: 3
   lakeRadius: 4
   lakeDepth: 2

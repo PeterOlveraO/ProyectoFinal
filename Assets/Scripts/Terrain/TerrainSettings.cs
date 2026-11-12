@@ -92,6 +92,12 @@ namespace Game.Terrain
         public Color zone2Color = new Color(0.80f, 0.52f, 0.18f, 1f);
         public Color zone3Color = new Color(0.30f, 0.45f, 0.75f, 1f);
 
+        [Header("Materiales")]
+        [Tooltip("Material base del terreno y del agua. Es un asset a propósito: al compilar, Unity " +
+                 "elimina los shaders que ningún asset referencia, y Shader.Find devuelve null en el " +
+                 "dispositivo (el mapa no se vería). Debe usar el shader URP/Lit.")]
+        public Material terrainMaterial;
+
         [Header("Lagos")]
         [Tooltip("Cantidad de lagos decorativos (solo en la zona 1).")]
         [Range(0, 12)] public int lakeCount = 3;
