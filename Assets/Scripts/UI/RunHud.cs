@@ -24,7 +24,7 @@ namespace Game.UI
         Text _enemiesLabel;
         Text _pointsLabel;
         Text _coinsLabel;
-        Text _cashLabel;
+        Text _bonusLabel;
         Button _drinkButton;
         Text _drinkLabel;
         int _nearbyDrink = -1;
@@ -153,9 +153,9 @@ namespace Game.UI
             UIFactory.Place(_coinsLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
                             new Vector2(248f, -130f), new Vector2(200f, 30f));
 
-            _cashLabel = UIFactory.CreateText("RunCash", _statusPanel, "PARTIDA $0  ·  EV 0", 23,
-                                              UIFactory.Cream, TextAnchor.MiddleLeft);
-            UIFactory.Place(_cashLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            _bonusLabel = UIFactory.CreateText("RunBonus", _statusPanel, "BONUS DE PUNTOS x0", 22,
+                                               UIFactory.Cream, TextAnchor.MiddleLeft);
+            UIFactory.Place(_bonusLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
                             new Vector2(22f, -172f), new Vector2(430f, 30f));
         }
 
@@ -179,9 +179,9 @@ namespace Game.UI
             if (_nearbyDrink < 0) return;
             _drinkLabel.text = stations.Has((DrinkType)_nearbyDrink) ?
                 "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · ADQUIRIDA" :
-                "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · $" + DrinkStations.Prices[_nearbyDrink];
+                "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · " + DrinkStations.Prices[_nearbyDrink] + " PUNTOS";
             _drinkButton.interactable = !stations.Has((DrinkType)_nearbyDrink) &&
-                                         round.RunCash >= DrinkStations.Prices[_nearbyDrink];
+                                         round.Points >= DrinkStations.Prices[_nearbyDrink];
         }
 
         void BuyDrink()
@@ -270,15 +270,15 @@ namespace Game.UI
                 if (_enemiesLabel != null) _enemiesLabel.text = "0 / 0";
                 if (_pointsLabel != null) _pointsLabel.text = "PUNTOS 0";
                 if (_coinsLabel != null) _coinsLabel.text = "MONEDAS " + PlayerEconomy.Coins;
-                if (_cashLabel != null) _cashLabel.text = "PARTIDA $0  ·  EV " + PlayerEconomy.SkillPoints;
+                if (_bonusLabel != null) _bonusLabel.text = "BONUS DE PUNTOS x0";
                 return;
             }
 
             _roundLabel.text = "RONDA " + round.Round;
             _enemiesLabel.text = round.EnemiesDefeatedThisRound + " / " + round.EnemiesThisRound;
             _pointsLabel.text = "PUNTOS " + round.Points;
-            _coinsLabel.text = "MONEDAS " + PlayerEconomy.Coins;
-            _cashLabel.text = "PARTIDA $" + round.RunCash + "  ·  EV " + PlayerEconomy.SkillPoints;
+            _coinsLabel.text = "PREMIO +" + round.CoinsEarned;
+            _bonusLabel.text = "BONUS x" + round.BonusDrops + "  ·  CARTERA " + PlayerEconomy.Coins;
         }
 
         void UpdateBanner(RoundManager round, bool playing)
@@ -357,9 +357,10 @@ namespace Game.UI
                 _gameOverStats.text =
                     "Rondas superadas: " + round.RoundsPassed +
                     "\nEnemigos derrotados: " + round.EnemiesDefeated +
-                    "\nPuntos de la partida: " + round.Points +
+                    "\nPuntos ganados: " + round.TotalPointsEarned +
+                    "\nPuntos restantes: " + round.Points +
                     "\nMonedas ganadas: " + round.CoinsEarned +
-                    "\nPuntos EV obtenidos: " + round.SkillPointsDropped +
+                    "\nBonus de puntos: " + round.BonusDrops +
                     "\n\nMonedas totales: " + PlayerEconomy.Coins;
 
                 _gameOverRoot.SetActive(true);

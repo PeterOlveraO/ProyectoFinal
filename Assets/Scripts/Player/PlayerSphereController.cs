@@ -2,7 +2,6 @@ using Game.Combat;
 using Game.Core;
 using Game.Enemies;
 using Game.Terrain;
-using Game.Economy;
 using Game.Rounds;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -55,7 +54,7 @@ namespace Game.Player
 
         public static PlayerSphereController Instance { get; private set; }
 
-        public int MaxHealth => maxHealth + PlayerEconomy.EVLevel(0) * 10 +
+        public int MaxHealth => maxHealth + (RoundManager.Instance != null ? RoundManager.Instance.EVLevel(0) * 10 : 0) +
                                 (RoundManager.Instance != null && RoundManager.Instance.GetComponent<DrinkStations>() != null &&
                                  RoundManager.Instance.GetComponent<DrinkStations>().Has(DrinkType.Vitality) ? 50 : 0);
 
@@ -135,7 +134,7 @@ namespace Game.Player
             _verticalSpeed -= gravity * Time.deltaTime;
 
             var drinks = RoundManager.Instance != null ? RoundManager.Instance.GetComponent<DrinkStations>() : null;
-            float speedMultiplier = 1f + PlayerEconomy.EVLevel(3) * .04f;
+            float speedMultiplier = 1f + (RoundManager.Instance != null ? RoundManager.Instance.EVLevel(3) * .04f : 0f);
             if (drinks != null && drinks.Has(DrinkType.Sprint)) speedMultiplier *= 1.3f;
             Vector3 velocity = move * (moveSpeed * speedMultiplier) + Vector3.up * _verticalSpeed;
             _controller.Move(velocity * Time.deltaTime);
@@ -161,7 +160,7 @@ namespace Game.Player
             if (IsInvincible || IsProtected) return;
 
             var drinks = RoundManager.Instance != null ? RoundManager.Instance.GetComponent<DrinkStations>() : null;
-            float reduction = Mathf.Min(.65f, PlayerEconomy.EVLevel(2) * .04f +
+            float reduction = Mathf.Min(.65f, (RoundManager.Instance != null ? RoundManager.Instance.EVLevel(2) * .04f : 0f) +
                 (drinks != null && drinks.Has(DrinkType.Armor) ? .25f : 0f));
             _health -= amount * (1f - reduction);
             if (_health <= 0f)

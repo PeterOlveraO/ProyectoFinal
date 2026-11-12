@@ -238,10 +238,6 @@ namespace Game.EditorTools
             follow.TrackerSettings.BindingMode = BindingMode.WorldSpace;
             follow.TrackerSettings.PositionDamping = new Vector3(0.25f, 0.25f, 0.25f);
 
-            var zoom = GetOrAdd<IsoCameraZoom>(vcamGo);
-            SetFloat(zoom, "minSize", 4f);
-            SetFloat(zoom, "maxSize", 20f);
-
             vcamGo.transform.position = followTarget.position + follow.FollowOffset;
 
             EditorUtility.SetDirty(vcam);
@@ -274,15 +270,6 @@ namespace Game.EditorTools
                 return;
             }
             prop.objectReferenceValue = value;
-            so.ApplyModifiedPropertiesWithoutUndo();
-        }
-
-        static void SetFloat(Object target, string field, float value)
-        {
-            var so = new SerializedObject(target);
-            var prop = so.FindProperty(field);
-            if (prop == null) return;
-            prop.floatValue = value;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 

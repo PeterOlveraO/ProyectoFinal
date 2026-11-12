@@ -19,8 +19,8 @@ namespace Game.Rounds
     /// Economía:
     ///   · Puntos (interna de la partida): +10 por enemigo y +50 por ronda superada
     ///     (más 10 extra por cada ronda adicional). Se reinicia en cada run.
-    ///   · Monedas (global, persistente): +1 por enemigo y +15 por ronda superada
-    ///     (más 5 extra por ronda). Se guardan en <see cref="PlayerEconomy"/>.
+    ///   · Monedas: +1 por enemigo y +15 por ronda superada (más 5 extra por ronda).
+    ///     Se acumulan aquí y se depositan una sola vez al terminar la partida.
     ///
     /// Si el jugador llega a 0 de vida la run termina y se muestra la pantalla de derrota.
     /// </summary>
@@ -97,6 +97,8 @@ namespace Game.Rounds
         float _spawnTimer;
         int _spawnedThisRound;
         int _defeatedThisRound;
+        readonly int[] _evLevels = new int[4];
+        bool _rewardsPaid;
 
         public RoundPhase Phase => _phase;
         public int Round { get; private set; }
@@ -105,11 +107,12 @@ namespace Game.Rounds
         public int AliveCount { get; private set; }
         public float PreparationRemaining => Mathf.Max(0f, _prepRemaining);
 
+        /// <summary>Saldo de puntos para comprar EVs y bebidas durante esta partida.</summary>
         public int Points { get; private set; }
+        public int TotalPointsEarned { get; private set; }
         public int CoinsEarned { get; private set; }
-        /// <summary>Dinero gastable solo durante esta partida; no afecta la cartera global.</summary>
-        public int RunCash { get; private set; }
-        public int SkillPointsDropped { get; private set; }
+        public int BonusDrops { get; private set; }
+        public int BonusPointsPerDrop => pointsPerKill;
         public int EnemiesDefeated { get; private set; }
         public int RoundsPassed { get; private set; }
 
@@ -118,6 +121,21 @@ namespace Game.Rounds
 
         /// <summary>Se dispara cuando cambian puntos, monedas o el estado de la ronda.</summary>
         public event Action Changed;
+
+        public bool IsRunActive => _phase != RoundPhase.Idle && _phase != RoundPhase.GameOver;
+        public int EVLevel(int stat) => stat >= 0 && stat < _evLevels.Length ? _evLevels[stat] : 0;
+        public int EVCost(int stat) => 20 + EVLevel(stat) * 10;
+        public bool CanBuyEV(int stat) => IsRunActive && stat >= 0 && stat < _evLevels.Length &&
+                                          _evLevels[stat] < 10 && Points >= EVCost(stat);
+
+        public bool BuyEV(int stat)
+        {
+            if (!CanBuyEV(stat) || !SpendPoints(EVCost(stat))) return false;
+            _evLevels[stat]++;
+            if (stat == 0) PlayerSphereController.Instance?.Heal(10);
+            Changed?.Invoke();
+            return true;
+        }
 
         void Awake()
         {
@@ -185,13 +203,16 @@ namespace Game.Rounds
         /// <summary>Empieza una run nueva desde la ronda 1 y revive al jugador.</summary>
         public void StartRun()
         {
+            if (IsRunActive) FinishRun();
             ClearEnemies();
             GetComponent<DrinkStations>()?.ResetRun();
 
             Points = 0;
+            TotalPointsEarned = 0;
             CoinsEarned = 0;
-            RunCash = 0;
-            SkillPointsDropped = 0;
+            BonusDrops = 0;
+            Array.Clear(_evLevels, 0, _evLevels.Length);
+            _rewardsPaid = false;
             EnemiesDefeated = 0;
             RoundsPassed = 0;
             LastRoundBonusPoints = 0;
@@ -213,6 +234,7 @@ namespace Game.Rounds
         /// <summary>Detiene la run (al volver al menú principal) y limpia los enemigos.</summary>
         public void StopRun()
         {
+            if (IsRunActive) FinishRun();
             ClearEnemies();
             _phase = RoundPhase.Idle;
             GameFlow.Over = false;
@@ -223,22 +245,36 @@ namespace Game.Rounds
 
         public void AbandonRun()
         {
-            if (_phase == RoundPhase.Idle || _phase == RoundPhase.GameOver) return;
+            if (!IsRunActive) return;
+            FinishRun();
+            ClearEnemies();
+        }
+
+        public bool SpendPoints(int amount)
+        {
+            if (!IsRunActive || amount < 0 || Points < amount) return false;
+            Points -= amount;
+            Changed?.Invoke();
+            return true;
+        }
+
+        void AddPoints(int amount)
+        {
+            Points += amount;
+            TotalPointsEarned += amount;
+        }
+
+        void FinishRun()
+        {
+            if (!IsRunActive || _rewardsPaid) return;
             _phase = RoundPhase.GameOver;
+            _rewardsPaid = true;
             GameFlow.Over = true;
             GameFlow.Blocked = true;
-            ClearEnemies();
+            PlayerEconomy.AddCoins(CoinsEarned);
             PlayerEconomy.RegisterLoss();
             PlayerEconomy.Flush();
             Changed?.Invoke();
-        }
-
-        public bool SpendRunCash(int amount)
-        {
-            if (_phase == RoundPhase.Idle || _phase == RoundPhase.GameOver || amount < 0 || RunCash < amount) return false;
-            RunCash -= amount;
-            Changed?.Invoke();
-            return true;
         }
 
         void StartRound(int round)
@@ -290,13 +326,10 @@ namespace Game.Rounds
             LastRoundBonusPoints = pointsPerRound + pointsPerRoundGrowth * (Round - 1);
             LastRoundBonusCoins = coinsPerRound + coinsPerRoundGrowth * (Round - 1);
 
-            Points += LastRoundBonusPoints;
+            AddPoints(LastRoundBonusPoints);
             CoinsEarned += LastRoundBonusCoins;
-            RunCash += LastRoundBonusCoins;
 
-            PlayerEconomy.AddCoins(LastRoundBonusCoins);
             PlayerEconomy.RegisterRoundWon();
-            PlayerEconomy.Flush();
 
             _phase = RoundPhase.Clearing;
             _clearRemaining = clearingDuration;
@@ -306,12 +339,7 @@ namespace Game.Rounds
 
         void GameOver()
         {
-            _phase = RoundPhase.GameOver;
-            GameFlow.Over = true;
-            GameFlow.Blocked = true;
-            PlayerEconomy.RegisterLoss();
-            PlayerEconomy.Flush();
-            Changed?.Invoke();
+            FinishRun();
         }
 
         // --------------------------------------------------------------- Enemigos
@@ -323,18 +351,16 @@ namespace Game.Rounds
             _defeatedThisRound++;
 
             EnemiesDefeated++;
-            Points += pointsPerKill;
+            AddPoints(pointsPerKill);
             CoinsEarned += coinsPerKill;
-            RunCash += coinsPerKill;
 
             if (UnityEngine.Random.value < 0.30f)
             {
-                SkillPointsDropped++;
-                PlayerEconomy.AddSkillPoint();
+                BonusDrops++;
+                AddPoints(pointsPerKill);
                 HitBurst.Spawn(enemy.transform.position + Vector3.up, new Color(.4f, .8f, 1f), 8, .8f);
             }
 
-            PlayerEconomy.AddCoins(coinsPerKill);
             PlayerEconomy.RegisterEnemyDefeated();
 
             Changed?.Invoke();

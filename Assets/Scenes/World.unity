@@ -1264,7 +1264,6 @@ GameObject:
   - component: {fileID: 2019086871}
   - component: {fileID: 2019086874}
   - component: {fileID: 2019086873}
-  - component: {fileID: 2019086872}
   m_Layer: 0
   m_Name: Iso VCam
   m_TagString: Untagged
@@ -1287,23 +1286,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1763244405}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &2019086872
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2019086870}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 82b9764090ba66f9fa5a82e5ebc82837, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Game.World.IsoCameraZoom
-  minSize: 4
-  maxSize: 20
-  stepPerNotch: 1.5
-  pinchSensitivity: 0.05
-  smoothing: 12
 --- !u!114 &2019086873
 MonoBehaviour:
   m_ObjectHideFlags: 0

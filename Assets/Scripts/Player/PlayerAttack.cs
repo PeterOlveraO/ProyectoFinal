@@ -1,6 +1,5 @@
 using Game.Combat;
 using Game.Core;
-using Game.Economy;
 using Game.Rounds;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -41,7 +40,7 @@ namespace Game.Player
         Vector3 _lastAim = Vector3.forward;
 
         public Vector3 LastAimDirection => _lastAim;
-        public int Damage => damage + PlayerEconomy.EVLevel(1) +
+        public int Damage => damage + (RoundManager.Instance != null ? RoundManager.Instance.EVLevel(1) : 0) +
             (RoundManager.Instance != null && RoundManager.Instance.GetComponent<DrinkStations>() != null &&
              RoundManager.Instance.GetComponent<DrinkStations>().Has(DrinkType.Power) ? 3 : 0);
 

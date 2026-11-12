@@ -106,7 +106,7 @@ namespace Game.Rounds
             var player = PlayerSphereController.Instance;
             var round = RoundManager.Instance;
             if (player == null || !player.IsAlive || round == null || NearbyOffer(player.transform.position) != index) return false;
-            if (!round.SpendRunCash(Prices[index])) return false;
+            if (!round.SpendPoints(Prices[index])) return false;
             _purchased[index] = true;
             if ((DrinkType)index == DrinkType.Vitality) player.Heal(50);
             return true;

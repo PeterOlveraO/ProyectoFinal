@@ -44,6 +44,7 @@ namespace Game.UI
         Button[] _skillButtons;
         int _collectionIndex;
         GameObject _pauseButton;
+        GameObject _skillsButton;
 
         Text _volumeValue;
         Text _qualityValue;
@@ -55,6 +56,7 @@ namespace Game.UI
         bool _paused;
         bool _settingsOpen;
         bool _subMenuOpen;
+        bool _skillsFromPause;
 
         float _volume = 0.8f;
         int _quality;
@@ -166,6 +168,7 @@ namespace Game.UI
 
             _paused = false;
             _settingsOpen = false;
+            _subMenuOpen = false;
             GameFlow.Blocked = false;
             Time.timeScale = 1f;
             AudioListener.pause = false;
@@ -228,7 +231,9 @@ namespace Game.UI
         void RefreshPauseButton()
         {
             if (_pauseButton != null)
-                _pauseButton.SetActive(_playing && !_paused && !_settingsOpen && !GameFlow.Over);
+                _pauseButton.SetActive(_playing && !_paused && !_settingsOpen && !_subMenuOpen && !GameFlow.Over);
+            if (_skillsButton != null)
+                _skillsButton.SetActive(_playing && !_paused && !_settingsOpen && !_subMenuOpen && !GameFlow.Over);
         }
 
         // ------------------------------------------------------------------ UI
@@ -237,6 +242,7 @@ namespace Game.UI
             _canvas = UIFactory.CreateCanvas("UI_Menus", 100);
 
             BuildPauseButton();
+            BuildSkillsButton();
             BuildMainMenu();
             BuildPauseMenu();
             BuildSettingsMenu();
@@ -280,6 +286,15 @@ namespace Game.UI
             _pauseButton = rect.gameObject;
         }
 
+        void BuildSkillsButton()
+        {
+            var button = UIFactory.CreateButton(_canvas, "RunSkillsButton", "EVs", UIFactory.Sky,
+                                                new Vector2(150f, 92f), OpenSkills, 35);
+            UIFactory.Place((RectTransform)button.transform, new Vector2(1f, 1f), new Vector2(.5f, .5f),
+                            new Vector2(-240f, -90f), new Vector2(150f, 92f));
+            _skillsButton = button.gameObject;
+        }
+
         void BuildMainMenu()
         {
             _mainPanel = CreateOverlay("MainMenu");
@@ -320,11 +335,7 @@ namespace Game.UI
             var collection = UIFactory.CreateButton(root, "CollectionButton", "POKÉMON", UIFactory.Sky,
                                                     new Vector2(310f, 90f), OpenCollection, 36);
             UIFactory.Place((RectTransform)collection.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(-165f, -75f), new Vector2(310f, 90f));
-            var skills = UIFactory.CreateButton(root, "SkillsButton", "ÁRBOL EV", UIFactory.Lime,
-                                                new Vector2(310f, 90f), OpenSkills, 36);
-            UIFactory.Place((RectTransform)skills.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(165f, -75f), new Vector2(310f, 90f));
+                            new Vector2(0f, -75f), new Vector2(310f, 90f));
 
             var settings = UIFactory.CreateButton(root, "SettingsButton", "CONFIGURACIÓN", UIFactory.Sky,
                                                  new Vector2(640f, 116f),
@@ -396,20 +407,25 @@ namespace Game.UI
                             new Vector2(0f, 140f), new Vector2(700f, 50f));
 
             var resume = UIFactory.CreateButton(card, "ResumeButton", "CONTINUAR", UIFactory.Lime,
-                                                new Vector2(600f, 110f), Resume, 46);
+                                                new Vector2(600f, 95f), Resume, 46);
             UIFactory.Place((RectTransform)resume.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, 30f), new Vector2(600f, 110f));
+                            new Vector2(0.5f, 0.5f), new Vector2(0f, 55f), new Vector2(600f, 95f));
+
+            var evs = UIFactory.CreateButton(card, "RunSkillsButton", "ÁRBOL EV", UIFactory.Lime,
+                                             new Vector2(600f, 95f), OpenSkills, 40);
+            UIFactory.Place((RectTransform)evs.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, -50f), new Vector2(600f, 95f));
 
             var settings = UIFactory.CreateButton(card, "SettingsButton", "CONFIGURACIÓN", UIFactory.Sky,
-                                                  new Vector2(600f, 110f),
+                                                   new Vector2(600f, 95f),
                                                   () => OpenSettings(SettingsOrigin.Pause), 38);
             UIFactory.Place((RectTransform)settings.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, -100f), new Vector2(600f, 110f));
+                            new Vector2(0.5f, 0.5f), new Vector2(0f, -155f), new Vector2(600f, 95f));
 
             var quit = UIFactory.CreateButton(card, "QuitButton", "SALIR DE PARTIDA", UIFactory.Coral,
-                                               new Vector2(600f, 110f), AbandonRun, 40);
+                                                new Vector2(600f, 95f), AbandonRun, 40);
             UIFactory.Place((RectTransform)quit.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, -230f), new Vector2(600f, 110f));
+                            new Vector2(0.5f, 0.5f), new Vector2(0f, -260f), new Vector2(600f, 95f));
         }
 
         void OpenCollection()
@@ -421,15 +437,28 @@ namespace Game.UI
 
         void OpenSkills()
         {
+            if (!_playing || RoundManager.Instance == null || !RoundManager.Instance.IsRunActive) return;
+            _skillsFromPause = _paused;
             _subMenuOpen = true;
+            _paused = true;
+            GameFlow.Blocked = true;
+            Time.timeScale = 0f;
+            AudioListener.pause = true;
             RefreshSkills();
             ShowPanel(_skillsPanel);
+            RefreshPauseButton();
         }
 
         void CloseSubMenu()
         {
             _subMenuOpen = false;
-            ShowPanel(_mainPanel);
+            if (_playing)
+            {
+                if (_skillsFromPause) ShowPanel(_pausePanel);
+                else Resume();
+            }
+            else ShowPanel(_mainPanel);
+            RefreshPauseButton();
         }
 
         void BuildCollectionMenu()
@@ -512,7 +541,7 @@ namespace Game.UI
             {
                 int stat = i;
                 var button = UIFactory.CreateButton(_skillsPanel, "EV_" + names[i], "", UIFactory.Sky,
-                                                     new Vector2(720, 100), () => { PlayerEconomy.BuyEV(stat); RefreshSkills(); }, 36);
+                                                     new Vector2(720, 100), () => { RoundManager.Instance?.BuyEV(stat); RefreshSkills(); }, 36);
                 UIFactory.Place((RectTransform)button.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                                 new Vector2(0, 135 - i * 115), new Vector2(720, 100));
                 _skillButtons[i] = button;
@@ -525,14 +554,16 @@ namespace Game.UI
 
         void RefreshSkills()
         {
-            _skillsInfo.text = PokemonCollection.GetName(PokemonCollection.Selected) + " · Puntos: " + PlayerEconomy.SkillPoints +
-                               "  ·  30% de probabilidad por enemigo";
+            var round = RoundManager.Instance;
+            if (round == null) return;
+            _skillsInfo.text = PokemonCollection.GetName(PokemonCollection.Selected) + " · Puntos: " + round.Points +
+                               "  ·  30%: +" + round.BonusPointsPerDrop + " puntos por enemigo";
             string[] names = { "SALUD", "ATAQUE", "DEFENSA", "VELOCIDAD" };
             for (int i = 0; i < 4; i++)
             {
-                _skillButtons[i].GetComponentInChildren<Text>().text = names[i] + "  " + PlayerEconomy.EVLevel(i) +
-                    "/10  ·  " + PlayerEconomy.EVCost(i) + " pt";
-                _skillButtons[i].interactable = PlayerEconomy.CanBuyEV(i);
+                _skillButtons[i].GetComponentInChildren<Text>().text = names[i] + "  " + round.EVLevel(i) +
+                    "/10  ·  " + round.EVCost(i) + " pt";
+                _skillButtons[i].interactable = round.CanBuyEV(i);
             }
         }
 
