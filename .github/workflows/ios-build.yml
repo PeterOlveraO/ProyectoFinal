@@ -33,6 +33,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: true
+      # La imagen Docker de Unity necesita más espacio que el disponible por defecto.
+      - name: Liberar espacio para pruebas Unity
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: game-ci/unity-test-runner@v4
         id: tests
         env:
