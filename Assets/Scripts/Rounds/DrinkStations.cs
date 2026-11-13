@@ -13,7 +13,8 @@ namespace Game.Rounds
     public sealed class DrinkStations : MonoBehaviour
     {
         public static readonly string[] Names = { "FUERZA", "VITALIDAD", "SPRINT", "ESCUDO", "RÁFAGA" };
-        public static readonly int[] Prices = { 10, 15, 12, 15, 20 };
+        // R1 ~128 puntos, hasta R10 ~4070 acumulados sin compras ni dobles puntos.
+        public static readonly int[] Prices = { 500, 650, 450, 600, 700 };
         static readonly Color[] Colors =
         {
             new Color(1f, .28f, .22f), new Color(.35f, 1f, .45f),

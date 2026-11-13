@@ -557,7 +557,7 @@ namespace Game.UI
             var round = RoundManager.Instance;
             if (round == null) return;
             _skillsInfo.text = PokemonCollection.GetName(PokemonCollection.Selected) + " · Puntos: " + round.Points +
-                               "  ·  30%: +" + round.BonusPointsPerDrop + " puntos por enemigo";
+                                "  ·  20% botín temporal; 30%: +" + round.BonusPointsPerDrop + " puntos";
             string[] names = { "SALUD", "ATAQUE", "DEFENSA", "VELOCIDAD" };
             for (int i = 0; i < 4; i++)
             {

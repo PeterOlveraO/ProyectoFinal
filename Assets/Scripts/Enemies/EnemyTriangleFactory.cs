@@ -12,7 +12,7 @@ namespace Game.Enemies
     /// </summary>
     public static class EnemyTriangleFactory
     {
-        public static GameObject Create(int zone)
+        public static GameObject Create(int zone, int bossIndex = -1)
         {
             var go = new GameObject("Enemy_Z" + zone);
 
@@ -20,7 +20,9 @@ namespace Game.Enemies
             go.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
 
             // El sprite es el único visual del enemigo.
-            PokemonEnemyVisual.Attach(go, PokemonSpriteLibrary.NextForEnemy());
+            PokemonEnemyVisual.Attach(go, bossIndex >= 0
+                ? PokemonSpriteLibrary.BossAt(bossIndex)
+                : PokemonSpriteLibrary.NextForEnemy());
 
             return go;
         }

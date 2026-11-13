@@ -2,6 +2,7 @@ using Game.Economy;
 using Game.Player;
 using Game.Rendering;
 using Game.Rounds;
+using Game.Upgrades;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -25,9 +26,13 @@ namespace Game.UI
         Text _pointsLabel;
         Text _coinsLabel;
         Text _bonusLabel;
+        Text _powerupLabel;
         Button _drinkButton;
         Text _drinkLabel;
         int _nearbyDrink = -1;
+        Button _upgradeButton;
+        Text _upgradeLabel;
+        int _nearbyUpgrade = -1;
 
         CanvasGroup _banner;
         Text _bannerTitle;
@@ -66,6 +71,7 @@ namespace Game.UI
             UpdateFlash();
             UpdateGameOver(round, gameOver);
             UpdateDrink(round, player, playing && !gameOver && (menu == null || !menu.IsPaused));
+            UpdateUpgrade(round, player, playing && !gameOver && (menu == null || !menu.IsPaused));
         }
 
         // ------------------------------------------------------------- Construcción
@@ -91,6 +97,7 @@ namespace Game.UI
             BuildStatusPanel(root);
             BuildBanner(root);
             BuildDrinkButton(root);
+            BuildUpgradeButton(root);
 
             // La pantalla de derrota vive en su propio Canvas por encima de todo el HUD.
             var overlay = UIFactory.CreateCanvas("UI_GameOver", 120);
@@ -101,7 +108,7 @@ namespace Game.UI
         {
             _statusPanel = UIFactory.CreateRect("RunStatus", parent);
             UIFactory.Place(_statusPanel, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(24f, -24f), new Vector2(470f, 220f));
+                            new Vector2(24f, -24f), new Vector2(470f, 262f));
 
             var background = UIFactory.CreateImage("Background", _statusPanel,
                                                    ProceduralSprites.RoundedRect,
@@ -154,9 +161,14 @@ namespace Game.UI
                             new Vector2(248f, -130f), new Vector2(200f, 30f));
 
             _bonusLabel = UIFactory.CreateText("RunBonus", _statusPanel, "BONUS DE PUNTOS x0", 22,
-                                               UIFactory.Cream, TextAnchor.MiddleLeft);
+                                                UIFactory.Cream, TextAnchor.MiddleLeft);
             UIFactory.Place(_bonusLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(22f, -172f), new Vector2(430f, 30f));
+                             new Vector2(22f, -172f), new Vector2(430f, 30f));
+
+            _powerupLabel = UIFactory.CreateText("PowerupStatus", _statusPanel, "", 21,
+                                                 UIFactory.Sky, TextAnchor.MiddleLeft);
+            UIFactory.Place(_powerupLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
+                            new Vector2(22f, -208f), new Vector2(430f, 30f));
         }
 
         void BuildDrinkButton(Transform parent)
@@ -187,6 +199,37 @@ namespace Game.UI
         void BuyDrink()
         {
             RoundManager.Instance?.GetComponent<DrinkStations>()?.Buy(_nearbyDrink);
+        }
+
+        void BuildUpgradeButton(Transform parent)
+        {
+            _upgradeButton = UIFactory.CreateButton(parent, "BuyShotUpgrade", "", UIFactory.Sun,
+                                                     new Vector2(650f, 100f), BuyUpgrade, 28);
+            UIFactory.Place((RectTransform)_upgradeButton.transform, new Vector2(.5f, 0f), new Vector2(.5f, 0f),
+                            new Vector2(0f, 145f), new Vector2(650f, 100f));
+            _upgradeLabel = _upgradeButton.GetComponentInChildren<Text>();
+            _upgradeButton.gameObject.SetActive(false);
+        }
+
+        void UpdateUpgrade(RoundManager round, PlayerSphereController player, bool playing)
+        {
+            var stations = player != null ? player.GetComponent<ShotUpgradeStations>() : null;
+            _nearbyUpgrade = playing && player != null && stations != null && round != null && round.IsRunActive
+                ? stations.NearbyOffer(player.transform.position) : -1;
+            if (_upgradeButton == null) return;
+            _upgradeButton.gameObject.SetActive(_nearbyUpgrade >= 0);
+            if (_nearbyUpgrade < 0) return;
+            _upgradeLabel.text = stations.Has(_nearbyUpgrade)
+                ? "DISPARO " + ShotUpgradeStations.Names[_nearbyUpgrade] + " · ADQUIRIDO"
+                : "DISPARO " + ShotUpgradeStations.Names[_nearbyUpgrade] + " · " +
+                  ShotUpgradeStations.Prices[_nearbyUpgrade] + " PUNTOS";
+            _upgradeButton.interactable = !stations.Has(_nearbyUpgrade) &&
+                                          round.Points >= ShotUpgradeStations.Prices[_nearbyUpgrade];
+        }
+
+        void BuyUpgrade()
+        {
+            PlayerSphereController.Instance?.GetComponent<ShotUpgradeStations>()?.Buy(_nearbyUpgrade);
         }
 
         void BuildBanner(Transform parent)
@@ -271,6 +314,7 @@ namespace Game.UI
                 if (_pointsLabel != null) _pointsLabel.text = "PUNTOS 0";
                 if (_coinsLabel != null) _coinsLabel.text = "MONEDAS " + PlayerEconomy.Coins;
                 if (_bonusLabel != null) _bonusLabel.text = "BONUS DE PUNTOS x0";
+                if (_powerupLabel != null) _powerupLabel.text = "";
                 return;
             }
 
@@ -279,6 +323,10 @@ namespace Game.UI
             _pointsLabel.text = "PUNTOS " + round.Points;
             _coinsLabel.text = "PREMIO +" + round.CoinsEarned;
             _bonusLabel.text = "BONUS x" + round.BonusDrops + "  ·  CARTERA " + PlayerEconomy.Coins;
+            _powerupLabel.text = (round.DoublePointsRemaining > 0f
+                    ? "PUNTOS x2 " + Mathf.CeilToInt(round.DoublePointsRemaining) + "s   " : "") +
+                (round.ShieldRemaining > 0f
+                    ? "ESCUDO " + Mathf.CeilToInt(round.ShieldRemaining) + "s" : "");
         }
 
         void UpdateBanner(RoundManager round, bool playing)
@@ -307,8 +355,9 @@ namespace Game.UI
                         break;
 
                     case RoundManager.RoundPhase.Fighting:
-                        SetBanner("RONDA " + round.Round,
-                                  "Elimina a " + round.EnemiesThisRound + " enemigos");
+                        SetBanner(round.IsBossRound ? "¡RONDA DE JEFE!" : "RONDA " + round.Round,
+                                  "Elimina a " + round.EnemiesThisRound + " enemigos" +
+                                  (round.IsBossRound ? " · jefe legendario" : ""));
                         _bannerTimer = 2.2f;
                         break;
 

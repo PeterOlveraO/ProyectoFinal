@@ -7,8 +7,7 @@ namespace Game.Pokemon
     /// Visual del jugador: únicamente un Pokémon (sprite 2D). La esfera 3D ya no se usa.
     /// El CharacterController y toda la lógica siguen intactos: solo existe el sprite.
     ///
-    /// El Pokémon asignado es fijo durante toda la partida. La única variante es el espejado
-    /// horizontal según la dirección en la que camina.
+    /// Elige la vista del atlas según la dirección de movimiento relativa a la cámara.
     /// </summary>
     [DefaultExecutionOrder(5)]
     [DisallowMultipleComponent]
@@ -25,10 +24,15 @@ namespace Game.Pokemon
         Color _baseColor = Color.white;
         Vector3 _lastPosition;
         bool _hasLastPosition;
+        int _selected = -1;
+        Sprite _identity;
+        string _direction = "front";
 
         void Start()
         {
             var sprite = PokemonCollection.GetSprite(PokemonCollection.Selected);
+            _selected = PokemonCollection.Selected;
+            _identity = sprite;
             PokemonSpriteLibrary.SetPlayerIndex(PokemonCollection.Selected);
             if (sprite == null) return;
 
@@ -49,9 +53,10 @@ namespace Game.Pokemon
             if (_renderer == null) return;
 
             var selected = PokemonCollection.Selected;
-            if (_renderer.sprite != PokemonCollection.GetSprite(selected))
+            if (_selected != selected)
             {
-                _renderer.sprite = PokemonCollection.GetSprite(selected);
+                _selected = selected;
+                _identity = PokemonCollection.GetSprite(selected);
                 PokemonSpriteLibrary.SetPlayerIndex(selected);
             }
 
@@ -67,13 +72,26 @@ namespace Game.Pokemon
             Vector3 delta = transform.position - _lastPosition;
             _lastPosition = transform.position;
 
-            if (!_hasLastPosition || delta.sqrMagnitude < 0.000001f) return;
+            if (!_hasLastPosition || delta.sqrMagnitude < 0.000001f)
+            {
+                _renderer.sprite = PokemonSpriteLibrary.Frame(_identity, _direction, 0);
+                return;
+            }
 
             var camera = Camera.main;
             if (camera == null) return;
 
-            float lateral = Vector3.Dot(new Vector3(delta.x, 0f, delta.z), camera.transform.right);
-            if (Mathf.Abs(lateral) > facingThreshold) _renderer.flipX = lateral < 0f;
+            var movement = new Vector3(delta.x, 0f, delta.z);
+            float lateral = Vector3.Dot(movement, camera.transform.right);
+            Vector3 forward = camera.transform.forward; forward.y = 0f; forward.Normalize();
+            float depth = Vector3.Dot(movement, forward);
+            if (Mathf.Abs(lateral) > Mathf.Abs(depth))
+            {
+                _direction = "side";
+                if (Mathf.Abs(lateral) > facingThreshold * Time.deltaTime) _renderer.flipX = lateral < 0f;
+            }
+            else { _direction = depth > 0f ? "back" : "front"; _renderer.flipX = false; }
+            _renderer.sprite = PokemonSpriteLibrary.Frame(_identity, _direction, (int)(Time.time * 6f) % 2);
         }
     }
 }

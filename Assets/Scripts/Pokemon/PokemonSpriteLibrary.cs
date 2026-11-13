@@ -1,110 +1,49 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Game.Pokemon
 {
-    /// <summary>
-    /// Reparte los sprites de Pokémon extraídos de <c>Pokemones.png</c>
-    /// (Assets/Resources/PokemonSprites).
-    ///
-    /// - El jugador recibe uno al azar.
-    /// - Cada triángulo enemigo recibe uno <b>distinto</b>: se avanza un cursor por la lista
-    ///   barajada y solo se repite cuando se acaban los sprites disponibles.
-    /// </summary>
+    /// <summary>Catálogos estables; los PNG se generan en el editor desde Pokemones.png.</summary>
     public static class PokemonSpriteLibrary
     {
-        const string ResourcePath = "PokemonSprites";
-
-        static Sprite[] _pool;
+        public static readonly string[] PlayerNames = { "Pikachu", "Charizard", "Garchomp", "Vaporeon", "Eevee", "Snorlax", "Blastoise", "Dragonite", "Lucario", "Bulbasaur" };
+        public static readonly string[] EnemyNames = { "Caterpie", "Metapod", "Butterfree", "Weedle", "Kakuna", "Beedrill", "Pidgey", "Pidgeotto", "Pidgeot", "Rattata", "Raticate", "Spearow", "Fearow", "Ekans", "Arbok", "Raichu", "Sandshrew", "Sandslash", "NidoranF", "Nidorina" };
+        public static readonly string[] BossNames = { "Articuno", "Zapdos", "Moltres" };
+        const string Path = "PokemonAtlas/";
         static int _cursor;
-        static int _playerIndex = -1;
+        static readonly Dictionary<string, Sprite> Cache = new Dictionary<string, Sprite>();
+        public static int Count => PlayerNames.Length;
+        public static int EnemyCount => EnemyNames.Length;
+        public static int BossCount => BossNames.Length;
+        public static Sprite At(int index) => Load(PlayerNames, index);
+        public static Sprite EnemyAt(int index) => Load(EnemyNames, index);
+        public static Sprite BossAt(int index) => Load(BossNames, index);
+        public static void SetPlayerIndex(int index) { }
+        public static Sprite RandomForPlayer() => At(UnityEngine.Random.Range(0, Count));
+        public static Sprite NextForEnemy() => EnemyAt(_cursor++ % EnemyCount);
 
-        public static int Count
+        static Sprite Load(string[] names, int index)
         {
-            get { EnsureLoaded(); return _pool.Length; }
+            return index >= 0 && index < names.Length ? LoadFrame(names[index] + "_front_0") : null;
         }
 
-        public static Sprite At(int index)
+        static Sprite LoadFrame(string key)
         {
-            EnsureLoaded();
-            return index >= 0 && index < _pool.Length ? _pool[index] : null;
+            if (!Cache.TryGetValue(key, out var sprite) || sprite == null)
+            {
+                sprite = Resources.Load<Sprite>(Path + key);
+                if (sprite != null) Cache[key] = sprite;
+            }
+            return sprite;
         }
 
-        public static void SetPlayerIndex(int index) => _playerIndex = index;
-
-        /// <summary>Sprite aleatorio para el personaje principal.</summary>
-        public static Sprite RandomForPlayer()
+        /// <summary>Selecciona una vista y fotograma usando la identidad del sprite inicial.</summary>
+        public static Sprite Frame(Sprite identity, string direction, int frame)
         {
-            EnsureLoaded();
-            if (_pool.Length == 0) return null;
-
-            _playerIndex = Random.Range(0, _pool.Length);
-            return _pool[_playerIndex];
-        }
-
-        /// <summary>Siguiente sprite distinto para un triángulo enemigo.</summary>
-        public static Sprite NextForEnemy()
-        {
-            EnsureLoaded();
-            if (_pool.Length == 0) return null;
-
-            if (_cursor >= _pool.Length) _cursor = 0;
-
-            int index = _cursor++;
-
-            // El jugador conserva su Pokémon: nunca se le asigna a un enemigo.
-            if (_pool.Length > 1 && index == _playerIndex)
-            {
-                if (_cursor >= _pool.Length) _cursor = 0;
-                index = _cursor++;
-            }
-
-            return _pool[index];
-        }
-
-        static void EnsureLoaded()
-        {
-            if (_pool != null && _pool.Length > 0) return;
-
-            var sprites = Resources.LoadAll<Sprite>(ResourcePath);
-
-            // Red de seguridad: si el importador todavía no marcó las texturas como Sprite,
-            // se construyen los sprites en memoria a partir de las texturas.
-            if (sprites == null || sprites.Length == 0)
-            {
-                var textures = Resources.LoadAll<Texture2D>(ResourcePath);
-                sprites = new Sprite[textures.Length];
-                for (int i = 0; i < textures.Length; i++)
-                {
-                    var texture = textures[i];
-                    texture.filterMode = FilterMode.Point;
-                    sprites[i] = Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height),
-                                               new Vector2(0.5f, 0.5f), 32f, 0, SpriteMeshType.FullRect);
-                }
-            }
-
-            if (sprites == null || sprites.Length == 0)
-            {
-                Debug.LogError("[PokemonSpriteLibrary] No hay sprites en Resources/" + ResourcePath);
-                _pool = new Sprite[0];
-                return;
-            }
-
-            _pool = sprites;
-
-            // Orden estable y barajado determinista: misma partida, mismos Pokémon.
-            System.Array.Sort(_pool, (a, b) => string.CompareOrdinal(a.name, b.name));
-            var rng = new System.Random(20251109);
-            for (int i = _pool.Length - 1; i > 0; i--)
-            {
-                int j = rng.Next(i + 1);
-                (_pool[i], _pool[j]) = (_pool[j], _pool[i]);
-            }
-
-            foreach (var sprite in _pool)
-                if (sprite != null) sprite.texture.filterMode = FilterMode.Point;
-
-            _cursor = 0;
-            _playerIndex = -1;
+            if (identity == null) return null;
+            int separator = identity.name.IndexOf('_');
+            string name = separator < 0 ? identity.name : identity.name.Substring(0, separator);
+            return LoadFrame(name + "_" + direction + "_" + Mathf.Clamp(frame, 0, 1)) ?? identity;
         }
     }
 }

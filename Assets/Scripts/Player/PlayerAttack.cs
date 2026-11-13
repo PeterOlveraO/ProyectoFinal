@@ -1,6 +1,7 @@
 using Game.Combat;
 using Game.Core;
 using Game.Rounds;
+using Game.Upgrades;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -37,6 +38,7 @@ namespace Game.Player
         [SerializeField] Color projectileColor = new Color(1f, 0.80f, 0.16f, 1f);
 
         float _timer;
+        ShotUpgradeStations _upgrades;
         Vector3 _lastAim = Vector3.forward;
 
         public Vector3 LastAimDirection => _lastAim;
@@ -46,6 +48,12 @@ namespace Game.Player
 
         /// <summary>Asigna el joystick de ataque desde el bootstrap de la escena.</summary>
         public void SetJoystick(VirtualJoystick value) => joystick = value;
+
+        void Awake()
+        {
+            _upgrades = GetComponent<ShotUpgradeStations>();
+            if (_upgrades == null) _upgrades = gameObject.AddComponent<ShotUpgradeStations>();
+        }
 
         void Update()
         {
@@ -74,6 +82,7 @@ namespace Game.Player
             _timer += Time.deltaTime;
             var drinks = RoundManager.Instance != null ? RoundManager.Instance.GetComponent<DrinkStations>() : null;
             float interval = drinks != null && drinks.Has(DrinkType.RapidFire) ? fireInterval * .7f : fireInterval;
+            if (_upgrades.Has(ShotUpgrade.Rapid)) interval *= .7f;
             if (_timer < interval) return;
 
             _timer = 0f;
@@ -83,7 +92,24 @@ namespace Game.Player
         void Fire()
         {
             Vector3 origin = transform.position + Vector3.up * muzzleHeight + _lastAim * 0.55f;
-            AttackProjectile.Spawn(origin, _lastAim, projectileSpeed, range, Damage, projectileColor);
+            float speed = projectileSpeed;
+            float distance = range;
+            int power = Damage + (_upgrades.Has(ShotUpgrade.Power) ? 3 : 0);
+            int pierce = _upgrades.Has(ShotUpgrade.Pierce) ? 2 : 0;
+            bool area = _upgrades.Has(ShotUpgrade.Area);
+            if (_upgrades.Has(ShotUpgrade.Triple))
+            {
+                int sideDamage = Mathf.Max(1, Mathf.CeilToInt(power * .6f));
+                AttackProjectile.Spawn(origin, _lastAim, speed, distance, power, projectileColor, pierce, area);
+                AttackProjectile.Spawn(origin, Quaternion.Euler(0, -15, 0) * _lastAim, speed, distance, sideDamage, projectileColor, pierce, area);
+                AttackProjectile.Spawn(origin, Quaternion.Euler(0, 15, 0) * _lastAim, speed, distance, sideDamage, projectileColor, pierce, area);
+            }
+            else if (_upgrades.Has(ShotUpgrade.Double))
+            {
+                AttackProjectile.Spawn(origin, Quaternion.Euler(0, -7, 0) * _lastAim, speed, distance, power, projectileColor, pierce, area);
+                AttackProjectile.Spawn(origin, Quaternion.Euler(0, 7, 0) * _lastAim, speed, distance, power, projectileColor, pierce, area);
+            }
+            else AttackProjectile.Spawn(origin, _lastAim, speed, distance, power, projectileColor, pierce, area);
         }
 
         bool TryReadAim(out Vector3 worldDirection)

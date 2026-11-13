@@ -7,8 +7,7 @@ namespace Game.Pokemon
     /// del enemigo: un sprite billboard que se apoya en el suelo y conserva siempre el mismo
     /// Pokémon asignado.
     ///
-    /// Como los sprites solo tienen vista frontal, la variante de caminar se resuelve
-    /// espejando horizontalmente el sprite según la dirección lateral en la que se mueve.
+    /// Elige la vista del atlas según la dirección de movimiento relativa a la cámara.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PokemonEnemyVisual : MonoBehaviour
@@ -27,6 +26,9 @@ namespace Game.Pokemon
 
         SpriteRenderer _renderer;
         Transform _visual;
+        Sprite _identity;
+        Vector3 _lastPosition;
+        string _direction = "front";
 
         /// <summary>Añade el Pokémon a un enemigo recién creado.</summary>
         public static PokemonEnemyVisual Attach(GameObject enemy, Sprite sprite)
@@ -41,6 +43,8 @@ namespace Game.Pokemon
 
         void Build(Sprite sprite)
         {
+            _identity = sprite;
+            _lastPosition = transform.position;
             _renderer = PokemonVisuals.CreateBillboard(transform, "Pokemon " + sprite.name,
                                                        sprite, height, true);
             _visual = _renderer.transform;
@@ -81,10 +85,24 @@ namespace Game.Pokemon
             var camera = Camera.main;
             if (camera == null) return;
 
-            // transform.forward es la dirección de persecución; su componente lateral
-            // respecto a la cámara decide si el personaje camina a izquierda o derecha.
-            float lateral = Vector3.Dot(transform.forward, camera.transform.right);
-            if (Mathf.Abs(lateral) > facingThreshold) _renderer.flipX = lateral < 0f;
+            Vector3 delta = transform.position - _lastPosition;
+            _lastPosition = transform.position;
+            delta.y = 0f;
+            if (delta.sqrMagnitude < 0.000001f)
+            {
+                _renderer.sprite = PokemonSpriteLibrary.Frame(_identity, _direction, 0);
+                return;
+            }
+            float lateral = Vector3.Dot(delta, camera.transform.right);
+            Vector3 forward = camera.transform.forward; forward.y = 0f; forward.Normalize();
+            float depth = Vector3.Dot(delta, forward);
+            if (Mathf.Abs(lateral) > Mathf.Abs(depth))
+            {
+                _direction = "side";
+                if (Mathf.Abs(lateral) > facingThreshold * Time.deltaTime) _renderer.flipX = lateral < 0f;
+            }
+            else { _direction = depth > 0f ? "back" : "front"; _renderer.flipX = false; }
+            _renderer.sprite = PokemonSpriteLibrary.Frame(_identity, _direction, (int)(Time.time * 6f) % 2);
         }
     }
 }

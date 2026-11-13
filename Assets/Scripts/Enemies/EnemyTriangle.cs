@@ -60,12 +60,14 @@ namespace Game.Enemies
         bool _dead;
 
         float _speed = 2.5f;
+        float _contactDamage = ContactDamagePerSecond;
         int _wallSide;
 
         public int Zone { get; private set; }
         public int MaxHealth => maxHealth;
         public int Health => _health;
         public bool IsDead => _dead || _health <= 0;
+        public bool IsBoss { get; private set; }
         public Renderer VisualRenderer => _visualRenderer;
 
         /// <summary>Registra el sprite (único visual) para que el culler lo pueda apagar.</summary>
@@ -91,15 +93,23 @@ namespace Game.Enemies
         }
 
         /// <summary>Configuración usada por el sistema de rondas.</summary>
-        public void Initialize(int zone, float speed)
+        public void Initialize(int zone, float speed, bool boss = false)
         {
             Zone = zone;
-            _speed = Mathf.Max(0.05f, speed);
+            IsBoss = boss;
+            _speed = Mathf.Max(0.05f, speed * (boss ? 1.25f : 1f));
+            _contactDamage = ContactDamagePerSecond * (boss ? 3f : 1f);
 
             // Zona 1: 10 de vida. Zona 2: 12. Zona 3: 14 (redondeado).
             maxHealth = Mathf.Max(1, Mathf.RoundToInt(BaseHealth * Mathf.Pow(1f + HealthPerZone, zone - 1)));
+            if (boss) maxHealth *= 8;
             _health = maxHealth;
             _dead = false;
+            if (boss)
+            {
+                gameObject.name = "Boss_Z" + zone;
+                transform.localScale = Vector3.one * 1.7f;
+            }
             UpdateHealthBar();
         }
 
@@ -172,7 +182,8 @@ namespace Game.Enemies
                 }
 
                 // Daño continuo: 10 de vida por segundo entero de contacto.
-                _player.TakeDamage(ContactDamagePerSecond * Time.deltaTime);
+                if (RoundManager.Instance == null || !RoundManager.Instance.ShieldActive)
+                    _player.TakeDamage(_contactDamage * Time.deltaTime);
                 return;
             }
 

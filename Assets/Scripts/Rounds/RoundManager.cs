@@ -5,6 +5,7 @@ using Game.Economy;
 using Game.Enemies;
 using Game.Player;
 using Game.Terrain;
+using Game.Upgrades;
 using UnityEngine;
 
 namespace Game.Rounds
@@ -91,6 +92,12 @@ namespace Game.Rounds
         [SerializeField, Min(0)] int coinsPerRound = 15;
         [SerializeField, Min(0)] int coinsPerRoundGrowth = 5;
 
+        [Header("Progresión ampliada")]
+        [SerializeField, Min(0)] int extraEnemiesPerRound = 2;
+        [SerializeField, Min(1)] int expandedEnemyCap = 120;
+        [SerializeField, Min(1)] int bossEveryRounds = 5;
+        [SerializeField, Min(1f)] float powerupDuration = 15f;
+
         RoundPhase _phase = RoundPhase.Idle;
         float _prepRemaining;
         float _clearRemaining;
@@ -99,6 +106,9 @@ namespace Game.Rounds
         int _defeatedThisRound;
         readonly int[] _evLevels = new int[4];
         bool _rewardsPaid;
+        float _doublePointsRemaining;
+        float _shieldRemaining;
+        bool _skipRequested;
 
         public RoundPhase Phase => _phase;
         public int Round { get; private set; }
@@ -106,13 +116,18 @@ namespace Game.Rounds
         public int EnemiesDefeatedThisRound => _defeatedThisRound;
         public int AliveCount { get; private set; }
         public float PreparationRemaining => Mathf.Max(0f, _prepRemaining);
+        public float DoublePointsRemaining => _doublePointsRemaining;
+        public float ShieldRemaining => _shieldRemaining;
+        public bool DoublePointsActive => _doublePointsRemaining > 0f;
+        public bool ShieldActive => _shieldRemaining > 0f;
+        public bool IsBossRound => Round > 0 && Round % Mathf.Max(1, bossEveryRounds) == 0;
 
         /// <summary>Saldo de puntos para comprar EVs y bebidas durante esta partida.</summary>
         public int Points { get; private set; }
         public int TotalPointsEarned { get; private set; }
         public int CoinsEarned { get; private set; }
         public int BonusDrops { get; private set; }
-        public int BonusPointsPerDrop => pointsPerKill;
+        public int BonusPointsPerDrop => pointsPerKill * (DoublePointsActive ? 2 : 1);
         public int EnemiesDefeated { get; private set; }
         public int RoundsPassed { get; private set; }
 
@@ -124,7 +139,8 @@ namespace Game.Rounds
 
         public bool IsRunActive => _phase != RoundPhase.Idle && _phase != RoundPhase.GameOver;
         public int EVLevel(int stat) => stat >= 0 && stat < _evLevels.Length ? _evLevels[stat] : 0;
-        public int EVCost(int stat) => 20 + EVLevel(stat) * 10;
+        // R1 da ~128 puntos; una rama completa no debe poder comprarse al inicio.
+        public int EVCost(int stat) => 180 + EVLevel(stat) * 90;
         public bool CanBuyEV(int stat) => IsRunActive && stat >= 0 && stat < _evLevels.Length &&
                                           _evLevels[stat] < 10 && Points >= EVCost(stat);
 
@@ -178,6 +194,23 @@ namespace Game.Rounds
                 return;
             }
 
+            if (_phase != RoundPhase.GameOver)
+            {
+                bool hadDouble = DoublePointsActive;
+                bool hadShield = ShieldActive;
+                _doublePointsRemaining = Mathf.Max(0f, _doublePointsRemaining - Time.deltaTime);
+                _shieldRemaining = Mathf.Max(0f, _shieldRemaining - Time.deltaTime);
+                if (hadDouble != DoublePointsActive || hadShield != ShieldActive) Changed?.Invoke();
+                if (_skipRequested && _phase == RoundPhase.Fighting)
+                {
+                    _skipRequested = false;
+                    ClearEnemies();
+                    ClearPowerups();
+                    StartRound(Round + 1);
+                    return;
+                }
+            }
+
             AliveCount = CountAlive();
 
             switch (_phase)
@@ -205,7 +238,11 @@ namespace Game.Rounds
         {
             if (IsRunActive) FinishRun();
             ClearEnemies();
+            ClearPowerups();
+            _doublePointsRemaining = _shieldRemaining = 0f;
+            _skipRequested = false;
             GetComponent<DrinkStations>()?.ResetRun();
+            PlayerSphereController.Instance?.GetComponent<ShotUpgradeStations>()?.ResetRun();
 
             Points = 0;
             TotalPointsEarned = 0;
@@ -236,6 +273,9 @@ namespace Game.Rounds
         {
             if (IsRunActive) FinishRun();
             ClearEnemies();
+            ClearPowerups();
+            _doublePointsRemaining = _shieldRemaining = 0f;
+            _skipRequested = false;
             _phase = RoundPhase.Idle;
             GameFlow.Over = false;
             AliveCount = 0;
@@ -248,6 +288,7 @@ namespace Game.Rounds
             if (!IsRunActive) return;
             FinishRun();
             ClearEnemies();
+            ClearPowerups();
         }
 
         public bool SpendPoints(int amount)
@@ -260,6 +301,7 @@ namespace Game.Rounds
 
         void AddPoints(int amount)
         {
+            if (DoublePointsActive) amount *= 2;
             Points += amount;
             TotalPointsEarned += amount;
         }
@@ -268,6 +310,9 @@ namespace Game.Rounds
         {
             if (!IsRunActive || _rewardsPaid) return;
             _phase = RoundPhase.GameOver;
+            ClearPowerups();
+            _doublePointsRemaining = _shieldRemaining = 0f;
+            _skipRequested = false;
             _rewardsPaid = true;
             GameFlow.Over = true;
             GameFlow.Blocked = true;
@@ -280,8 +325,8 @@ namespace Game.Rounds
         void StartRound(int round)
         {
             Round = Mathf.Max(1, round);
-            EnemiesThisRound = Mathf.Min(maxEnemiesPerRound,
-                                          baseEnemies + enemiesPerRound * (Round - 1));
+            EnemiesThisRound = (int)Math.Min(Math.Max(maxEnemiesPerRound, expandedEnemyCap),
+                (long)baseEnemies + ((long)enemiesPerRound + extraEnemiesPerRound) * (Round - 1));
 
             _defeatedThisRound = 0;
             _spawnedThisRound = 0;
@@ -323,10 +368,11 @@ namespace Game.Rounds
         {
             RoundsPassed++;
 
-            LastRoundBonusPoints = pointsPerRound + pointsPerRoundGrowth * (Round - 1);
+            LastRoundBonusPoints = (pointsPerRound + pointsPerRoundGrowth * (Round - 1)) * (DoublePointsActive ? 2 : 1);
             LastRoundBonusCoins = coinsPerRound + coinsPerRoundGrowth * (Round - 1);
 
-            AddPoints(LastRoundBonusPoints);
+            Points += LastRoundBonusPoints;
+            TotalPointsEarned += LastRoundBonusPoints;
             CoinsEarned += LastRoundBonusCoins;
 
             PlayerEconomy.RegisterRoundWon();
@@ -347,7 +393,7 @@ namespace Game.Rounds
         /// <summary>Lo llama un enemigo justo antes de destruirse. Suma puntos y monedas.</summary>
         public void NotifyEnemyKilled(EnemyTriangle enemy)
         {
-            if (_phase != RoundPhase.Fighting || enemy == null || GameFlow.Over) return;
+            if (_phase != RoundPhase.Fighting || enemy == null || enemy.transform.parent != transform || GameFlow.Over) return;
             _defeatedThisRound++;
 
             EnemiesDefeated++;
@@ -361,6 +407,9 @@ namespace Game.Rounds
                 HitBurst.Spawn(enemy.transform.position + Vector3.up, new Color(.4f, .8f, 1f), 8, .8f);
             }
 
+            if (UnityEngine.Random.value < 0.20f)
+                RoundPowerup.Spawn(this, enemy.transform.position, (RoundPowerup.Kind)UnityEngine.Random.Range(0, 3));
+
             PlayerEconomy.RegisterEnemyDefeated();
 
             Changed?.Invoke();
@@ -371,12 +420,15 @@ namespace Game.Rounds
             int tier = TierForRound(Round);
             Vector3 position = PickSpawnPosition(player.transform.position);
 
-            var go = EnemyTriangleFactory.Create(tier);
+            bool boss = Round % Mathf.Max(1, bossEveryRounds) == 0 &&
+                        _spawnedThisRound == EnemiesThisRound / 2;
+            int bossIndex = boss ? ((Round / Mathf.Max(1, bossEveryRounds) - 1) % Game.Pokemon.PokemonSpriteLibrary.BossCount) : -1;
+            var go = EnemyTriangleFactory.Create(tier, bossIndex);
             go.transform.SetParent(transform, true);
             go.transform.position = position;
 
             var enemy = go.GetComponent<EnemyTriangle>();
-            if (enemy != null) enemy.Initialize(tier, CurrentEnemySpeed());
+            if (enemy != null) enemy.Initialize(tier, CurrentEnemySpeed(), boss);
 
             _spawnedThisRound++;
             AliveCount++;
@@ -434,7 +486,7 @@ namespace Game.Rounds
             for (int i = 0; i < all.Count; i++)
             {
                 var enemy = all[i];
-                if (enemy != null && !enemy.IsDead) alive++;
+                if (enemy != null && enemy.transform.parent == transform && !enemy.IsDead) alive++;
             }
 
             return alive;
@@ -449,7 +501,26 @@ namespace Game.Rounds
             for (int i = 0; i < all.Count; i++) snapshot[i] = all[i];
 
             foreach (var enemy in snapshot)
-                if (enemy != null) Destroy(enemy.gameObject);
+                if (enemy != null && enemy.transform.parent == transform) Destroy(enemy.gameObject);
+        }
+
+        void ClearPowerups()
+        {
+            foreach (var pickup in GetComponentsInChildren<RoundPowerup>())
+                Destroy(pickup.gameObject);
+        }
+
+        internal bool CollectPowerup(RoundPowerup.Kind kind)
+        {
+            if (_phase != RoundPhase.Fighting || GameFlow.Blocked || GameFlow.Over) return false;
+            switch (kind)
+            {
+                case RoundPowerup.Kind.DoublePoints: _doublePointsRemaining = powerupDuration; break;
+                case RoundPowerup.Kind.Shield: _shieldRemaining = powerupDuration; break;
+                case RoundPowerup.Kind.SkipRound: _skipRequested = true; break;
+            }
+            Changed?.Invoke();
+            return true;
         }
 
         // ------------------------------------------------------------ Dificultad

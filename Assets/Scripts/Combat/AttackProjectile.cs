@@ -3,6 +3,7 @@ using Game.Enemies;
 using Game.Rendering;
 using Game.Terrain;
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace Game.Combat
 {
@@ -29,9 +30,12 @@ namespace Game.Combat
 
         SpriteRenderer _glow;
         float _pulse;
+        int _pierce;
+        bool _area;
+        readonly HashSet<EnemyTriangle> _hitEnemies = new HashSet<EnemyTriangle>();
 
         public static AttackProjectile Spawn(Vector3 origin, Vector3 direction, float speed, float range,
-                                             int damage, Color color)
+                                             int damage, Color color, int pierce = 0, bool area = false)
         {
             if (direction.sqrMagnitude < 0.0001f) direction = Vector3.forward;
 
@@ -39,6 +43,8 @@ namespace Game.Combat
             go.transform.position = origin;
 
             var projectile = go.AddComponent<AttackProjectile>();
+            projectile._pierce = Mathf.Max(0, pierce);
+            projectile._area = area;
             projectile.Initialize(direction, speed, range, damage, color);
             return projectile;
         }
@@ -154,7 +160,7 @@ namespace Game.Combat
             for (int i = 0; i < enemies.Count; i++)
             {
                 var enemy = enemies[i];
-                if (enemy == null) continue;
+                if (enemy == null || enemy.IsDead || _hitEnemies.Contains(enemy)) continue;
 
                 Vector3 delta = enemy.transform.position - position;
                 if (Mathf.Abs(delta.y) > MaxHitHeight) continue;
@@ -163,13 +169,35 @@ namespace Game.Combat
                 if (delta.sqrMagnitude > HitRadius * HitRadius) continue;
 
                 Vector3 hitPoint = position + _direction * 0.1f;
+                _hitEnemies.Add(enemy);
                 enemy.TakeDamage(_damage);
                 HitBurst.Spawn(hitPoint, _color, 8, 0.8f);
+                if (_area) DamageNearby(position, enemy);
+                if (_pierce > 0) { _pierce--; continue; }
                 Destroy(gameObject);
                 return true;
             }
 
             return false;
+        }
+
+        void DamageNearby(Vector3 position, EnemyTriangle primary)
+        {
+            const float radius = 2.5f;
+            // TakeDamage puede retirar enemigos de la lista; iteramos sobre una copia.
+            var enemies = EnemyTriangle.All;
+            var snapshot = new EnemyTriangle[enemies.Count];
+            for (int i = 0; i < snapshot.Length; i++) snapshot[i] = enemies[i];
+            int splashDamage = Mathf.Max(1, Mathf.CeilToInt(_damage * .5f));
+            foreach (var enemy in snapshot)
+            {
+                if (enemy == null || enemy == primary || enemy.IsDead) continue;
+                Vector3 delta = enemy.transform.position - position;
+                if (Mathf.Abs(delta.y) > MaxHitHeight) continue;
+                delta.y = 0f;
+                if (delta.sqrMagnitude <= radius * radius) enemy.TakeDamage(splashDamage);
+            }
+            HitBurst.Spawn(position, _color, 14, 1.8f);
         }
     }
 }

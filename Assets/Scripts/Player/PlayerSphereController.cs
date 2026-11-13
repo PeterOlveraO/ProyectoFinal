@@ -158,6 +158,8 @@ namespace Game.Player
         {
             if (!_alive || amount <= 0f) return;
             if (IsInvincible || IsProtected) return;
+            // El escudo de botín protege durante toda su duración, sin consumir vida.
+            if (RoundManager.Instance != null && RoundManager.Instance.ShieldRemaining > 0f) return;
 
             var drinks = RoundManager.Instance != null ? RoundManager.Instance.GetComponent<DrinkStations>() : null;
             float reduction = Mathf.Min(.65f, (RoundManager.Instance != null ? RoundManager.Instance.EVLevel(2) * .04f : 0f) +
