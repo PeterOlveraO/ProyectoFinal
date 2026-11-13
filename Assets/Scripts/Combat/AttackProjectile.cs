@@ -19,6 +19,20 @@ namespace Game.Combat
         const float GroundClearance = 0.62f;
 
         static Material _trailMaterial;
+        static readonly List<AttackProjectile> Active = new List<AttackProjectile>();
+
+        struct Impact : System.IComparable<Impact>
+        {
+            public EnemyTriangle Enemy;
+            public float Time;
+            public int Order;
+
+            public int CompareTo(Impact other)
+            {
+                int result = Time.CompareTo(other.Time);
+                return result != 0 ? result : Order.CompareTo(other.Order);
+            }
+        }
 
         Vector3 _direction;
         float _speed;
@@ -33,6 +47,25 @@ namespace Game.Combat
         int _pierce;
         bool _area;
         readonly HashSet<EnemyTriangle> _hitEnemies = new HashSet<EnemyTriangle>();
+        readonly List<Impact> _impacts = new List<Impact>();
+        readonly List<EnemyTriangle> _splashTargets = new List<EnemyTriangle>();
+
+        void OnEnable() => Active.Add(this);
+        void OnDisable() => Active.Remove(this);
+
+        /// <summary>Desactiva y destruye todos los proyectiles activos, sin efectos de impacto.</summary>
+        public static void CleanupAll()
+        {
+            while (Active.Count > 0)
+            {
+                int last = Active.Count - 1;
+                var projectile = Active[last];
+                Active.RemoveAt(last);
+                if (projectile == null) continue;
+                projectile.gameObject.SetActive(false);
+                Destroy(projectile.gameObject);
+            }
+        }
 
         public static AttackProjectile Spawn(Vector3 origin, Vector3 direction, float speed, float range,
                                              int damage, Color color, int pierce = 0, bool area = false)
@@ -106,14 +139,15 @@ namespace Game.Combat
         {
             if (GameFlow.Blocked) return;
 
-            float step = _speed * Time.deltaTime;
+            float step = Mathf.Min(_speed * Time.deltaTime, Mathf.Max(0f, _range - _travelled));
+            Vector3 start = transform.position;
             transform.position += _direction * step;
             _travelled += step;
 
             FollowGround();
             Pulse();
 
-            if (CheckHit()) return;
+            if (CheckHit(start, transform.position)) return;
 
             if (_travelled >= _range)
             {
@@ -150,24 +184,28 @@ namespace Game.Combat
             transform.localScale = new Vector3(scale, scale, 1f);
         }
 
-        bool CheckHit()
+        bool CheckHit(Vector3 start, Vector3 end)
         {
             var enemies = EnemyTriangle.All;
             if (enemies == null) return false;
-
-            Vector3 position = transform.position;
+            _impacts.Clear();
 
             for (int i = 0; i < enemies.Count; i++)
             {
                 var enemy = enemies[i];
                 if (enemy == null || enemy.IsDead || _hitEnemies.Contains(enemy)) continue;
 
-                Vector3 delta = enemy.transform.position - position;
-                if (Mathf.Abs(delta.y) > MaxHitHeight) continue;
+                if (SegmentHit(start, end, enemy.transform.position, out float time))
+                    _impacts.Add(new Impact { Enemy = enemy, Time = time, Order = i });
+            }
 
-                delta.y = 0f;
-                if (delta.sqrMagnitude > HitRadius * HitRadius) continue;
-
+            _impacts.Sort();
+            for (int i = 0; i < _impacts.Count; i++)
+            {
+                var impact = _impacts[i];
+                var enemy = impact.Enemy;
+                if (enemy == null || enemy.IsDead || !enemy.isActiveAndEnabled || _hitEnemies.Contains(enemy)) continue;
+                Vector3 position = Vector3.Lerp(start, end, impact.Time);
                 Vector3 hitPoint = position + _direction * 0.1f;
                 _hitEnemies.Add(enemy);
                 enemy.TakeDamage(_damage);
@@ -181,21 +219,64 @@ namespace Game.Combat
             return false;
         }
 
+        // Intersección del segmento con el cilindro horizontal y la franja vertical del enemigo.
+        static bool SegmentHit(Vector3 start, Vector3 end, Vector3 center, out float time)
+        {
+            Vector3 delta = end - start;
+            float x = start.x - center.x;
+            float z = start.z - center.z;
+            float a = delta.x * delta.x + delta.z * delta.z;
+            float c = x * x + z * z - HitRadius * HitRadius;
+            float enter = 0f;
+            float exit = 1f;
+            if (a < 0.00000001f)
+            {
+                if (c > 0f) { time = 0f; return false; }
+            }
+            else
+            {
+                float b = x * delta.x + z * delta.z;
+                float discriminant = b * b - a * c;
+                if (discriminant < 0f) { time = 0f; return false; }
+                float root = Mathf.Sqrt(discriminant);
+                enter = Mathf.Max(enter, (-b - root) / a);
+                exit = Mathf.Min(exit, (-b + root) / a);
+            }
+
+            if (Mathf.Abs(delta.y) < 0.00000001f)
+            {
+                if (Mathf.Abs(start.y - center.y) > MaxHitHeight) { time = 0f; return false; }
+            }
+            else
+            {
+                float first = (center.y - MaxHitHeight - start.y) / delta.y;
+                float second = (center.y + MaxHitHeight - start.y) / delta.y;
+                enter = Mathf.Max(enter, Mathf.Min(first, second));
+                exit = Mathf.Min(exit, Mathf.Max(first, second));
+            }
+            time = enter;
+            return enter <= exit;
+        }
+
         void DamageNearby(Vector3 position, EnemyTriangle primary)
         {
             const float radius = 2.5f;
-            // TakeDamage puede retirar enemigos de la lista; iteramos sobre una copia.
             var enemies = EnemyTriangle.All;
-            var snapshot = new EnemyTriangle[enemies.Count];
-            for (int i = 0; i < snapshot.Length; i++) snapshot[i] = enemies[i];
+            _splashTargets.Clear();
             int splashDamage = Mathf.Max(1, Mathf.CeilToInt(_damage * .5f));
-            foreach (var enemy in snapshot)
+            for (int i = 0; i < enemies.Count; i++)
             {
+                var enemy = enemies[i];
                 if (enemy == null || enemy == primary || enemy.IsDead) continue;
                 Vector3 delta = enemy.transform.position - position;
                 if (Mathf.Abs(delta.y) > MaxHitHeight) continue;
                 delta.y = 0f;
-                if (delta.sqrMagnitude <= radius * radius) enemy.TakeDamage(splashDamage);
+                if (delta.sqrMagnitude <= radius * radius) _splashTargets.Add(enemy);
+            }
+            for (int i = 0; i < _splashTargets.Count; i++)
+            {
+                var enemy = _splashTargets[i];
+                if (enemy != null && !enemy.IsDead && enemy.isActiveAndEnabled) enemy.TakeDamage(splashDamage);
             }
             HitBurst.Spawn(position, _color, 14, 1.8f);
         }

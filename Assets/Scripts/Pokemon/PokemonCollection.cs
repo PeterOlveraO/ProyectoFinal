@@ -10,6 +10,9 @@ namespace Game.Pokemon
         const string SelectedKey = "pketer.pokemon.v2.selected";
         const string OwnedPrefix = "pketer.pokemon.v2.owned.";
         const string MigrationKey = "pketer.pokemon.v2.migrated";
+        const string RefundMigrationKey = "pketer.pokemon.v2.legacy_refunded";
+        const int LegacyCount = 163;
+        const int LegacyPrice = 50;
         // R1 ~21 monedas; diez rondas ~615. Un Pokémon cuesta varias rondas.
         public const int Price = 180;
 
@@ -37,20 +40,38 @@ namespace Game.Pokemon
                    (index == 0 || PlayerPrefs.GetInt(OwnedPrefix + index, 0) == 1);
         }
 
-        static void MigrateLegacyCollection()
+        static bool MigrateLegacyCollection(bool save = true)
         {
-            if (PlayerPrefs.GetInt(MigrationKey, 0) != 0) return;
+            bool migrate = PlayerPrefs.GetInt(MigrationKey, 0) == 0;
+            bool refund = PlayerPrefs.GetInt(RefundMigrationKey, 0) == 0;
+            if (!migrate && !refund) return false;
             // Solo se conservan compras cuyo Pokémon sigue en el catálogo.
-            if (PlayerPrefs.GetInt("pketer.pokemon.owned.5", 0) == 1)
-                PlayerPrefs.SetInt(OwnedPrefix + 1, 1); // Charizard
-            if (PlayerPrefs.GetInt("pketer.pokemon.owned.8", 0) == 1)
-                PlayerPrefs.SetInt(OwnedPrefix + 6, 1); // Blastoise
-            int previous = PlayerPrefs.GetInt("pketer.pokemon.selected", 0);
-            int selected = previous == 5 ? 1 : previous == 8 ? 6 : 0;
-            if (selected == 0 || PlayerPrefs.GetInt(OwnedPrefix + selected, 0) == 1)
-                PlayerPrefs.SetInt(SelectedKey, selected);
-            PlayerPrefs.SetInt(MigrationKey, 1);
-            PlayerPrefs.Save();
+            if (migrate)
+            {
+                if (PlayerPrefs.GetInt("pketer.pokemon.owned.5", 0) == 1)
+                    PlayerPrefs.SetInt(OwnedPrefix + 1, 1); // Charizard
+                if (PlayerPrefs.GetInt("pketer.pokemon.owned.8", 0) == 1)
+                    PlayerPrefs.SetInt(OwnedPrefix + 6, 1); // Blastoise
+                int previous = PlayerPrefs.GetInt("pketer.pokemon.selected", 0);
+                int selected = previous == 5 ? 1 : previous == 8 ? 6 : 0;
+                if (selected == 0 || PlayerPrefs.GetInt(OwnedPrefix + selected, 0) == 1)
+                    PlayerPrefs.SetInt(SelectedKey, selected);
+                PlayerPrefs.SetInt(MigrationKey, 1);
+            }
+            if (refund)
+            {
+                int count = 0;
+                for (int i = 1; i < LegacyCount; i++)
+                    if (i != 5 && i != 8 && PlayerPrefs.GetInt("pketer.pokemon.owned." + i, 0) == 1) count++;
+                PlayerEconomy.AddCoinsUncommitted(count * LegacyPrice);
+                PlayerPrefs.SetInt(RefundMigrationKey, 1);
+            }
+            if (save)
+            {
+                PlayerPrefs.Save();
+                if (refund) PlayerEconomy.NotifyChanged();
+            }
+            return true;
         }
 
         public static bool Select(int index)
@@ -63,9 +84,16 @@ namespace Game.Pokemon
 
         public static bool Buy(int index)
         {
-            if (index <= 0 || index >= Count || IsOwned(index) || !PlayerEconomy.SpendCoins(Price)) return false;
+            bool migrated = MigrateLegacyCollection(false);
+            if (index <= 0 || index >= Count || IsOwned(index) || !PlayerEconomy.SpendCoinsUncommitted(Price))
+            {
+                if (migrated) { PlayerPrefs.Save(); PlayerEconomy.NotifyChanged(); }
+                return false;
+            }
             PlayerPrefs.SetInt(OwnedPrefix + index, 1);
-            Select(index);
+            PlayerPrefs.SetInt(SelectedKey, index);
+            PlayerPrefs.Save();
+            PlayerEconomy.NotifyChanged();
             return true;
         }
     }

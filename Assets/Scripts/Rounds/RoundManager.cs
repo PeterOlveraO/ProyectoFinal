@@ -108,7 +108,8 @@ namespace Game.Rounds
         bool _rewardsPaid;
         float _doublePointsRemaining;
         float _shieldRemaining;
-        bool _skipRequested;
+        bool _skipNextRound;
+        bool _checkpointBlocked;
 
         public RoundPhase Phase => _phase;
         public int Round { get; private set; }
@@ -156,6 +157,7 @@ namespace Game.Rounds
         void Awake()
         {
             Instance = this;
+            PlayerEconomy.SettlePendingRunCoins();
             if (GetComponent<DrinkStations>() == null) gameObject.AddComponent<DrinkStations>();
 
             // Los valores del inspector tienen prioridad; solo se corrigen si quedaron raros.
@@ -168,21 +170,28 @@ namespace Game.Rounds
             if (Instance == this) Instance = null;
         }
 
-        void Start()
-        {
-            PlayerEconomy.Flush();
-        }
-
         void OnApplicationPause(bool paused)
         {
-            if (paused) PlayerEconomy.Flush();
+            if (paused) SavePendingCoins();
         }
 
-        void OnApplicationQuit() => PlayerEconomy.Flush();
+        void OnApplicationQuit() => SavePendingCoins();
+
+        void SavePendingCoins()
+        {
+            if (IsRunActive && !_rewardsPaid) PlayerEconomy.CheckpointRunCoins(CoinsEarned);
+            else PlayerEconomy.Flush();
+        }
 
         void Update()
         {
-            if (GameFlow.Blocked) return;
+            if (GameFlow.Blocked)
+            {
+                if (!_checkpointBlocked && IsRunActive) SavePendingCoins();
+                _checkpointBlocked = true;
+                return;
+            }
+            _checkpointBlocked = false;
 
             var player = PlayerSphereController.Instance;
 
@@ -201,14 +210,6 @@ namespace Game.Rounds
                 _doublePointsRemaining = Mathf.Max(0f, _doublePointsRemaining - Time.deltaTime);
                 _shieldRemaining = Mathf.Max(0f, _shieldRemaining - Time.deltaTime);
                 if (hadDouble != DoublePointsActive || hadShield != ShieldActive) Changed?.Invoke();
-                if (_skipRequested && _phase == RoundPhase.Fighting)
-                {
-                    _skipRequested = false;
-                    ClearEnemies();
-                    ClearPowerups();
-                    StartRound(Round + 1);
-                    return;
-                }
             }
 
             AliveCount = CountAlive();
@@ -226,7 +227,13 @@ namespace Game.Rounds
 
                 case RoundPhase.Clearing:
                     _clearRemaining -= Time.deltaTime;
-                    if (_clearRemaining <= 0f) StartRound(Round + 1);
+                    if (_clearRemaining <= 0f)
+                    {
+                        int nextRound = Round + (_skipNextRound ? 2 : 1);
+                        _skipNextRound = false;
+                        ClearPowerups();
+                        StartRound(nextRound);
+                    }
                     break;
             }
         }
@@ -236,11 +243,13 @@ namespace Game.Rounds
         /// <summary>Empieza una run nueva desde la ronda 1 y revive al jugador.</summary>
         public void StartRun()
         {
-            if (IsRunActive) FinishRun();
+            if (IsRunActive) FinishRun(false);
             ClearEnemies();
             ClearPowerups();
+            AttackProjectile.CleanupAll();
             _doublePointsRemaining = _shieldRemaining = 0f;
-            _skipRequested = false;
+            _skipNextRound = false;
+            _checkpointBlocked = false;
             GetComponent<DrinkStations>()?.ResetRun();
             PlayerSphereController.Instance?.GetComponent<ShotUpgradeStations>()?.ResetRun();
 
@@ -271,11 +280,12 @@ namespace Game.Rounds
         /// <summary>Detiene la run (al volver al menú principal) y limpia los enemigos.</summary>
         public void StopRun()
         {
-            if (IsRunActive) FinishRun();
+            if (IsRunActive) FinishRun(false);
             ClearEnemies();
             ClearPowerups();
+            AttackProjectile.CleanupAll();
             _doublePointsRemaining = _shieldRemaining = 0f;
-            _skipRequested = false;
+            _skipNextRound = false;
             _phase = RoundPhase.Idle;
             GameFlow.Over = false;
             AliveCount = 0;
@@ -286,9 +296,10 @@ namespace Game.Rounds
         public void AbandonRun()
         {
             if (!IsRunActive) return;
-            FinishRun();
+            FinishRun(false);
             ClearEnemies();
             ClearPowerups();
+            AttackProjectile.CleanupAll();
         }
 
         public bool SpendPoints(int amount)
@@ -306,18 +317,19 @@ namespace Game.Rounds
             TotalPointsEarned += amount;
         }
 
-        void FinishRun()
+        void FinishRun(bool defeated)
         {
             if (!IsRunActive || _rewardsPaid) return;
             _phase = RoundPhase.GameOver;
             ClearPowerups();
             _doublePointsRemaining = _shieldRemaining = 0f;
-            _skipRequested = false;
+            _skipNextRound = false;
             _rewardsPaid = true;
             GameFlow.Over = true;
             GameFlow.Blocked = true;
-            PlayerEconomy.AddCoins(CoinsEarned);
-            PlayerEconomy.RegisterLoss();
+            PlayerEconomy.CheckpointRunCoins(CoinsEarned);
+            PlayerEconomy.SettlePendingRunCoins();
+            if (defeated) PlayerEconomy.RegisterLoss();
             PlayerEconomy.Flush();
             Changed?.Invoke();
         }
@@ -385,7 +397,8 @@ namespace Game.Rounds
 
         void GameOver()
         {
-            FinishRun();
+            FinishRun(true);
+            AttackProjectile.CleanupAll();
         }
 
         // --------------------------------------------------------------- Enemigos
@@ -418,7 +431,7 @@ namespace Game.Rounds
         void SpawnEnemy(PlayerSphereController player)
         {
             int tier = TierForRound(Round);
-            Vector3 position = PickSpawnPosition(player.transform.position);
+            if (!TryPickSpawnPosition(player.transform.position, out Vector3 position)) return;
 
             bool boss = Round % Mathf.Max(1, bossEveryRounds) == 0 &&
                         _spawnedThisRound == EnemiesThisRound / 2;
@@ -437,12 +450,14 @@ namespace Game.Rounds
                            new Color(1f, 0.55f, 0.25f, 1f), 7, 0.7f);
         }
 
-        Vector3 PickSpawnPosition(Vector3 origin)
+        bool TryPickSpawnPosition(Vector3 origin, out Vector3 position)
         {
             var terrain = WorldTerrain.Instance;
-            if (terrain == null || terrain.Map == null) return origin;
+            position = default;
+            if (terrain == null || terrain.Map == null) return false;
 
-            Vector3 fallback = origin;
+            Vector3 fallback = default;
+            bool hasFallback = false;
 
             for (int attempt = 0; attempt < 48; attempt++)
             {
@@ -455,11 +470,18 @@ namespace Game.Rounds
 
                 // Guarda un destino válido por si ningún punto respeta el desnivel.
                 fallback = ground;
+                hasFallback = true;
 
-                if (Mathf.Abs(ground.y - origin.y) <= maxSpawnHeightDelta) return ground;
+                if (Mathf.Abs(ground.y - origin.y) <= maxSpawnHeightDelta)
+                {
+                    position = ground;
+                    return true;
+                }
             }
 
-            return fallback;
+            if (!hasFallback) return false;
+            position = fallback;
+            return true;
         }
 
         static bool TryGround(WorldTerrain terrain, Vector3 worldPosition, out Vector3 ground)
@@ -501,23 +523,43 @@ namespace Game.Rounds
             for (int i = 0; i < all.Count; i++) snapshot[i] = all[i];
 
             foreach (var enemy in snapshot)
-                if (enemy != null && enemy.transform.parent == transform) Destroy(enemy.gameObject);
+                if (enemy != null && enemy.transform.parent == transform)
+                {
+                    enemy.gameObject.SetActive(false);
+                    Destroy(enemy.gameObject);
+                }
         }
 
         void ClearPowerups()
         {
             foreach (var pickup in GetComponentsInChildren<RoundPowerup>())
+            {
+                pickup.gameObject.SetActive(false);
                 Destroy(pickup.gameObject);
+            }
         }
 
         internal bool CollectPowerup(RoundPowerup.Kind kind)
         {
-            if (_phase != RoundPhase.Fighting || GameFlow.Blocked || GameFlow.Over) return false;
+            if ((_phase != RoundPhase.Fighting && _phase != RoundPhase.Clearing) || GameFlow.Blocked || GameFlow.Over) return false;
             switch (kind)
             {
                 case RoundPowerup.Kind.DoublePoints: _doublePointsRemaining = powerupDuration; break;
                 case RoundPowerup.Kind.Shield: _shieldRemaining = powerupDuration; break;
-                case RoundPowerup.Kind.SkipRound: _skipRequested = true; break;
+                case RoundPowerup.Kind.SkipRound:
+                    if (_phase == RoundPhase.Clearing)
+                    {
+                        if (_skipNextRound) return false;
+                        _skipNextRound = true;
+                    }
+                    else
+                    {
+                        ClearEnemies();
+                        ClearPowerups();
+                        CompleteRound();
+                    }
+                    break;
+                default: return false;
             }
             Changed?.Invoke();
             return true;

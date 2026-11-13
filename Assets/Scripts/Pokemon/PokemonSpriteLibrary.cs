@@ -12,6 +12,9 @@ namespace Game.Pokemon
         const string Path = "PokemonAtlas/";
         static int _cursor;
         static readonly Dictionary<string, Sprite> Cache = new Dictionary<string, Sprite>();
+        static readonly Dictionary<string, Sprite> FrontCache = new Dictionary<string, Sprite>();
+        static readonly Dictionary<Sprite, Dictionary<string, Sprite[]>> FrameCache =
+            new Dictionary<Sprite, Dictionary<string, Sprite[]>>();
         public static int Count => PlayerNames.Length;
         public static int EnemyCount => EnemyNames.Length;
         public static int BossCount => BossNames.Length;
@@ -24,7 +27,14 @@ namespace Game.Pokemon
 
         static Sprite Load(string[] names, int index)
         {
-            return index >= 0 && index < names.Length ? LoadFrame(names[index] + "_front_0") : null;
+            if (index < 0 || index >= names.Length) return null;
+            string name = names[index];
+            if (!FrontCache.TryGetValue(name, out var sprite) || sprite == null)
+            {
+                sprite = LoadFrame(name + "_front_0");
+                if (sprite != null) FrontCache[name] = sprite;
+            }
+            return sprite;
         }
 
         static Sprite LoadFrame(string key)
@@ -41,9 +51,23 @@ namespace Game.Pokemon
         public static Sprite Frame(Sprite identity, string direction, int frame)
         {
             if (identity == null) return null;
+            // Las direcciones habituales se resuelven una sola vez por identidad y fotograma.
+            if (direction == null) direction = string.Empty;
+            if (!FrameCache.TryGetValue(identity, out var directions))
+            {
+                directions = new Dictionary<string, Sprite[]>();
+                FrameCache.Add(identity, directions);
+            }
+            if (!directions.TryGetValue(direction, out var frames))
+            {
+                frames = new Sprite[2];
+                directions.Add(direction, frames);
+            }
+            frame = Mathf.Clamp(frame, 0, 1);
+            if (frames[frame] != null) return frames[frame];
             int separator = identity.name.IndexOf('_');
             string name = separator < 0 ? identity.name : identity.name.Substring(0, separator);
-            return LoadFrame(name + "_" + direction + "_" + Mathf.Clamp(frame, 0, 1)) ?? identity;
+            return frames[frame] = LoadFrame(name + "_" + direction + "_" + frame) ?? identity;
         }
     }
 }

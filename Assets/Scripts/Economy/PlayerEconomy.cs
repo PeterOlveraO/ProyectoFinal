@@ -13,6 +13,7 @@ namespace Game.Economy
         const string EnemiesKey = "pketer.enemigos";
         const string RoundsKey = "pketer.rondas";
         const string LossesKey = "pketer.derrotas";
+        const string PendingRunCoinsKey = "pketer.monedas.pendientes";
 
         /// <summary>Monedas globales disponibles para el gacha.</summary>
         public static int Coins => PlayerPrefs.GetInt(CoinsKey, 0);
@@ -31,6 +32,36 @@ namespace Game.Economy
             Flush();
             Changed?.Invoke();
             return true;
+        }
+
+        // El comprador guarda propiedad, selección y saldo juntos antes de notificar.
+        internal static bool SpendCoinsUncommitted(int amount)
+        {
+            if (amount < 0 || Coins < amount) return false;
+            PlayerPrefs.SetInt(CoinsKey, Coins - amount);
+            return true;
+        }
+
+        internal static void NotifyChanged() => Changed?.Invoke();
+
+        internal static void AddCoinsUncommitted(int amount)
+        {
+            if (amount != 0) PlayerPrefs.SetInt(CoinsKey, Mathf.Max(0, Coins + amount));
+        }
+
+        public static void CheckpointRunCoins(int amount)
+        {
+            PlayerPrefs.SetInt(PendingRunCoinsKey, Mathf.Max(0, amount));
+            Flush();
+        }
+
+        public static void SettlePendingRunCoins()
+        {
+            int pending = Mathf.Max(0, PlayerPrefs.GetInt(PendingRunCoinsKey, 0));
+            AddCoinsUncommitted(pending);
+            PlayerPrefs.DeleteKey(PendingRunCoinsKey);
+            Flush();
+            if (pending > 0) Changed?.Invoke();
         }
 
         /// <summary>Enemigos derrotados en toda la cuenta.</summary>
@@ -76,6 +107,7 @@ namespace Game.Economy
             PlayerPrefs.DeleteKey(EnemiesKey);
             PlayerPrefs.DeleteKey(RoundsKey);
             PlayerPrefs.DeleteKey(LossesKey);
+            PlayerPrefs.DeleteKey(PendingRunCoinsKey);
             PlayerPrefs.Save();
             Changed?.Invoke();
         }

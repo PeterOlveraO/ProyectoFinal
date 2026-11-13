@@ -197,6 +197,7 @@ namespace Game.Player
             _health = MaxHealth;
             _alive = true;
             _invincibleUntil = 0f;
+            _powerReadyAt = 0f;
             Respawn();
         }
 
