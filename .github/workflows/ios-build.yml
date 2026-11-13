@@ -42,7 +42,6 @@ jobs:
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
         with:
           testMode: EditMode
-          coverageEnabled: false
           githubToken: '' # El job ya es un check; evita pedir checks: write para publicar otro.
           cliVersion: v0.1.73
       - uses: actions/upload-artifact@v4
