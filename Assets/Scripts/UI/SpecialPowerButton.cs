@@ -37,17 +37,17 @@ namespace Game.UI
 
             if (invincibility > 0.05f)
             {
-                _label.text = Mathf.CeilToInt(invincibility).ToString();
+                _label.text = "ACTIVO " + Mathf.CeilToInt(invincibility) + "s";
                 _cooldown.color = new Color(0.18f, 0.85f, 0.45f, 0.45f);
             }
             else if (!ready)
             {
-                _label.text = Mathf.CeilToInt(cooldown).ToString();
+                _label.text = "RECARGA " + Mathf.CeilToInt(cooldown) + "s";
                 _cooldown.color = new Color(0.02f, 0.01f, 0.06f, 0.62f);
             }
             else
             {
-                _label.text = "PODER";
+                _label.text = "LISTO";
                 _cooldown.color = new Color(0f, 0f, 0f, 0f);
             }
 
@@ -70,7 +70,8 @@ namespace Game.UI
                 return;
             }
 
-            var rect = UIFactory.CreateRect("PowerButton", canvas.transform);
+            var safeArea = UIFactory.CreateSafeArea(canvas.transform);
+            var rect = UIFactory.CreateRect("PowerButton", safeArea);
             UIFactory.Place(rect, new Vector2(0.75f, 0.6f), new Vector2(0.5f, 0.5f),
                             new Vector2(0f, 135f), new Vector2(164f, 164f));
 
@@ -108,7 +109,7 @@ namespace Game.UI
             overlay.fillAmount = 0f;
             _cooldown = overlay;
 
-            _label = UIFactory.CreateText("Label", rect, "PODER", 27, UIFactory.Ink);
+            _label = UIFactory.CreateText("Label", rect, "LISTO", 20, UIFactory.Ink);
             UIFactory.Stretch(_label.rectTransform, 12f);
         }
     }

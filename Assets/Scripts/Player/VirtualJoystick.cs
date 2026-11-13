@@ -1,6 +1,8 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using Game.Core;
 
 namespace Game.Player
 {
@@ -16,7 +18,7 @@ namespace Game.Player
     /// </summary>
     [RequireComponent(typeof(RectTransform))]
     [DisallowMultipleComponent]
-    public sealed class VirtualJoystick : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerUpHandler
+    public sealed class VirtualJoystick : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerUpHandler, ICancelHandler
     {
         [Tooltip("Radio del recorrido del mando, en píxeles de referencia del Canvas.")]
         [SerializeField] float radius = 110f;
@@ -42,6 +44,13 @@ namespace Game.Player
         Vector2 _value;
 
         static Sprite s_Circle;
+        static readonly List<VirtualJoystick> Active = new List<VirtualJoystick>();
+
+        public static void ResetAll()
+        {
+            foreach (var joystick in Active)
+                if (joystick != null) joystick.ResetInput();
+        }
 
         /// <summary>Dirección actual (x = derecha, y = arriba), magnitud ≤ 1.</summary>
         public Vector2 Value => isActiveAndEnabled ? _value : Vector2.zero;
@@ -94,13 +103,25 @@ namespace Game.Player
             handleTint = handle;
         }
 
+        void OnEnable() => Active.Add(this);
+
         void OnDisable()
         {
+            Active.Remove(this);
             Release();
         }
 
+        void Update()
+        {
+            if (_pointerId != int.MinValue && (GameFlow.Blocked || !Application.isFocused)) Release();
+        }
+
+        public void ResetInput() => Release();
+        public void OnCancel(BaseEventData eventData) => Release();
+
         public void OnPointerDown(PointerEventData eventData)
         {
+            if (GameFlow.Blocked) return;
             if (_pointerId != int.MinValue) return;
             _pointerId = eventData.pointerId;
 

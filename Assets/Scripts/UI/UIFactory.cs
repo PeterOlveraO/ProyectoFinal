@@ -64,6 +64,14 @@ namespace Game.UI
             return (RectTransform)go.transform;
         }
 
+        public static RectTransform CreateSafeArea(Transform parent)
+        {
+            var rect = CreateRect("SafeArea", parent);
+            Stretch(rect);
+            rect.gameObject.AddComponent<SafeAreaPanel>();
+            return rect;
+        }
+
         public static void Stretch(RectTransform rect, float padding = 0f)
         {
             rect.anchorMin = Vector2.zero;
@@ -107,8 +115,8 @@ namespace Game.UI
             text.fontStyle = FontStyle.Bold;
             text.color = color;
             text.alignment = alignment;
-            text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
             text.raycastTarget = false;
             text.supportRichText = true;
 
@@ -162,7 +170,7 @@ namespace Game.UI
             colors.highlightedColor = new Color(1.12f, 1.12f, 1.12f, 1f);
             colors.pressedColor = new Color(0.78f, 0.78f, 0.78f, 1f);
             colors.selectedColor = Color.white;
-            colors.disabledColor = new Color(0.55f, 0.55f, 0.55f, 0.7f);
+            colors.disabledColor = new Color(0.82f, 0.82f, 0.82f, 1f);
             colors.fadeDuration = 0.08f;
             button.colors = colors;
 
@@ -172,6 +180,8 @@ namespace Game.UI
             Stretch(text.rectTransform);
             text.rectTransform.offsetMin = new Vector2(20f, 4f);
             text.rectTransform.offsetMax = new Vector2(-20f, -4f);
+            // Tinta oscura sobre botones claros: legible también en pantallas pequeñas.
+            text.color = Ink;
 
             return button;
         }
@@ -208,7 +218,7 @@ namespace Game.UI
             rect.sizeDelta = size;
 
             var track = CreateImage("Track", rect, ProceduralSprites.RoundedRect,
-                                    new Color(0.10f, 0.05f, 0.20f, 0.85f), false, true);
+                                    new Color(0.10f, 0.05f, 0.20f, 0.85f), true, true);
             Stretch(track.rectTransform, 0f);
             track.rectTransform.anchorMin = new Vector2(0f, 0.30f);
             track.rectTransform.anchorMax = new Vector2(1f, 0.70f);

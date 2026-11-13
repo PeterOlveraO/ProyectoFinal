@@ -63,7 +63,7 @@ namespace Game.UI
             bool gameOver = round != null && round.Phase == RoundManager.RoundPhase.GameOver;
 
             if (_statusPanel != null)
-                _statusPanel.gameObject.SetActive(true);
+                _statusPanel.gameObject.SetActive(playing && !gameOver && round != null && round.IsRunActive);
 
             UpdateHealth(player);
             UpdateNumbers(round, player);
@@ -94,10 +94,11 @@ namespace Game.UI
                                                 new Color(1f, 0.1f, 0.12f, 0f), false);
             UIFactory.Stretch(_damageFlash.rectTransform);
 
-            BuildStatusPanel(root);
-            BuildBanner(root);
-            BuildDrinkButton(root);
-            BuildUpgradeButton(root);
+            var safeArea = UIFactory.CreateSafeArea(root);
+            BuildStatusPanel(safeArea);
+            BuildBanner(safeArea);
+            BuildDrinkButton(safeArea);
+            BuildUpgradeButton(safeArea);
 
             // La pantalla de derrota vive en su propio Canvas por encima de todo el HUD.
             var overlay = UIFactory.CreateCanvas("UI_GameOver", 120);
@@ -263,7 +264,7 @@ namespace Game.UI
             var dim = UIFactory.CreateImage("Dim", root, null, new Color(0.03f, 0.01f, 0.07f, 0.86f), true);
             UIFactory.Stretch(dim.rectTransform);
 
-            var card = UIFactory.CreateCard(root, new Vector2(980f, 660f),
+            var card = UIFactory.CreateCard(UIFactory.CreateSafeArea(root), new Vector2(980f, 660f),
                                             UIFactory.DeepViolet, UIFactory.Coral);
             UIFactory.Place(card, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                             Vector2.zero, new Vector2(980f, 660f));

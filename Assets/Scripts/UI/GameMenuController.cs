@@ -3,6 +3,7 @@ using Game.Economy;
 using Game.Rendering;
 using Game.Rounds;
 using Game.Pokemon;
+using Game.Player;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -32,8 +33,10 @@ namespace Game.UI
         enum SettingsOrigin { MainMenu, Pause }
 
         RectTransform _canvas;
+        RectTransform _safeCanvas;
         RectTransform _mainPanel;
         RectTransform _pausePanel;
+        RectTransform _confirmPanel;
         RectTransform _settingsPanel;
         RectTransform _collectionPanel;
         RectTransform _skillsPanel;
@@ -49,6 +52,9 @@ namespace Game.UI
         Text _volumeValue;
         Text _qualityValue;
         Text _walletText;
+        Text _pauseInfo;
+        Image _mainPokemonPreview;
+        Text _mainPokemonName;
         Slider _volumeSlider;
         SettingsOrigin _settingsOrigin;
 
@@ -103,6 +109,12 @@ namespace Game.UI
                 return;
             }
 
+            if (_confirmPanel != null && _confirmPanel.gameObject.activeSelf)
+            {
+                CancelAbandon();
+                return;
+            }
+
             if (_subMenuOpen) { CloseSubMenu(); return; }
 
             if (!_playing) return;
@@ -125,6 +137,8 @@ namespace Game.UI
 
             RoundManager.Instance?.StopRun();
             RefreshWallet();
+            RefreshHero();
+            ReleaseJoysticks();
 
             ShowPanel(_mainPanel);
             RefreshPauseButton();
@@ -157,6 +171,12 @@ namespace Game.UI
             GameFlow.Blocked = true;
             Time.timeScale = 0f;
             AudioListener.pause = true;
+            ReleaseJoysticks();
+
+            var round = RoundManager.Instance;
+            if (_pauseInfo != null && round != null)
+                _pauseInfo.text = "RONDA " + round.Round + "  ·  " + round.EnemiesDefeated +
+                                  " DERROTADOS  ·  " + round.Points + " PUNTOS";
 
             ShowPanel(_pausePanel);
             RefreshPauseButton();
@@ -182,6 +202,7 @@ namespace Game.UI
             _settingsOrigin = origin;
             _settingsOpen = true;
             GameFlow.Blocked = true;
+            ReleaseJoysticks();
             ShowPanel(_settingsPanel);
             RefreshPauseButton();
         }
@@ -219,6 +240,7 @@ namespace Game.UI
             _settingsPanel.gameObject.SetActive(false);
             _collectionPanel.gameObject.SetActive(false);
             _skillsPanel.gameObject.SetActive(false);
+            _confirmPanel.gameObject.SetActive(false);
         }
 
         void ShowPanel(RectTransform panel)
@@ -240,11 +262,13 @@ namespace Game.UI
         void Build()
         {
             _canvas = UIFactory.CreateCanvas("UI_Menus", 100);
+            _safeCanvas = UIFactory.CreateSafeArea(_canvas);
 
             BuildPauseButton();
             BuildSkillsButton();
             BuildMainMenu();
             BuildPauseMenu();
+            BuildConfirmAbandon();
             BuildSettingsMenu();
             BuildCollectionMenu();
             BuildSkillsMenu();
@@ -253,11 +277,12 @@ namespace Game.UI
             _settingsPanel.gameObject.SetActive(false);
             _collectionPanel.gameObject.SetActive(false);
             _skillsPanel.gameObject.SetActive(false);
+            _confirmPanel.gameObject.SetActive(false);
         }
 
         void BuildPauseButton()
         {
-            var rect = UIFactory.CreateRect("PauseButton", _canvas);
+            var rect = UIFactory.CreateRect("PauseButton", _safeCanvas);
             UIFactory.Place(rect, new Vector2(1f, 1f), new Vector2(0.5f, 0.5f),
                             new Vector2(-90f, -90f), new Vector2(116f, 116f));
 
@@ -288,7 +313,7 @@ namespace Game.UI
 
         void BuildSkillsButton()
         {
-            var button = UIFactory.CreateButton(_canvas, "RunSkillsButton", "EVs", UIFactory.Sky,
+            var button = UIFactory.CreateButton(_safeCanvas, "RunSkillsButton", "EVs", UIFactory.Sky,
                                                 new Vector2(150f, 92f), OpenSkills, 35);
             UIFactory.Place((RectTransform)button.transform, new Vector2(1f, 1f), new Vector2(.5f, .5f),
                             new Vector2(-240f, -90f), new Vector2(150f, 92f));
@@ -299,62 +324,82 @@ namespace Game.UI
         {
             _mainPanel = CreateOverlay("MainMenu");
             var root = _mainPanel;
-
-            // Fondo degradado (violeta -> coral -> amarillo).
             var background = UIFactory.CreateImage("Background", root,
-                ProceduralSprites.VerticalGradient(new Color32(66, 28, 128, 255),
-                                                   new Color32(255, 160, 92, 255)),
+                ProceduralSprites.VerticalGradient(new Color32(24, 13, 43, 255),
+                                                   new Color32(77, 39, 127, 255)),
                 Color.white, true);
             UIFactory.Stretch(background.rectTransform);
-
             var glow = UIFactory.CreateImage("Glow", root, ProceduralSprites.Glow,
-                new Color(1f, 0.88f, 0.35f, 0.35f), false);
+                new Color(1f, 0.53f, 0.28f, 0.28f), false);
             UIFactory.Place(glow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 280f), new Vector2(1250f, 620f));
-
+                            new Vector2(500f, -100f), new Vector2(1200f, 900f));
             BuildSparkles(root);
-            BuildPokeballDecoration(root);
+            var content = UIFactory.CreateSafeArea(root);
+            var title = UIFactory.CreateText("Title", content, "PKETER", 142, UIFactory.Sun);
+            UIFactory.Place(title.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, 410f), new Vector2(1000f, 190f));
+            UIFactory.AddOutline(title, UIFactory.Ink, 6f);
+            var subtitle = UIFactory.CreateText("Subtitle", content, "POKÉMON  ·  SUPERVIVENCIA", 35, UIFactory.Cream);
+            UIFactory.Place(subtitle.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, 292f), new Vector2(1200f, 55f));
 
-            // Título.
-            var title = UIFactory.CreateText("Title", root, "PKETER", 190, UIFactory.Sun);
-            UIFactory.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 315f), new Vector2(1500f, 270f));
-            UIFactory.AddOutline(title, UIFactory.Ink, 7f);
-
-            var subtitle = UIFactory.CreateText("Subtitle", root, "P O K É M O N   T R A I N E R", 40,
-                                                UIFactory.Cream);
-            subtitle.color = new Color(1f, 0.98f, 0.93f, 0.92f);
-            UIFactory.Place(subtitle.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 160f), new Vector2(1500f, 70f));
-
-            var play = UIFactory.CreateButton(root, "PlayButton", "JUGAR", UIFactory.Lime,
-                                             new Vector2(640f, 116f), StartGame, 50);
-            UIFactory.Place((RectTransform)play.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, 45f), new Vector2(640f, 116f));
-
-            var collection = UIFactory.CreateButton(root, "CollectionButton", "POKÉMON", UIFactory.Sky,
-                                                    new Vector2(310f, 90f), OpenCollection, 36);
+            var actionsAnchor = UIFactory.CreateRect("ActionsColumn", content);
+            UIFactory.Place(actionsAnchor, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(-390f, -105f), new Vector2(730f, 640f));
+            var actions = UIFactory.CreateCard(actionsAnchor, new Vector2(720f, 625f),
+                                               UIFactory.DeepViolet, UIFactory.Sky);
+            var heading = UIFactory.CreateText("ActionsHeading", actions, "TU AVENTURA", 43, UIFactory.Sun);
+            UIFactory.Place(heading.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, 225f), new Vector2(610f, 65f));
+            var play = UIFactory.CreateButton(actions, "PlayButton", "JUGAR", UIFactory.Lime,
+                                             new Vector2(570f, 100f), StartGame, 48);
+            UIFactory.Place((RectTransform)play.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, 125f), new Vector2(570f, 100f));
+            var collection = UIFactory.CreateButton(actions, "CollectionButton", "MI EQUIPO POKÉMON", UIFactory.Sky,
+                                                    new Vector2(570f, 92f), OpenCollection, 37);
             UIFactory.Place((RectTransform)collection.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(0f, -75f), new Vector2(310f, 90f));
+                            new Vector2(0f, 12f), new Vector2(570f, 92f));
+            var settings = UIFactory.CreateButton(actions, "SettingsButton", "AJUSTES", UIFactory.Sun,
+                                                  new Vector2(570f, 92f),
+                                                  () => OpenSettings(SettingsOrigin.MainMenu), 38);
+            UIFactory.Place((RectTransform)settings.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, -100f), new Vector2(570f, 92f));
+            var quit = UIFactory.CreateButton(actions, "QuitButton", "SALIR", UIFactory.Coral,
+                                              new Vector2(570f, 80f), QuitGame, 36);
+            UIFactory.Place((RectTransform)quit.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, -211f), new Vector2(570f, 80f));
 
-            var settings = UIFactory.CreateButton(root, "SettingsButton", "CONFIGURACIÓN", UIFactory.Sky,
-                                                 new Vector2(640f, 116f),
-                                                 () => OpenSettings(SettingsOrigin.MainMenu), 40);
-            UIFactory.Place((RectTransform)settings.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, -185f), new Vector2(640f, 96f));
+            var heroAnchor = UIFactory.CreateRect("HeroColumn", content);
+            UIFactory.Place(heroAnchor, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(390f, -105f), new Vector2(650f, 640f));
+            var hero = UIFactory.CreateCard(heroAnchor, new Vector2(640f, 625f),
+                                            UIFactory.CardViolet, UIFactory.Sun);
+            var heroHeading = UIFactory.CreateText("HeroHeading", hero, "TU COMPAÑERO", 36, UIFactory.Cream);
+            UIFactory.Place(heroHeading.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, 232f), new Vector2(560f, 58f));
+            var halo = UIFactory.CreateImage("PokemonGlow", hero, ProceduralSprites.Glow,
+                                             new Color(1f, .87f, .25f, .45f));
+            UIFactory.Place(halo.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, 75f), new Vector2(440f, 360f));
+            _mainPokemonPreview = UIFactory.CreateImage("SelectedPokemon", hero, null, Color.white);
+            UIFactory.Place(_mainPokemonPreview.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, 65f), new Vector2(280f, 280f));
+            _mainPokemonPreview.preserveAspect = true;
+            _mainPokemonName = UIFactory.CreateText("PokemonName", hero, "PIKACHU", 48, UIFactory.Sun);
+            UIFactory.Place(_mainPokemonName.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, -145f), new Vector2(560f, 66f));
+            var hint = UIFactory.CreateText("Hint", hero, "Elige a tu Pokémon y sobrevive\na las rondas de jefes legendarios", 25,
+                                            UIFactory.Cream);
+            UIFactory.Place(hint.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, -230f), new Vector2(560f, 75f));
 
-            var quit = UIFactory.CreateButton(root, "QuitButton", "SALIR", UIFactory.Coral,
-                                              new Vector2(640f, 116f), QuitGame, 46);
-            UIFactory.Place((RectTransform)quit.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, -300f), new Vector2(640f, 96f));
-
-            var footer = UIFactory.CreateText("Footer", root, "v1.0  ·  Peter Games", 24,
-                                              new Color(1f, 1f, 1f, 0.65f));
-            UIFactory.Place(footer.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                            new Vector2(0f, 34f), new Vector2(900f, 40f));
-
-            BuildWalletBadge(root);
+            var footer = UIFactory.CreateText("Footer", content, "PETER GAMES  ·  v1.0", 22,
+                                              new Color(1f, 1f, 1f, .66f));
+            UIFactory.Place(footer.rectTransform, new Vector2(.5f, 0f), new Vector2(.5f, 0f),
+                            new Vector2(0f, 22f), new Vector2(900f, 40f));
+            BuildWalletBadge(content);
             RefreshWallet();
+            RefreshHero();
         }
 
         /// <summary>Monedas globales (economía persistente usada por el gacha).</summary>
@@ -383,6 +428,13 @@ namespace Game.UI
             if (_walletText != null) _walletText.text = "MONEDAS " + PlayerEconomy.Coins;
         }
 
+        void RefreshHero()
+        {
+            if (_mainPokemonPreview == null || _mainPokemonName == null) return;
+            _mainPokemonPreview.sprite = PokemonCollection.GetSprite(PokemonCollection.Selected);
+            _mainPokemonName.text = PokemonCollection.GetName(PokemonCollection.Selected).ToUpperInvariant();
+        }
+
         void BuildPauseMenu()
         {
             _pausePanel = CreateOverlay("PauseMenu");
@@ -391,7 +443,7 @@ namespace Game.UI
             var dim = UIFactory.CreateImage("Dim", root, null, new Color(0.03f, 0.01f, 0.07f, 0.78f), true);
             UIFactory.Stretch(dim.rectTransform);
 
-            var card = UIFactory.CreateCard(root, new Vector2(900f, 700f),
+            var card = UIFactory.CreateCard(UIFactory.CreateSafeArea(root), new Vector2(900f, 700f),
                                             UIFactory.DeepViolet, UIFactory.Sun);
             UIFactory.Place(card, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                             Vector2.zero, new Vector2(900f, 700f));
@@ -401,10 +453,10 @@ namespace Game.UI
                             new Vector2(0f, 235f), new Vector2(800f, 150f));
             UIFactory.AddOutline(title, UIFactory.Ink, 6f);
 
-            var note = UIFactory.CreateText("Note", card, "La partida está en pausa", 30,
-                                            new Color(1f, 1f, 1f, 0.7f));
-            UIFactory.Place(note.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 140f), new Vector2(700f, 50f));
+            _pauseInfo = UIFactory.CreateText("RunSummary", card, "TU PROGRESO", 28,
+                                             new Color(1f, 1f, 1f, 0.7f));
+            UIFactory.Place(_pauseInfo.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                            new Vector2(0f, 140f), new Vector2(800f, 50f));
 
             var resume = UIFactory.CreateButton(card, "ResumeButton", "CONTINUAR", UIFactory.Lime,
                                                 new Vector2(600f, 95f), Resume, 46);
@@ -423,10 +475,38 @@ namespace Game.UI
                             new Vector2(0.5f, 0.5f), new Vector2(0f, -155f), new Vector2(600f, 95f));
 
             var quit = UIFactory.CreateButton(card, "QuitButton", "SALIR DE PARTIDA", UIFactory.Coral,
-                                                new Vector2(600f, 95f), AbandonRun, 40);
+                                                new Vector2(600f, 95f), ConfirmAbandon, 40);
             UIFactory.Place((RectTransform)quit.transform, new Vector2(0.5f, 0.5f),
                             new Vector2(0.5f, 0.5f), new Vector2(0f, -260f), new Vector2(600f, 95f));
         }
+
+        void BuildConfirmAbandon()
+        {
+            _confirmPanel = CreateOverlay("ConfirmAbandon");
+            var dim = UIFactory.CreateImage("Dim", _confirmPanel, null,
+                                            new Color(.03f, .01f, .07f, .86f), true);
+            UIFactory.Stretch(dim.rectTransform);
+            var card = UIFactory.CreateCard(UIFactory.CreateSafeArea(_confirmPanel),
+                                            new Vector2(900f, 460f), UIFactory.DeepViolet, UIFactory.Coral);
+            var title = UIFactory.CreateText("Title", card, "¿SALIR DE LA PARTIDA?", 55, UIFactory.Sun);
+            UIFactory.Place(title.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, 130f), new Vector2(800f, 90f));
+            var note = UIFactory.CreateText("Note", card,
+                "Se guardarán las monedas ganadas. Perderás los puntos y mejoras de esta partida.", 28, UIFactory.Cream);
+            UIFactory.Place(note.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(0f, 15f), new Vector2(750f, 90f));
+            var stay = UIFactory.CreateButton(card, "StayButton", "SEGUIR JUGANDO", UIFactory.Lime,
+                                               new Vector2(350f, 94f), CancelAbandon, 32);
+            UIFactory.Place((RectTransform)stay.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(-200f, -125f), new Vector2(350f, 94f));
+            var leave = UIFactory.CreateButton(card, "LeaveButton", "SALIR", UIFactory.Coral,
+                                                new Vector2(300f, 94f), AbandonRun, 36);
+            UIFactory.Place((RectTransform)leave.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                            new Vector2(230f, -125f), new Vector2(300f, 94f));
+        }
+
+        void ConfirmAbandon() => ShowPanel(_confirmPanel);
+        void CancelAbandon() => ShowPanel(_pausePanel);
 
         void OpenCollection()
         {
@@ -442,6 +522,7 @@ namespace Game.UI
             _subMenuOpen = true;
             _paused = true;
             GameFlow.Blocked = true;
+            ReleaseJoysticks();
             Time.timeScale = 0f;
             AudioListener.pause = true;
             RefreshSkills();
@@ -457,8 +538,18 @@ namespace Game.UI
                 if (_skillsFromPause) ShowPanel(_pausePanel);
                 else Resume();
             }
-            else ShowPanel(_mainPanel);
+            else { RefreshWallet(); RefreshHero(); ShowPanel(_mainPanel); }
             RefreshPauseButton();
+        }
+
+        void OnApplicationFocus(bool focused)
+        {
+            if (!focused) ReleaseJoysticks();
+        }
+
+        void ReleaseJoysticks()
+        {
+            VirtualJoystick.ResetAll();
         }
 
         void BuildCollectionMenu()
@@ -466,29 +557,32 @@ namespace Game.UI
             _collectionPanel = CreateOverlay("CollectionMenu");
             var dim = UIFactory.CreateImage("Dim", _collectionPanel, null, UIFactory.DeepViolet, true);
             UIFactory.Stretch(dim.rectTransform);
-            var title = UIFactory.CreateText("Title", _collectionPanel, "COLECCIÓN POKÉMON", 72, UIFactory.Sun);
+            var content = UIFactory.CreateSafeArea(_collectionPanel);
+            var card = UIFactory.CreateCard(content, new Vector2(1520f, 880f),
+                                            UIFactory.CardViolet, UIFactory.Sun);
+            var title = UIFactory.CreateText("Title", card, "COLECCIÓN POKÉMON", 72, UIFactory.Sun);
             UIFactory.Place(title.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                             new Vector2(0, 340), new Vector2(1400, 110));
-            _collectionInfo = UIFactory.CreateText("Info", _collectionPanel, "", 36, UIFactory.Cream);
+            _collectionInfo = UIFactory.CreateText("Info", card, "", 36, UIFactory.Cream);
             UIFactory.Place(_collectionInfo.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                             new Vector2(225, 110), new Vector2(1000, 300));
-            _pokemonPreview = UIFactory.CreateImage("PokemonPreview", _collectionPanel, null, Color.white);
+            _pokemonPreview = UIFactory.CreateImage("PokemonPreview", card, null, Color.white);
             UIFactory.Place(_pokemonPreview.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                             new Vector2(-510, 110), new Vector2(270, 270));
             _pokemonPreview.preserveAspect = true;
-            var previous = UIFactory.CreateButton(_collectionPanel, "Previous", "◀", UIFactory.Sky,
+            var previous = UIFactory.CreateButton(card, "Previous", "◀", UIFactory.Sky,
                                                    new Vector2(180, 90), () => ChangeSelection(-1), 42);
             UIFactory.Place((RectTransform)previous.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                             new Vector2(-290, -100), new Vector2(180, 90));
-            var next = UIFactory.CreateButton(_collectionPanel, "Next", "▶", UIFactory.Sky,
+            var next = UIFactory.CreateButton(card, "Next", "▶", UIFactory.Sky,
                                                new Vector2(180, 90), () => ChangeSelection(1), 42);
             UIFactory.Place((RectTransform)next.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                             new Vector2(290, -100), new Vector2(180, 90));
-            _buyPokemonButton = UIFactory.CreateButton(_collectionPanel, "BuyOrSelect", "", UIFactory.Lime,
+            _buyPokemonButton = UIFactory.CreateButton(card, "BuyOrSelect", "", UIFactory.Lime,
                                                        new Vector2(510, 100), BuyOrSelectPokemon, 36);
             UIFactory.Place((RectTransform)_buyPokemonButton.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                             new Vector2(0, -245), new Vector2(510, 100));
-            var back = UIFactory.CreateButton(_collectionPanel, "Back", "VOLVER", UIFactory.Coral,
+            var back = UIFactory.CreateButton(card, "Back", "VOLVER", UIFactory.Coral,
                                               new Vector2(360, 85), CloseSubMenu, 36);
             UIFactory.Place((RectTransform)back.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                             new Vector2(0, -370), new Vector2(360, 85));
@@ -512,16 +606,21 @@ namespace Game.UI
         void RefreshCollection()
         {
             int count = PokemonCollection.Count;
-            if (count == 0) { _collectionInfo.text = "No hay sprites en Resources/PokemonSprites"; _buyPokemonButton.interactable = false; return; }
+            if (count == 0) { _collectionInfo.text = "No hay sprites en Resources/PokemonAtlas"; _buyPokemonButton.interactable = false; return; }
             _collectionIndex = Mathf.Clamp(_collectionIndex, 0, count - 1);
             _pokemonPreview.sprite = PokemonCollection.GetSprite(_collectionIndex);
             bool owned = PokemonCollection.IsOwned(_collectionIndex);
             _collectionInfo.text = PokemonCollection.GetName(_collectionIndex) + "  (" + (_collectionIndex + 1) + "/" + count + ")\n" +
-                                   (owned ? "DESBLOQUEADO" : "BLOQUEADO") +
-                                   "\nMonedas: " + PlayerEconomy.Coins + "  ·  Precio: " + PokemonCollection.Price;
+                                    (owned ? "DESBLOQUEADO" : "BLOQUEADO") +
+                                    "\nMonedas: " + PlayerEconomy.Coins + "  ·  Precio: " +
+                                    (_collectionIndex == 0 ? "GRATIS" : PokemonCollection.Price.ToString()) +
+                                    (!owned && PlayerEconomy.Coins < PokemonCollection.Price
+                                        ? "\nFaltan " + (PokemonCollection.Price - PlayerEconomy.Coins) + " monedas" : "");
             _buyPokemonButton.GetComponentInChildren<Text>().text = owned ?
                 (PokemonCollection.Selected == _collectionIndex ? "EQUIPADO" : "EQUIPAR") : "COMPRAR";
-            _buyPokemonButton.interactable = owned || PlayerEconomy.Coins >= PokemonCollection.Price;
+            _buyPokemonButton.interactable = owned
+                ? PokemonCollection.Selected != _collectionIndex
+                : PlayerEconomy.Coins >= PokemonCollection.Price;
         }
 
         void BuildSkillsMenu()
@@ -529,10 +628,13 @@ namespace Game.UI
             _skillsPanel = CreateOverlay("SkillsMenu");
             var dim = UIFactory.CreateImage("Dim", _skillsPanel, null, UIFactory.DeepViolet, true);
             UIFactory.Stretch(dim.rectTransform);
-            var title = UIFactory.CreateText("Title", _skillsPanel, "ÁRBOL DE EVs", 72, UIFactory.Sun);
+            var content = UIFactory.CreateSafeArea(_skillsPanel);
+            var card = UIFactory.CreateCard(content, new Vector2(1380f, 880f),
+                                            UIFactory.DeepViolet, UIFactory.Sky);
+            var title = UIFactory.CreateText("Title", card, "ÁRBOL DE EVs", 72, UIFactory.Sun);
             UIFactory.Place(title.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                             new Vector2(0, 390), new Vector2(1300, 100));
-            _skillsInfo = UIFactory.CreateText("Info", _skillsPanel, "", 32, UIFactory.Cream);
+            _skillsInfo = UIFactory.CreateText("Info", card, "", 32, UIFactory.Cream);
             UIFactory.Place(_skillsInfo.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                             new Vector2(0, 270), new Vector2(1300, 90));
             _skillButtons = new Button[4];
@@ -540,13 +642,13 @@ namespace Game.UI
             for (int i = 0; i < names.Length; i++)
             {
                 int stat = i;
-                var button = UIFactory.CreateButton(_skillsPanel, "EV_" + names[i], "", UIFactory.Sky,
+                var button = UIFactory.CreateButton(card, "EV_" + names[i], "", UIFactory.Sky,
                                                      new Vector2(720, 100), () => { RoundManager.Instance?.BuyEV(stat); RefreshSkills(); }, 36);
                 UIFactory.Place((RectTransform)button.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                                 new Vector2(0, 135 - i * 115), new Vector2(720, 100));
                 _skillButtons[i] = button;
             }
-            var back = UIFactory.CreateButton(_skillsPanel, "Back", "VOLVER", UIFactory.Coral,
+            var back = UIFactory.CreateButton(card, "Back", "VOLVER", UIFactory.Coral,
                                               new Vector2(360, 85), CloseSubMenu, 36);
             UIFactory.Place((RectTransform)back.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                             new Vector2(0, -375), new Vector2(360, 85));
@@ -557,12 +659,15 @@ namespace Game.UI
             var round = RoundManager.Instance;
             if (round == null) return;
             _skillsInfo.text = PokemonCollection.GetName(PokemonCollection.Selected) + " · Puntos: " + round.Points +
-                                "  ·  20% botín temporal; 30%: +" + round.BonusPointsPerDrop + " puntos";
+                                "  ·  Mejora tus EV con los puntos de esta partida";
             string[] names = { "SALUD", "ATAQUE", "DEFENSA", "VELOCIDAD" };
             for (int i = 0; i < 4; i++)
             {
+                string state = round.EVLevel(i) >= 10 ? "NIVEL MÁXIMO" :
+                    round.Points < round.EVCost(i) ? "FALTAN " + (round.EVCost(i) - round.Points) + " pt" :
+                    round.EVCost(i) + " pt";
                 _skillButtons[i].GetComponentInChildren<Text>().text = names[i] + "  " + round.EVLevel(i) +
-                    "/10  ·  " + round.EVCost(i) + " pt";
+                    "/10  ·  " + state;
                 _skillButtons[i].interactable = round.CanBuyEV(i);
             }
         }
@@ -575,7 +680,7 @@ namespace Game.UI
             var dim = UIFactory.CreateImage("Dim", root, null, new Color(0.03f, 0.01f, 0.07f, 0.82f), true);
             UIFactory.Stretch(dim.rectTransform);
 
-            var card = UIFactory.CreateCard(root, new Vector2(1080f, 660f),
+            var card = UIFactory.CreateCard(UIFactory.CreateSafeArea(root), new Vector2(1080f, 660f),
                                             UIFactory.DeepViolet, UIFactory.Sky);
             UIFactory.Place(card, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                             Vector2.zero, new Vector2(1080f, 660f));
