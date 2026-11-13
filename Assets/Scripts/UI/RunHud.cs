@@ -274,9 +274,9 @@ namespace Game.UI
                             new Vector2(0f, 228f), new Vector2(900f, 130f));
             UIFactory.AddOutline(title, UIFactory.Ink, 6f);
 
-            _gameOverStats = UIFactory.CreateText("Stats", card, "", 34, UIFactory.Cream);
+            _gameOverStats = UIFactory.CreateText("Stats", card, "", 28, UIFactory.Cream);
             UIFactory.Place(_gameOverStats.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 42f), new Vector2(860f, 270f));
+                            new Vector2(0f, 25f), new Vector2(860f, 310f));
 
             var retry = UIFactory.CreateButton(card, "RetryButton", "REINTENTAR", UIFactory.Lime,
                                                new Vector2(400f, 104f), Retry, 40);

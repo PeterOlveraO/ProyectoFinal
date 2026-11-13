@@ -85,6 +85,10 @@ namespace Game.UI
             ShowMainMenu();
         }
 
+        void OnEnable() => PlayerEconomy.Changed += RefreshWallet;
+        void OnDisable() => PlayerEconomy.Changed -= RefreshWallet;
+        void Start() => RefreshWallet();
+
         void OnDestroy()
         {
             if (Instance == this) Instance = null;
@@ -336,12 +340,12 @@ namespace Game.UI
             BuildSparkles(root);
             var content = UIFactory.CreateSafeArea(root);
             var title = UIFactory.CreateText("Title", content, "PKETER", 142, UIFactory.Sun);
-            UIFactory.Place(title.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(0f, 410f), new Vector2(1000f, 190f));
+            UIFactory.Place(title.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, .5f),
+                            new Vector2(0f, -110f), new Vector2(1000f, 200f));
             UIFactory.AddOutline(title, UIFactory.Ink, 6f);
             var subtitle = UIFactory.CreateText("Subtitle", content, "POKÉMON  ·  SUPERVIVENCIA", 35, UIFactory.Cream);
-            UIFactory.Place(subtitle.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(0f, 292f), new Vector2(1200f, 55f));
+            UIFactory.Place(subtitle.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, .5f),
+                            new Vector2(0f, -215f), new Vector2(1200f, 55f));
 
             var actionsAnchor = UIFactory.CreateRect("ActionsColumn", content);
             UIFactory.Place(actionsAnchor, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
@@ -496,7 +500,7 @@ namespace Game.UI
             UIFactory.Place(note.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                             new Vector2(0f, 15f), new Vector2(750f, 90f));
             var stay = UIFactory.CreateButton(card, "StayButton", "SEGUIR JUGANDO", UIFactory.Lime,
-                                               new Vector2(350f, 94f), CancelAbandon, 32);
+                                               new Vector2(350f, 94f), Resume, 32);
             UIFactory.Place((RectTransform)stay.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
                             new Vector2(-200f, -125f), new Vector2(350f, 94f));
             var leave = UIFactory.CreateButton(card, "LeaveButton", "SALIR", UIFactory.Coral,

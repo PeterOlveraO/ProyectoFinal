@@ -210,7 +210,7 @@ namespace Game.Combat
                 _hitEnemies.Add(enemy);
                 enemy.TakeDamage(_damage);
                 HitBurst.Spawn(hitPoint, _color, 8, 0.8f);
-                if (_area) DamageNearby(position, enemy);
+                if (_area) DamageNearby(enemy.transform.position, enemy);
                 if (_pierce > 0) { _pierce--; continue; }
                 Destroy(gameObject);
                 return true;

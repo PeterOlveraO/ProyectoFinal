@@ -43,6 +43,8 @@ jobs:
         with:
           testMode: EditMode
           coverageEnabled: false
+          githubToken: '' # El job ya es un check; evita pedir checks: write para publicar otro.
+          cliVersion: v0.1.73
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -52,6 +54,7 @@ jobs:
 
   unity-export:
     name: Exportar proyecto de Xcode (Unity)
+    needs: editmode-tests
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -104,7 +107,7 @@ jobs:
 
   xcode-ipa:
     name: Compilar .ipa (Xcode)
-    needs: [unity-export, editmode-tests]
+    needs: unity-export
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -137,9 +140,10 @@ jobs:
           cd "$RUNNER_TEMP/ipa"
           zip -qry ProyectoFinal-unsigned.ipa Payload
           ls -lh ProyectoFinal-unsigned.ipa
-          sha256sum ProyectoFinal-unsigned.ipa > ProyectoFinal-unsigned.ipa.sha256
-          printf 'source_sha=%s\nsource_ref=%s\nevent=%s\n' \
-            "$GITHUB_SHA" "$GITHUB_REF" "$GITHUB_EVENT_NAME" > provenance.txt
+          shasum -a 256 ProyectoFinal-unsigned.ipa > ProyectoFinal-unsigned.ipa.sha256
+          printf 'source_sha=%s\nsource_ref=%s\nevent=%s\npr_head_sha=%s\n' \
+            "$GITHUB_SHA" "$GITHUB_REF" "$GITHUB_EVENT_NAME" \
+            "${{ github.event.pull_request.head.sha }}" > provenance.txt
 
       - uses: actions/upload-artifact@v4
         with:
