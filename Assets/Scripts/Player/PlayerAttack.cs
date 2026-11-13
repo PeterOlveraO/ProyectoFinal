@@ -97,19 +97,23 @@ namespace Game.Player
             int power = Damage + (_upgrades.Has(ShotUpgrade.Power) ? 3 : 0);
             int pierce = _upgrades.Has(ShotUpgrade.Pierce) ? 2 : 0;
             bool area = _upgrades.Has(ShotUpgrade.Area);
-            if (_upgrades.Has(ShotUpgrade.Triple))
+            bool triple = _upgrades.Has(ShotUpgrade.Triple);
+            bool doubleShot = _upgrades.Has(ShotUpgrade.Double);
+            if (triple)
             {
                 int sideDamage = Mathf.Max(1, Mathf.CeilToInt(power * .6f));
                 AttackProjectile.Spawn(origin, _lastAim, speed, distance, power, projectileColor, pierce, area);
                 AttackProjectile.Spawn(origin, Quaternion.Euler(0, -15, 0) * _lastAim, speed, distance, sideDamage, projectileColor, pierce, area);
                 AttackProjectile.Spawn(origin, Quaternion.Euler(0, 15, 0) * _lastAim, speed, distance, sideDamage, projectileColor, pierce, area);
             }
-            else if (_upgrades.Has(ShotUpgrade.Double))
+            // Doble y Triple son compras independientes: juntas generan cinco disparos.
+            if (doubleShot)
             {
                 AttackProjectile.Spawn(origin, Quaternion.Euler(0, -7, 0) * _lastAim, speed, distance, power, projectileColor, pierce, area);
                 AttackProjectile.Spawn(origin, Quaternion.Euler(0, 7, 0) * _lastAim, speed, distance, power, projectileColor, pierce, area);
             }
-            else AttackProjectile.Spawn(origin, _lastAim, speed, distance, power, projectileColor, pierce, area);
+            if (!triple && !doubleShot)
+                AttackProjectile.Spawn(origin, _lastAim, speed, distance, power, projectileColor, pierce, area);
         }
 
         bool TryReadAim(out Vector3 worldDirection)
