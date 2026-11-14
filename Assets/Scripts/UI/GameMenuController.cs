@@ -3,6 +3,10 @@ using Game.Economy;
 using Game.Rendering;
 using Game.Rounds;
 using Game.Pokemon;
+using Game.Pokemon.Progression;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -37,10 +41,32 @@ namespace Game.UI
         RectTransform _settingsPanel;
         RectTransform _collectionPanel;
         RectTransform _skillsPanel;
+        RectTransform _starterPanel;
+        RectTransform _gachaPanel;
+        RectTransform _resultPanel;
+        RectTransform _releasePanel;
         Text _collectionInfo;
         Image _pokemonPreview;
         Text _skillsInfo;
-        Button _buyPokemonButton;
+        Button _equipButton;
+        Button _releaseButton;
+        Text _starterInfo;
+        Text _gachaInfo;
+        Text _resultInfo;
+        Image _resultPreview;
+        Text _releaseInfo;
+        Button _starterConfirm;
+        Button[] _poolButtons;
+        IReadOnlyList<SpeciesDefinition> _catalog;
+        IReadOnlyList<PokemonInstance> _inventory;
+        IReadOnlyList<GachaPool> _pools;
+        PokemonInstance _equipped;
+        int _starterIndex;
+        string _message = "";
+        string _pullRequest;
+        string _releaseTarget;
+        bool _busy;
+        readonly List<RectTransform> _responsiveContents = new List<RectTransform>();
         Button[] _skillButtons;
         int _collectionIndex;
         GameObject _pauseButton;
@@ -76,12 +102,14 @@ namespace Game.UI
             if (QualitySettings.names.Length > 0) QualitySettings.SetQualityLevel(_quality, true);
 
             Build();
+            PokemonCollection.Changed += OnCollectionChanged;
             ShowMainMenu();
         }
 
         void OnDestroy()
         {
             if (Instance == this) Instance = null;
+            PokemonCollection.Changed -= OnCollectionChanged;
 
             GameFlow.Blocked = false;
             GameFlow.Over = false;
@@ -93,10 +121,12 @@ namespace Game.UI
         {
             RefreshPauseButton();
             if (GameFlow.Over) return;
+            if (_starterPanel.gameObject.activeSelf || _resultPanel.gameObject.activeSelf) return;
 
             var keyboard = Keyboard.current;
             if (keyboard == null || !keyboard.escapeKey.wasPressedThisFrame) return;
 
+            if (_releasePanel.gameObject.activeSelf) { CancelRelease(); return; }
             if (_settingsOpen)
             {
                 CloseSettings();
@@ -108,6 +138,15 @@ namespace Game.UI
             if (!_playing) return;
             if (_paused) Resume();
             else Pause();
+        }
+
+        void LateUpdate()
+        {
+            if (_canvas == null) return;
+            var size = _canvas.rect.size;
+            float scale = Mathf.Min(1f, Mathf.Min(size.x / 1540f, size.y / 1020f));
+            foreach (var content in _responsiveContents)
+                content.localScale = Vector3.one * scale;
         }
 
         // --------------------------------------------------------------- Flujo
@@ -125,13 +164,24 @@ namespace Game.UI
 
             RoundManager.Instance?.StopRun();
             RefreshWallet();
-
-            ShowPanel(_mainPanel);
+            RefreshSnapshots();
+            if (!PokemonCollection.Progression.IsReady || PokemonCollection.NeedsStarter)
+            {
+                RefreshStarter();
+                ShowPanel(_starterPanel);
+            }
+            else ShowPanel(_mainPanel);
             RefreshPauseButton();
         }
 
         public void StartGame()
         {
+            if (!PokemonCollection.Progression.IsReady || PokemonCollection.NeedsStarter ||
+                PokemonCollection.Equipped == null)
+            {
+                ShowMainMenu();
+                return;
+            }
             _playing = true;
             _paused = false;
             _settingsOpen = false;
@@ -219,6 +269,10 @@ namespace Game.UI
             _settingsPanel.gameObject.SetActive(false);
             _collectionPanel.gameObject.SetActive(false);
             _skillsPanel.gameObject.SetActive(false);
+            _starterPanel.gameObject.SetActive(false);
+            _gachaPanel.gameObject.SetActive(false);
+            _resultPanel.gameObject.SetActive(false);
+            _releasePanel.gameObject.SetActive(false);
         }
 
         void ShowPanel(RectTransform panel)
@@ -247,12 +301,25 @@ namespace Game.UI
             BuildPauseMenu();
             BuildSettingsMenu();
             BuildCollectionMenu();
+            BuildStarterMenu();
+            BuildGachaMenu();
+            BuildResultMenu();
+            BuildReleaseMenu();
             BuildSkillsMenu();
+            FitPanelContent(_starterPanel);
+            FitPanelContent(_collectionPanel);
+            FitPanelContent(_gachaPanel);
+            FitPanelContent(_resultPanel);
+            FitPanelContent(_releasePanel);
 
             _pausePanel.gameObject.SetActive(false);
             _settingsPanel.gameObject.SetActive(false);
             _collectionPanel.gameObject.SetActive(false);
             _skillsPanel.gameObject.SetActive(false);
+            _starterPanel.gameObject.SetActive(false);
+            _gachaPanel.gameObject.SetActive(false);
+            _resultPanel.gameObject.SetActive(false);
+            _releasePanel.gameObject.SetActive(false);
         }
 
         void BuildPauseButton()
@@ -461,67 +528,314 @@ namespace Game.UI
             RefreshPauseButton();
         }
 
+        void RefreshSnapshots()
+        {
+            _catalog = PokemonCollection.Catalog;
+            _inventory = PokemonCollection.Inventory;
+            _equipped = PokemonCollection.Equipped;
+            _pools = PokemonCollection.GetPools();
+        }
+
+        void OnCollectionChanged()
+        {
+            RefreshSnapshots();
+            RefreshWallet();
+            if (_collectionPanel != null && _collectionPanel.gameObject.activeSelf) RefreshCollection();
+            if (_gachaPanel != null && _gachaPanel.gameObject.activeSelf) RefreshGacha();
+        }
+
+        SpeciesDefinition Species(string id) => _catalog?.FirstOrDefault(s => s.id == id);
+        static string Category(string category) => category == "PseudoLegendary" ? "Pseudolegendario" :
+            category == "Mythical" ? "Mítico" : "Común";
+        static string Stats(StatBlock s) => $"SAL {s.health}  ATQ {s.attack}  DEF {s.defense}  VEL {s.speed}";
+        static string NatureName(Nature nature)
+        {
+            string[] names = { "Fuerte", "Huraña", "Audaz", "Firme", "Pícara",
+                "Osada", "Dócil", "Plácida", "Agitada", "Floja",
+                "Miedosa", "Activa", "Seria", "Alegre", "Ingenua",
+                "Modesta", "Afable", "Mansa", "Tímida", "Alocada",
+                "Serena", "Amable", "Grosera", "Cauta", "Rara" };
+            int index = (int)nature;
+            return index >= 0 && index < names.Length ? names[index] : nature.ToString();
+        }
+        string Describe(PokemonInstance pokemon)
+        {
+            if (pokemon == null) return "Sin Pokémon";
+            var species = Species(pokemon.speciesId);
+            if (species == null) return "Especie desconocida";
+            var calculated = PokemonStats.Calculate(species.baseStats, pokemon.ivs, new StatBlock(), pokemon.nature);
+            return $"{species.name}  ·  {Category(species.category)}  ·  Rareza {pokemon.rarity}\n" +
+                $"Naturaleza: {NatureName(pokemon.nature)}\nIV: {Stats(pokemon.ivs)}\n" +
+                $"Base: {Stats(species.baseStats)}\nStats (sin EV): {Stats(calculated)}";
+        }
+        static string ErrorMessage(string error)
+        {
+            switch (error)
+            {
+                case "InventoryFull": return "Inventario lleno. Libera un Pokémon primero.";
+                case "InsufficientCoins": return "No tienes suficientes monedas.";
+                case "LastInstance": return "No puedes liberar tu último Pokémon.";
+                case "StarterRequired": return "Elige primero tu Pokémon inicial.";
+                case "PersistenceFailure":
+                case "SaveUnavailable": return "No se pudo guardar la partida. Reinicia y revisa el almacenamiento.";
+                case "InstanceNotFound": return "Ese Pokémon ya no está en tu inventario.";
+                default: return "No se pudo completar la operación. " + (error ?? "");
+            }
+        }
+        static void At(RectTransform rect, float x, float y, float width, float height) =>
+            UIFactory.Place(rect, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                new Vector2(x, y), new Vector2(width, height));
+        Text PanelText(Transform root, string name, string text, int size, float x, float y, float width, float height)
+        {
+            var label = UIFactory.CreateText(name, root, text, size, UIFactory.Cream);
+            label.horizontalOverflow = HorizontalWrapMode.Wrap;
+            label.verticalOverflow = VerticalWrapMode.Truncate;
+            At(label.rectTransform, x, y, width, height);
+            return label;
+        }
+        Button PanelButton(Transform root, string name, string label, Color color, float x, float y,
+            float width, float height, UnityEngine.Events.UnityAction action, int size = 30)
+        {
+            var button = UIFactory.CreateButton(root, name, label, color, new Vector2(width, height), action, size);
+            At((RectTransform)button.transform, x, y, width, height);
+            var text = button.GetComponentInChildren<Text>();
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            return button;
+        }
+        RectTransform PlainPanel(string name, string title)
+        {
+            var panel = CreateOverlay(name);
+            var dim = UIFactory.CreateImage("Background", panel, null, UIFactory.DeepViolet, true);
+            UIFactory.Stretch(dim.rectTransform);
+            var label = PanelText(panel, "Title", title, 66, 0, 430, 1400, 90);
+            label.color = UIFactory.Sun;
+            return panel;
+        }
+        void FitPanelContent(RectTransform panel)
+        {
+            var content = UIFactory.CreateRect("ResponsiveContent", panel);
+            At(content, 0, 0, 1540, 1020);
+            var children = new List<Transform>();
+            foreach (Transform child in panel)
+                if (child != content && child.name != "Background") children.Add(child);
+            foreach (var child in children) child.SetParent(content, false);
+            _responsiveContents.Add(content);
+        }
+
+        void BuildStarterMenu()
+        {
+            _starterPanel = PlainPanel("StarterMenu", "ELIGE TU POKÉMON INICIAL");
+            PanelText(_starterPanel, "Note", "Solo puedes elegir una vez. El inicial será gratuito.", 30, 0, 345, 1300, 55);
+            var ids = PokemonCollection.StarterIds;
+            for (int i = 0; i < ids.Count; i++)
+            {
+                int index = i;
+                float x = (i - (ids.Count - 1) * .5f) * 420f;
+                var species = PokemonCollection.Catalog.FirstOrDefault(s => s.id == ids[index]);
+                var image = UIFactory.CreateImage("StarterSprite" + i, _starterPanel,
+                    PokemonCollection.GetSprite(new PokemonInstance { speciesId = ids[index] }), Color.white);
+                image.preserveAspect = true;
+                At(image.rectTransform, x, 130, 220, 220);
+                PanelButton(_starterPanel, "Starter" + i, species?.name ?? ids[index], UIFactory.Sky,
+                    x, -30, 350, 82, () => { _starterIndex = index; _message = ""; RefreshStarter(); }, 32);
+            }
+            _starterInfo = PanelText(_starterPanel, "StarterInfo", "", 30, 0, -140, 1300, 100);
+            _starterConfirm = PanelButton(_starterPanel, "ConfirmStarter", "CONFIRMAR INICIAL", UIFactory.Lime,
+                0, -280, 500, 90, ConfirmStarter, 34);
+        }
+        void RefreshStarter()
+        {
+            if (!PokemonCollection.Progression.IsReady)
+            {
+                _starterInfo.text = "No se pudo cargar el progreso. Reinicia y revisa el almacenamiento.";
+                _starterConfirm.interactable = false;
+                return;
+            }
+            var ids = PokemonCollection.StarterIds;
+            if (ids.Count == 0) { _starterInfo.text = "No hay iniciales configurados."; _starterConfirm.interactable = false; return; }
+            _starterIndex = Mathf.Clamp(_starterIndex, 0, ids.Count - 1);
+            var config = PokemonCollection.Configuration;
+            int total = config.starterF + config.starterA + config.starterS;
+            _starterInfo.text = $"Elegido: {Species(ids[_starterIndex])?.name ?? ids[_starterIndex]} · Rareza F {Percent(config.starterF, total)} / A {Percent(config.starterA, total)} / S {Percent(config.starterS, total)}\n{_message}";
+            _starterConfirm.interactable = !_busy;
+        }
+        void ConfirmStarter()
+        {
+            if (_busy || !PokemonCollection.Progression.IsReady || !PokemonCollection.NeedsStarter) return;
+            var ids = PokemonCollection.StarterIds;
+            if (_starterIndex >= ids.Count) return;
+            _busy = true;
+            var result = PokemonCollection.ChooseStarter(ids[_starterIndex]);
+            _busy = false;
+            if (!result.success) { _message = ErrorMessage(result.error); RefreshStarter(); return; }
+            ShowResult(result.instance, true);
+        }
         void BuildCollectionMenu()
         {
-            _collectionPanel = CreateOverlay("CollectionMenu");
-            var dim = UIFactory.CreateImage("Dim", _collectionPanel, null, UIFactory.DeepViolet, true);
-            UIFactory.Stretch(dim.rectTransform);
-            var title = UIFactory.CreateText("Title", _collectionPanel, "COLECCIÓN POKÉMON", 72, UIFactory.Sun);
-            UIFactory.Place(title.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(0, 340), new Vector2(1400, 110));
-            _collectionInfo = UIFactory.CreateText("Info", _collectionPanel, "", 36, UIFactory.Cream);
-            UIFactory.Place(_collectionInfo.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(225, 110), new Vector2(1000, 300));
+            _collectionPanel = PlainPanel("CollectionMenu", "INVENTARIO POKÉMON");
+            _collectionInfo = PanelText(_collectionPanel, "Info", "", 31, 220, 105, 1040, 310);
             _pokemonPreview = UIFactory.CreateImage("PokemonPreview", _collectionPanel, null, Color.white);
-            UIFactory.Place(_pokemonPreview.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(-510, 110), new Vector2(270, 270));
             _pokemonPreview.preserveAspect = true;
-            var previous = UIFactory.CreateButton(_collectionPanel, "Previous", "◀", UIFactory.Sky,
-                                                   new Vector2(180, 90), () => ChangeSelection(-1), 42);
-            UIFactory.Place((RectTransform)previous.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(-290, -100), new Vector2(180, 90));
-            var next = UIFactory.CreateButton(_collectionPanel, "Next", "▶", UIFactory.Sky,
-                                               new Vector2(180, 90), () => ChangeSelection(1), 42);
-            UIFactory.Place((RectTransform)next.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(290, -100), new Vector2(180, 90));
-            _buyPokemonButton = UIFactory.CreateButton(_collectionPanel, "BuyOrSelect", "", UIFactory.Lime,
-                                                       new Vector2(510, 100), BuyOrSelectPokemon, 36);
-            UIFactory.Place((RectTransform)_buyPokemonButton.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(0, -245), new Vector2(510, 100));
-            var back = UIFactory.CreateButton(_collectionPanel, "Back", "VOLVER", UIFactory.Coral,
-                                              new Vector2(360, 85), CloseSubMenu, 36);
-            UIFactory.Place((RectTransform)back.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(0, -370), new Vector2(360, 85));
+            At(_pokemonPreview.rectTransform, -530, 130, 250, 250);
+            PanelButton(_collectionPanel, "Previous", "◀ ANTERIOR", UIFactory.Sky, -360, -110, 330, 80, () => ChangeSelection(-1));
+            PanelButton(_collectionPanel, "Next", "SIGUIENTE ▶", UIFactory.Sky, 360, -110, 330, 80, () => ChangeSelection(1));
+            _equipButton = PanelButton(_collectionPanel, "Equip", "EQUIPAR", UIFactory.Lime, -240, -230, 380, 80, EquipPokemon);
+            _releaseButton = PanelButton(_collectionPanel, "Release", "LIBERAR", UIFactory.Coral, 240, -230, 380, 80, AskRelease);
+            PanelButton(_collectionPanel, "Gacha", "MÁQUINAS GACHA", UIFactory.Sky, -240, -355, 380, 80, OpenGacha, 27);
+            PanelButton(_collectionPanel, "Back", "VOLVER", UIFactory.Coral, 240, -355, 380, 80, CloseSubMenu);
         }
-
         void ChangeSelection(int delta)
         {
-            int count = PokemonCollection.Count;
+            int count = _inventory?.Count ?? 0;
             if (count == 0) return;
             _collectionIndex = (_collectionIndex + delta + count) % count;
+            _message = "";
             RefreshCollection();
         }
-
-        void BuyOrSelectPokemon()
+        void EquipPokemon()
         {
-            if (PokemonCollection.IsOwned(_collectionIndex)) PokemonCollection.Select(_collectionIndex);
-            else PokemonCollection.Buy(_collectionIndex);
+            if (_busy || _inventory.Count == 0) return;
+            _busy = true;
+            var result = PokemonCollection.Equip(_inventory[_collectionIndex].instanceId);
+            _busy = false;
+            _message = result.success ? "Pokémon equipado." : ErrorMessage(result.error);
             RefreshCollection();
         }
-
+        void BuildReleaseMenu()
+        {
+            _releasePanel = PlainPanel("ReleaseMenu", "CONFIRMAR LIBERACIÓN");
+            _releaseInfo = PanelText(_releasePanel, "ReleaseInfo", "", 36, 0, 100, 1200, 220);
+            PanelButton(_releasePanel, "CancelRelease", "CANCELAR", UIFactory.Sky, -250, -220, 400, 90, CancelRelease, 34);
+            PanelButton(_releasePanel, "ConfirmRelease", "SÍ, LIBERAR", UIFactory.Coral, 250, -220, 400, 90, ReleasePokemon, 34);
+        }
+        void AskRelease()
+        {
+            if (_busy || _inventory == null || _inventory.Count <= 1) return;
+            var pokemon = _inventory[_collectionIndex];
+            _releaseTarget = pokemon.instanceId;
+            _releaseInfo.text = $"¿Liberar a {Species(pokemon.speciesId)?.name ?? "este Pokémon"} de rareza {pokemon.rarity}?\nEsta acción no se puede deshacer.";
+            ShowPanel(_releasePanel);
+        }
+        void CancelRelease()
+        {
+            _releaseTarget = null;
+            ShowPanel(_collectionPanel);
+            RefreshCollection();
+        }
+        void ReleasePokemon()
+        {
+            if (_busy || string.IsNullOrEmpty(_releaseTarget)) return;
+            _busy = true;
+            var target = _releaseTarget;
+            _releaseTarget = null;
+            var result = PokemonCollection.Release(target);
+            _busy = false;
+            _message = result.success ? "Pokémon liberado." : ErrorMessage(result.error);
+            ShowPanel(_collectionPanel);
+            RefreshCollection();
+        }
         void RefreshCollection()
         {
-            int count = PokemonCollection.Count;
-            if (count == 0) { _collectionInfo.text = "No hay sprites en Resources/PokemonSprites"; _buyPokemonButton.interactable = false; return; }
+            int count = _inventory?.Count ?? 0;
+            if (count == 0)
+            {
+                _collectionInfo.text = "No hay Pokémon en el inventario.";
+                _pokemonPreview.sprite = null;
+                _pokemonPreview.enabled = false;
+                _equipButton.interactable = _releaseButton.interactable = false;
+                return;
+            }
             _collectionIndex = Mathf.Clamp(_collectionIndex, 0, count - 1);
-            _pokemonPreview.sprite = PokemonCollection.GetSprite(_collectionIndex);
-            bool owned = PokemonCollection.IsOwned(_collectionIndex);
-            _collectionInfo.text = PokemonCollection.GetName(_collectionIndex) + "  (" + (_collectionIndex + 1) + "/" + count + ")\n" +
-                                   (owned ? "DESBLOQUEADO" : "BLOQUEADO") +
-                                   "\nMonedas: " + PlayerEconomy.Coins + "  ·  Precio: " + PokemonCollection.Price;
-            _buyPokemonButton.GetComponentInChildren<Text>().text = owned ?
-                (PokemonCollection.Selected == _collectionIndex ? "EQUIPADO" : "EQUIPAR") : "COMPRAR";
-            _buyPokemonButton.interactable = owned || PlayerEconomy.Coins >= PokemonCollection.Price;
+            var pokemon = _inventory[_collectionIndex];
+            bool equipped = _equipped != null && _equipped.instanceId == pokemon.instanceId;
+            _pokemonPreview.sprite = PokemonCollection.GetSprite(pokemon);
+            _pokemonPreview.enabled = _pokemonPreview.sprite != null;
+            _collectionInfo.text = $"Instancia {_collectionIndex + 1}/{count} · Capacidad {count}/{PokemonCollection.InventoryCapacity} · Monedas {PlayerEconomy.Coins}\n" +
+                Describe(pokemon) + (equipped ? "\nEQUIPADO" : "") + "\n" + _message;
+            _equipButton.GetComponentInChildren<Text>().text = equipped ? "EQUIPADO" : "EQUIPAR";
+            _equipButton.interactable = !_busy && !equipped;
+            _releaseButton.interactable = !_busy && count > 1;
+        }
+        static string Percent(int value, int total) => total > 0 ? (100f * value / total).ToString("0.##") + "%" : "0%";
+        void BuildGachaMenu()
+        {
+            _gachaPanel = PlainPanel("GachaMenu", "MÁQUINAS GACHA");
+            _gachaInfo = PanelText(_gachaPanel, "Info", "", 28, 0, 315, 1450, 100);
+            _poolButtons = new Button[2];
+            for (int i = 0; i < _poolButtons.Length; i++)
+            {
+                int index = i;
+                float x = i == 0 ? -400 : 400;
+                _poolButtons[i] = PanelButton(_gachaPanel, "Pool" + i, "", UIFactory.Sky,
+                    x, -100, 660, 430, () => PullPool(index), 29);
+            }
+            PanelButton(_gachaPanel, "Back", "VOLVER AL INVENTARIO", UIFactory.Coral, 0, -400, 500, 75, OpenCollection, 27);
+        }
+        void OpenGacha()
+        {
+            _message = "";
+            RefreshSnapshots();
+            RefreshGacha();
+            ShowPanel(_gachaPanel);
+        }
+        void RefreshGacha()
+        {
+            _gachaInfo.text = $"Monedas: {PlayerEconomy.Coins} · Inventario: {_inventory.Count}/{PokemonCollection.InventoryCapacity}\n{_message}";
+            for (int i = 0; i < _poolButtons.Length; i++)
+            {
+                var button = _poolButtons[i];
+                bool exists = i < _pools.Count;
+                button.gameObject.SetActive(exists);
+                if (!exists) continue;
+                var pool = _pools[i];
+                int total = pool.weightF + pool.weightA + pool.weightS;
+                string species = string.Join(", ", pool.species.Select(id => Species(id)?.name ?? id));
+                button.GetComponentInChildren<Text>().text = $"MÁQUINA {(i == 0 ? "BÁSICA" : "ESPECIAL")}\n\nPrecio: {pool.price} monedas\nRareza F {Percent(pool.weightF, total)} · A {Percent(pool.weightA, total)} · S {Percent(pool.weightS, total)}\n\nEspecies (igual probabilidad):\n{species}\n\nTOCA PARA TIRAR";
+                button.interactable = !_busy && _pullRequest == null && PokemonCollection.Progression.IsReady;
+            }
+        }
+        void PullPool(int index)
+        {
+            if (_busy || _pullRequest != null || index < 0 || index >= _pools.Count) return;
+            _busy = true;
+            _pullRequest = Guid.NewGuid().ToString("N");
+            var result = PokemonCollection.Pull(_pools[index].id, _pullRequest);
+            _busy = false;
+            if (!result.success)
+            {
+                _pullRequest = null;
+                _message = ErrorMessage(result.error);
+                RefreshGacha();
+                return;
+            }
+            ShowResult(result.instance, false);
+        }
+        void BuildResultMenu()
+        {
+            _resultPanel = PlainPanel("ResultMenu", "¡POKÉMON OBTENIDO!");
+            _resultPreview = UIFactory.CreateImage("ResultSprite", _resultPanel, null, Color.white);
+            _resultPreview.preserveAspect = true;
+            At(_resultPreview.rectTransform, -480, 110, 300, 300);
+            _resultInfo = PanelText(_resultPanel, "ResultInfo", "", 34, 180, 105, 1050, 330);
+            PanelButton(_resultPanel, "CloseResult", "CONTINUAR", UIFactory.Lime, 0, -300, 450, 90, CloseResult, 36);
+        }
+        bool _starterResult;
+        void ShowResult(PokemonInstance pokemon, bool starter)
+        {
+            _starterResult = starter;
+            RefreshSnapshots();
+            _resultPreview.sprite = PokemonCollection.GetSprite(pokemon);
+            _resultPreview.enabled = _resultPreview.sprite != null;
+            _resultInfo.text = Describe(pokemon) + "\nGuardado en tu inventario.";
+            ShowPanel(_resultPanel);
+        }
+        void CloseResult()
+        {
+            _pullRequest = null;
+            _message = "";
+            if (_starterResult) ShowMainMenu();
+            else OpenGacha();
         }
 
         void BuildSkillsMenu()

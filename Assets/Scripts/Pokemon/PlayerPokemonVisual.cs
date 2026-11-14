@@ -28,32 +28,38 @@ namespace Game.Pokemon
 
         void Start()
         {
-            var sprite = PokemonCollection.GetSprite(PokemonCollection.Selected);
-            PokemonSpriteLibrary.SetPlayerIndex(PokemonCollection.Selected);
-            if (sprite == null) return;
-
-            _renderer = PokemonVisuals.CreateBillboard(transform, "Pokemon Visual", sprite, height, false);
-            _baseColor = _renderer.color;
-
-            // El pivote del sprite está centrado: los pies quedan en -0.5 (base del CharacterController).
-            var visual = _renderer.transform;
-            visual.localPosition = new Vector3(0f, -0.5f + height * 0.5f, 0f);
-
             _controller = GetComponent<PlayerSphereController>();
             _lastPosition = transform.position;
             _hasLastPosition = true;
+            RefreshPokemon();
+        }
+
+        void OnEnable() => PokemonCollection.Changed += RefreshPokemon;
+        void OnDisable() => PokemonCollection.Changed -= RefreshPokemon;
+
+        void RefreshPokemon()
+        {
+            var equipped = PokemonCollection.Equipped;
+            var sprite = PokemonCollection.GetSprite(equipped);
+            if (sprite == null)
+            {
+                if (_renderer != null) _renderer.enabled = false;
+                return;
+            }
+            if (_renderer == null)
+            {
+                _renderer = PokemonVisuals.CreateBillboard(transform, "Pokemon Visual", sprite, height, false);
+                _baseColor = _renderer.color;
+                _renderer.transform.localPosition = new Vector3(0f, -0.5f + height * 0.5f, 0f);
+            }
+            _renderer.sprite = sprite;
+            _renderer.enabled = true;
+            PokemonSpriteLibrary.SetPlayerIndex(PokemonCollection.Selected);
         }
 
         void Update()
         {
             if (_renderer == null) return;
-
-            var selected = PokemonCollection.Selected;
-            if (_renderer.sprite != PokemonCollection.GetSprite(selected))
-            {
-                _renderer.sprite = PokemonCollection.GetSprite(selected);
-                PokemonSpriteLibrary.SetPlayerIndex(selected);
-            }
 
             UpdateFacing();
 
