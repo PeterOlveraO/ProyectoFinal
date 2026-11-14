@@ -4,6 +4,9 @@ using Game.Core;
 using Game.Economy;
 using Game.Enemies;
 using Game.Player;
+using Game.Player.ProgressionCombat;
+using Game.Pokemon;
+using Game.Pokemon.Progression;
 using Game.Terrain;
 using UnityEngine;
 
@@ -99,6 +102,26 @@ namespace Game.Rounds
         int _defeatedThisRound;
         readonly int[] _evLevels = new int[4];
         bool _rewardsPaid;
+        DrinkStations _drinks;
+        CombatBalance _balance;
+        PokemonInstance _runPokemon;
+        SpeciesDefinition _runSpecies;
+        StatBlock _runStats;
+        CombatStatBlock _combatStats;
+        readonly System.Collections.Generic.HashSet<EnemyTriangle> _creditedEnemies = new System.Collections.Generic.HashSet<EnemyTriangle>();
+
+        public DrinkStations Drinks => _drinks;
+        public bool HasRunPokemon => _runPokemon != null;
+        public PokemonInstance RunPokemon => _runPokemon?.Copy();
+        public SpeciesDefinition RunSpecies => _runSpecies == null ? null : new SpeciesDefinition
+        {
+            id = _runSpecies.id, name = _runSpecies.name, category = _runSpecies.category,
+            spriteName = _runSpecies.spriteName, baseStats = _runSpecies.baseStats
+        };
+        public StatBlock RunStats => _runStats;
+        public CombatStatBlock CombatStats => _combatStats;
+        public float MaxDamageReduction => _balance?.maxTotalDamageReduction ?? .65f;
+        public string LastRunStartError { get; private set; }
 
         public RoundPhase Phase => _phase;
         public int Round { get; private set; }
@@ -130,9 +153,14 @@ namespace Game.Rounds
 
         public bool BuyEV(int stat)
         {
-            if (!CanBuyEV(stat) || !SpendPoints(EVCost(stat))) return false;
+            if (!CanBuyEV(stat)) return false;
+            var player = PlayerSphereController.Instance;
+            int previousMax = player != null ? player.MaxHealth : 0;
+            Points -= EVCost(stat);
             _evLevels[stat]++;
-            if (stat == 0) PlayerSphereController.Instance?.Heal(10);
+            RebuildRunStats();
+            // Preserve the old vitality-upgrade heal, but only for the actual gained capacity.
+            if (stat == 0 && player != null) player.Heal(Mathf.Max(0, player.MaxHealth - previousMax));
             Changed?.Invoke();
             return true;
         }
@@ -141,6 +169,7 @@ namespace Game.Rounds
         {
             Instance = this;
             if (GetComponent<DrinkStations>() == null) gameObject.AddComponent<DrinkStations>();
+            _drinks = GetComponent<DrinkStations>();
 
             // Los valores del inspector tienen prioridad; solo se corrigen si quedaron raros.
             spawnRadiusMax = Mathf.Max(spawnRadiusMax, spawnRadiusMin + 1f);
@@ -203,15 +232,24 @@ namespace Game.Rounds
         /// <summary>Empieza una run nueva desde la ronda 1 y revive al jugador.</summary>
         public void StartRun()
         {
-            if (IsRunActive) FinishRun();
+            // Repeated start clicks must not end/pay the run that the first click just started.
+            if (IsRunActive) return;
+            if (!CaptureRunPokemon())
+            {
+                GameFlow.Blocked = true;
+                Changed?.Invoke();
+                return;
+            }
             ClearEnemies();
-            GetComponent<DrinkStations>()?.ResetRun();
+            _drinks?.ResetRun();
 
             Points = 0;
             TotalPointsEarned = 0;
             CoinsEarned = 0;
             BonusDrops = 0;
             Array.Clear(_evLevels, 0, _evLevels.Length);
+            _creditedEnemies.Clear();
+            RebuildRunStats();
             _rewardsPaid = false;
             EnemiesDefeated = 0;
             RoundsPassed = 0;
@@ -226,7 +264,11 @@ namespace Game.Rounds
             GameFlow.Blocked = false;
 
             var player = PlayerSphereController.Instance;
-            if (player != null) player.Revive();
+            if (player != null)
+            {
+                player.Revive();
+                player.GetComponent<PlayerAttack>()?.ResetRun();
+            }
 
             StartRound(1);
         }
@@ -238,7 +280,9 @@ namespace Game.Rounds
             ClearEnemies();
             _phase = RoundPhase.Idle;
             GameFlow.Over = false;
+            GameFlow.Blocked = true;
             AliveCount = 0;
+            ResetTemporaryStats();
             PlayerEconomy.Flush();
             Changed?.Invoke();
         }
@@ -248,6 +292,69 @@ namespace Game.Rounds
             if (!IsRunActive) return;
             FinishRun();
             ClearEnemies();
+        }
+
+        public void NotifyPlayerDefeated()
+        {
+            if (IsRunActive) FinishRun();
+        }
+
+        bool CaptureRunPokemon()
+        {
+            LastRunStartError = null;
+            var progression = PokemonCollection.Progression;
+            var instance = progression.Equipped;
+            if (!progression.IsReady || progression.NeedsStarter || instance == null)
+            {
+                LastRunStartError = "EquippedPokemonRequired";
+                return false;
+            }
+            SpeciesDefinition species = null;
+            foreach (var entry in progression.Catalog)
+                if (entry.id == instance.speciesId) { species = entry; break; }
+            if (species == null)
+            {
+                LastRunStartError = "SpeciesNotFound";
+                return false;
+            }
+            try
+            {
+                var asset = Resources.Load<TextAsset>("PokemonProgression/combat");
+                if (asset == null) throw new InvalidOperationException("Missing PokemonProgression/combat configuration.");
+                var balance = JsonUtility.FromJson<CombatBalance>(asset.text);
+                if (balance == null) throw new InvalidOperationException("Invalid combat configuration.");
+                balance.Validate();
+                _balance = balance;
+            }
+            catch (Exception ex)
+            {
+                LastRunStartError = "InvalidCombatBalance";
+                Debug.LogException(ex);
+                return false;
+            }
+            _runPokemon = instance.Copy();
+            _runSpecies = new SpeciesDefinition
+            {
+                id = species.id, name = species.name, category = species.category,
+                spriteName = species.spriteName, baseStats = species.baseStats
+            };
+            return true;
+        }
+
+        void RebuildRunStats()
+        {
+            if (_runPokemon == null || _runSpecies == null || _balance == null) return;
+            var ev = PokemonCombatStats.RunEV(_balance, _evLevels[0], _evLevels[1], _evLevels[2], _evLevels[3]);
+            _runStats = PokemonStats.Calculate(_runSpecies.baseStats, _runPokemon.ivs, ev, _runPokemon.nature);
+            _combatStats = PokemonCombatStats.Convert(_runStats, _balance);
+            PlayerSphereController.Instance?.RecalculateStats();
+        }
+
+        void ResetTemporaryStats()
+        {
+            Array.Clear(_evLevels, 0, _evLevels.Length);
+            _drinks?.ResetRun();
+            RebuildRunStats();
         }
 
         public bool SpendPoints(int amount)
@@ -271,6 +378,7 @@ namespace Game.Rounds
             _rewardsPaid = true;
             GameFlow.Over = true;
             GameFlow.Blocked = true;
+            ResetTemporaryStats();
             PlayerEconomy.AddCoins(CoinsEarned);
             PlayerEconomy.RegisterLoss();
             PlayerEconomy.Flush();
@@ -321,6 +429,7 @@ namespace Game.Rounds
 
         void CompleteRound()
         {
+            if (_phase != RoundPhase.Fighting) return;
             RoundsPassed++;
 
             LastRoundBonusPoints = pointsPerRound + pointsPerRoundGrowth * (Round - 1);
@@ -348,6 +457,7 @@ namespace Game.Rounds
         public void NotifyEnemyKilled(EnemyTriangle enemy)
         {
             if (_phase != RoundPhase.Fighting || enemy == null || GameFlow.Over) return;
+            if (!_creditedEnemies.Add(enemy)) return;
             _defeatedThisRound++;
 
             EnemiesDefeated++;

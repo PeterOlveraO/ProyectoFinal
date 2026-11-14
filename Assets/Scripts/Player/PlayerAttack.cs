@@ -40,9 +40,16 @@ namespace Game.Player
         Vector3 _lastAim = Vector3.forward;
 
         public Vector3 LastAimDirection => _lastAim;
-        public int Damage => damage + (RoundManager.Instance != null ? RoundManager.Instance.EVLevel(1) : 0) +
-            (RoundManager.Instance != null && RoundManager.Instance.GetComponent<DrinkStations>() != null &&
-             RoundManager.Instance.GetComponent<DrinkStations>().Has(DrinkType.Power) ? 3 : 0);
+        public int Damage => (RoundManager.Instance != null && RoundManager.Instance.HasRunPokemon ?
+            RoundManager.Instance.CombatStats.damage : damage) +
+            (RoundManager.Instance != null && RoundManager.Instance.Drinks != null &&
+             RoundManager.Instance.Drinks.Has(DrinkType.Power) ? 3 : 0);
+
+        public void ResetRun()
+        {
+            _timer = fireInterval;
+            _lastAim = Vector3.forward;
+        }
 
         /// <summary>Asigna el joystick de ataque desde el bootstrap de la escena.</summary>
         public void SetJoystick(VirtualJoystick value) => joystick = value;
@@ -72,7 +79,7 @@ namespace Game.Player
             _lastAim = worldDirection;
 
             _timer += Time.deltaTime;
-            var drinks = RoundManager.Instance != null ? RoundManager.Instance.GetComponent<DrinkStations>() : null;
+            var drinks = RoundManager.Instance != null ? RoundManager.Instance.Drinks : null;
             float interval = drinks != null && drinks.Has(DrinkType.RapidFire) ? fireInterval * .7f : fireInterval;
             if (_timer < interval) return;
 

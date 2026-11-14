@@ -1,0 +1,18 @@
+{
+  "evPerUpgrade": { "health": 15, "attack": 40, "defense": 20, "speed": 10 },
+  "healthOffset": 60.0,
+  "healthPerPoint": 0.6,
+  "minHealth": 50,
+  "maxHealth": 400,
+  "damageOffset": 0.5,
+  "damagePerPoint": 0.025,
+  "minDamage": 1,
+  "maxDamage": 25,
+  "defenseHalfReductionStat": 400.0,
+  "maxBaseDamageReduction": 0.4,
+  "maxTotalDamageReduction": 0.65,
+  "movementOffset": 3.0,
+  "movementPerPoint": 0.02,
+  "minMovementSpeed": 3.5,
+  "maxMovementSpeed": 8.0
+}

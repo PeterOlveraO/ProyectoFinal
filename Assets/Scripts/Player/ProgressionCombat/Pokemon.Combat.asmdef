@@ -1,0 +1,5 @@
+{
+  "name": "Pokemon.Combat",
+  "rootNamespace": "Game.Player.ProgressionCombat",
+  "references": ["Pokemon.Progression"]
+}

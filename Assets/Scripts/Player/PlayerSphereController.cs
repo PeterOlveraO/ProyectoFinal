@@ -3,6 +3,7 @@ using Game.Core;
 using Game.Enemies;
 using Game.Terrain;
 using Game.Rounds;
+using Game.Player.ProgressionCombat;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -54,9 +55,14 @@ namespace Game.Player
 
         public static PlayerSphereController Instance { get; private set; }
 
-        public int MaxHealth => maxHealth + (RoundManager.Instance != null ? RoundManager.Instance.EVLevel(0) * 10 : 0) +
-                                (RoundManager.Instance != null && RoundManager.Instance.GetComponent<DrinkStations>() != null &&
-                                 RoundManager.Instance.GetComponent<DrinkStations>().Has(DrinkType.Vitality) ? 50 : 0);
+        public int MaxHealth => (RoundManager.Instance != null && RoundManager.Instance.HasRunPokemon ?
+            RoundManager.Instance.CombatStats.maxHealth : maxHealth) + (Drinks != null && Drinks.Has(DrinkType.Vitality) ? 50 : 0);
+        DrinkStations Drinks => RoundManager.Instance != null ? RoundManager.Instance.Drinks : null;
+        public float MovementSpeed => (RoundManager.Instance != null && RoundManager.Instance.HasRunPokemon ?
+            RoundManager.Instance.CombatStats.movementSpeed : moveSpeed) * (Drinks != null && Drinks.Has(DrinkType.Sprint) ? 1.3f : 1f);
+        public float DamageReduction => Mathf.Min(RoundManager.Instance != null ? RoundManager.Instance.MaxDamageReduction : .65f,
+            (RoundManager.Instance != null && RoundManager.Instance.HasRunPokemon ? RoundManager.Instance.CombatStats.damageReduction : 0f) +
+            (Drinks != null && Drinks.Has(DrinkType.Armor) ? .25f : 0f));
 
         /// <summary>Vida actual redondeada hacia arriba (0 solo cuando está derrotado).</summary>
         public int Health => Mathf.Clamp(Mathf.CeilToInt(_health), 0, MaxHealth);
@@ -133,10 +139,7 @@ namespace Game.Player
             if (_controller.isGrounded && _verticalSpeed < 0f) _verticalSpeed = -1f;
             _verticalSpeed -= gravity * Time.deltaTime;
 
-            var drinks = RoundManager.Instance != null ? RoundManager.Instance.GetComponent<DrinkStations>() : null;
-            float speedMultiplier = 1f + (RoundManager.Instance != null ? RoundManager.Instance.EVLevel(3) * .04f : 0f);
-            if (drinks != null && drinks.Has(DrinkType.Sprint)) speedMultiplier *= 1.3f;
-            Vector3 velocity = move * (moveSpeed * speedMultiplier) + Vector3.up * _verticalSpeed;
+            Vector3 velocity = move * MovementSpeed + Vector3.up * _verticalSpeed;
             _controller.Move(velocity * Time.deltaTime);
 
             // Guarda el último punto pisado fuera del agua: ahí vuelve si cae a un lago.
@@ -159,10 +162,7 @@ namespace Game.Player
             if (!_alive || amount <= 0f) return;
             if (IsInvincible || IsProtected) return;
 
-            var drinks = RoundManager.Instance != null ? RoundManager.Instance.GetComponent<DrinkStations>() : null;
-            float reduction = Mathf.Min(.65f, (RoundManager.Instance != null ? RoundManager.Instance.EVLevel(2) * .04f : 0f) +
-                (drinks != null && drinks.Has(DrinkType.Armor) ? .25f : 0f));
-            _health -= amount * (1f - reduction);
+            _health -= amount * (1f - DamageReduction);
             if (_health <= 0f)
             {
                 _health = 0f;
@@ -177,6 +177,9 @@ namespace Game.Player
             _health = Mathf.Min(MaxHealth, _health + amount);
         }
 
+        /// <summary>Stat changes do not heal. Explicit Heal/Revive remain the only healing paths.</summary>
+        public void RecalculateStats() => _health = PokemonCombatStats.ClampHealth(_health, MaxHealth);
+
         void Die()
         {
             if (!_alive) return;
@@ -187,6 +190,7 @@ namespace Game.Player
 
             HitBurst.Spawn(transform.position + Vector3.up * 0.6f,
                            new Color(1f, 0.25f, 0.3f, 1f), 18, 1.2f);
+            RoundManager.Instance?.NotifyPlayerDefeated();
         }
 
         /// <summary>Deja al jugador con la vida al máximo y lo devuelve al spawn.</summary>
@@ -195,6 +199,10 @@ namespace Game.Player
             _health = MaxHealth;
             _alive = true;
             _invincibleUntil = 0f;
+            _powerReadyAt = 0f;
+            _protectedUntil = 0f;
+            _verticalSpeed = 0f;
+            _hasSafePosition = false;
             Respawn();
         }
 
