@@ -19,19 +19,19 @@ namespace Game.UI
     {
         RectTransform _statusPanel;
         Image _healthFill;
-        Text _healthLabel;
-        Text _roundLabel;
-        Text _enemiesLabel;
-        Text _pointsLabel;
-        Text _coinsLabel;
-        Text _bonusLabel;
+        TMPro.TMP_Text _healthLabel;
+        TMPro.TMP_Text _roundLabel;
+        TMPro.TMP_Text _enemiesLabel;
+        TMPro.TMP_Text _pointsLabel;
+        TMPro.TMP_Text _coinsLabel;
+        TMPro.TMP_Text _bonusLabel;
         Button _drinkButton;
-        Text _drinkLabel;
+        TMPro.TMP_Text _drinkLabel;
         int _nearbyDrink = -1;
 
         CanvasGroup _banner;
-        Text _bannerTitle;
-        Text _bannerSubtitle;
+        TMPro.TMP_Text _bannerTitle;
+        TMPro.TMP_Text _bannerSubtitle;
         float _bannerTimer;
         RoundManager.RoundPhase _bannerPhase = (RoundManager.RoundPhase)(-1);
         int _bannerRound = -1;
@@ -39,13 +39,32 @@ namespace Game.UI
         Image _damageFlash;
         float _flashAmount;
         int _lastHealth = -1;
+        int _lastMaxHealth = -1;
+        int _lastPreparation = -1;
+        RoundManager _round;
+        RectTransform _root, _overlay;
+        bool _numbersDirty = true;
 
         GameObject _gameOverRoot;
-        Text _gameOverStats;
+        TMPro.TMP_Text _gameOverStats;
+        MenuPage _gameOverPage;
 
         void Start()
         {
             Build();
+            _round = RoundManager.Instance;
+            if (_round != null) _round.Changed += MarkNumbersDirty;
+            PlayerEconomy.Changed += MarkNumbersDirty;
+        }
+
+        void MarkNumbersDirty() => _numbersDirty = true;
+
+        void OnDestroy()
+        {
+            if (_round != null) _round.Changed -= MarkNumbersDirty;
+            PlayerEconomy.Changed -= MarkNumbersDirty;
+            if (_root != null) Destroy(_root.gameObject);
+            if (_overlay != null) Destroy(_overlay.gameObject);
         }
 
         void Update()
@@ -57,12 +76,17 @@ namespace Game.UI
             bool playing = menu == null || menu.IsPlaying;
             bool gameOver = round != null && round.Phase == RoundManager.RoundPhase.GameOver;
 
-            if (_statusPanel != null)
-                _statusPanel.gameObject.SetActive(true);
+            bool showHud = playing && !gameOver && (menu == null || !menu.IsPaused);
+            if (_root != null && _root.gameObject.activeSelf != showHud)
+                _root.gameObject.SetActive(showHud);
 
             UpdateHealth(player);
-            UpdateNumbers(round, player);
-            UpdateBanner(round, playing);
+            if (_numbersDirty)
+            {
+                UpdateNumbers(round, player);
+                _numbersDirty = false;
+            }
+            UpdateBanner(round, showHud);
             UpdateFlash();
             UpdateGameOver(round, gameOver);
             UpdateDrink(round, player, playing && !gameOver && (menu == null || !menu.IsPaused));
@@ -80,8 +104,8 @@ namespace Game.UI
                 return;
             }
 
-            var root = UIFactory.CreateRect("RunHud", canvas.transform);
-            UIFactory.Stretch(root);
+            var root = UIFactory.SafeRoot(canvas.transform, "RunHud");
+            _root = root;
 
             // Flash rojo al recibir daño (detrás del resto del HUD).
             _damageFlash = UIFactory.CreateImage("DamageFlash", root, null,
@@ -93,8 +117,8 @@ namespace Game.UI
             BuildDrinkButton(root);
 
             // La pantalla de derrota vive en su propio Canvas por encima de todo el HUD.
-            var overlay = UIFactory.CreateCanvas("UI_GameOver", 120);
-            BuildGameOver((RectTransform)overlay.transform);
+            _overlay = UIFactory.CreateCanvas("UI_GameOver", 120);
+            BuildGameOver(_overlay);
         }
 
         void BuildStatusPanel(Transform parent)
@@ -105,9 +129,8 @@ namespace Game.UI
 
             var background = UIFactory.CreateImage("Background", _statusPanel,
                                                    ProceduralSprites.RoundedRect,
-                                                   new Color(0.06f, 0.03f, 0.12f, 0.74f), false, true);
+                                                   UIFactory.DeepViolet, false, true);
             UIFactory.Stretch(background.rectTransform);
-            UIFactory.AddOutline(background, new Color(1f, 1f, 1f, 0.12f), 2f);
 
             var healthTitle = UIFactory.CreateText("HealthTitle", _statusPanel, "VIDA", 26,
                                                    UIFactory.Sun, TextAnchor.MiddleLeft);
@@ -165,13 +188,13 @@ namespace Game.UI
                                                    new Vector2(650f, 100f), BuyDrink, 28);
             UIFactory.Place((RectTransform)_drinkButton.transform, new Vector2(.5f, 0f), new Vector2(.5f, 0f),
                             new Vector2(0f, 35f), new Vector2(650f, 100f));
-            _drinkLabel = _drinkButton.GetComponentInChildren<Text>();
+            _drinkLabel = _drinkButton.GetComponentInChildren<TMPro.TMP_Text>();
             _drinkButton.gameObject.SetActive(false);
         }
 
         void UpdateDrink(RoundManager round, PlayerSphereController player, bool playing)
         {
-            var stations = round != null ? round.GetComponent<DrinkStations>() : null;
+            var stations = round != null ? round.Drinks : null;
             _nearbyDrink = playing && player != null && stations != null && round.Phase != RoundManager.RoundPhase.Idle
                 ? stations.NearbyOffer(player.transform.position) : -1;
             if (_drinkButton == null) return;
@@ -186,14 +209,14 @@ namespace Game.UI
 
         void BuyDrink()
         {
-            RoundManager.Instance?.GetComponent<DrinkStations>()?.Buy(_nearbyDrink);
+            RoundManager.Instance?.Drinks?.Buy(_nearbyDrink);
         }
 
         void BuildBanner(Transform parent)
         {
             var rect = UIFactory.CreateRect("RoundBanner", parent);
             UIFactory.Place(rect, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                            new Vector2(0f, -130f), new Vector2(1100f, 190f));
+                            new Vector2(0f, -260f), new Vector2(1000f, 170f));
 
             _banner = rect.gameObject.AddComponent<CanvasGroup>();
             _banner.alpha = 0f;
@@ -213,38 +236,15 @@ namespace Game.UI
 
         void BuildGameOver(Transform parent)
         {
-            var root = UIFactory.CreateRect("GameOver", parent);
-            UIFactory.Stretch(root);
-            _gameOverRoot = root.gameObject;
-
-            var dim = UIFactory.CreateImage("Dim", root, null, new Color(0.03f, 0.01f, 0.07f, 0.86f), true);
-            UIFactory.Stretch(dim.rectTransform);
-
-            var card = UIFactory.CreateCard(root, new Vector2(980f, 660f),
-                                            UIFactory.DeepViolet, UIFactory.Coral);
-            UIFactory.Place(card, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            Vector2.zero, new Vector2(980f, 660f));
-
-            var title = UIFactory.CreateText("Title", card, "DERROTADO", 96, UIFactory.Coral);
-            UIFactory.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 228f), new Vector2(900f, 130f));
-            UIFactory.AddOutline(title, UIFactory.Ink, 6f);
-
-            _gameOverStats = UIFactory.CreateText("Stats", card, "", 34, UIFactory.Cream);
-            UIFactory.Place(_gameOverStats.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 42f), new Vector2(860f, 270f));
-
-            var retry = UIFactory.CreateButton(card, "RetryButton", "REINTENTAR", UIFactory.Lime,
-                                               new Vector2(400f, 104f), Retry, 40);
-            UIFactory.Place((RectTransform)retry.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(-215f, -218f), new Vector2(400f, 104f));
-
-            var menu = UIFactory.CreateButton(card, "MenuButton", "MENÚ", UIFactory.Sky,
-                                              new Vector2(400f, 104f), BackToMenu, 42);
-            UIFactory.Place((RectTransform)menu.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(215f, -218f), new Vector2(400f, 104f));
-
-            _gameOverRoot.SetActive(false);
+            _gameOverPage = new MenuPage(parent, "GameOver", "Cada partida te hace más fuerte", "Fin de la partida · Este es tu progreso");
+            _gameOverRoot = _gameOverPage.Root.gameObject;
+            var card = UIFactory.Surface("Summary", _gameOverPage.Body);
+            UIFactory.Region(card, .15f, 0, .85f, 1);
+            UIFactory.Stack(card, 40, 24);
+            UIFactory.Label(card, "Title", "PARTIDA TERMINADA", 46, UIFactory.Sun, 80);
+            _gameOverStats = UIFactory.Label(card, "Stats", "", 32, UIFactory.Cream, 360, TextAnchor.UpperLeft);
+            _gameOverPage.Action("RetryButton", "VOLVER A INTENTAR", UIFactory.Sun, Retry);
+            _gameOverPage.Action("MenuButton", "Volver al menú", UIFactory.CardViolet, BackToMenu);
         }
 
         // ---------------------------------------------------------------- Estado
@@ -252,6 +252,7 @@ namespace Game.UI
         void UpdateHealth(PlayerSphereController player)
         {
             if (_healthFill == null || player == null) return;
+            if (_lastHealth == player.Health && _lastMaxHealth == player.MaxHealth) return;
 
             float ratio = player.Health01;
             _healthFill.fillAmount = ratio;
@@ -260,6 +261,7 @@ namespace Game.UI
 
             if (_lastHealth >= 0 && player.Health < _lastHealth) _flashAmount = 0.5f;
             _lastHealth = player.Health;
+            _lastMaxHealth = player.MaxHealth;
         }
 
         void UpdateNumbers(RoundManager round, PlayerSphereController player)
@@ -326,7 +328,11 @@ namespace Game.UI
             }
 
             if (phase == RoundManager.RoundPhase.Preparing)
-                _bannerSubtitle.text = "Prepárate… " + Mathf.CeilToInt(round.PreparationRemaining);
+            {
+                int seconds = Mathf.CeilToInt(round.PreparationRemaining);
+                if (seconds != _lastPreparation) _bannerSubtitle.text = "Prepárate… " + seconds;
+                _lastPreparation = seconds;
+            }
 
             if (phase == RoundManager.RoundPhase.Fighting || phase == RoundManager.RoundPhase.Clearing)
                 _bannerTimer -= Time.unscaledDeltaTime;
@@ -361,9 +367,16 @@ namespace Game.UI
                     "\nPuntos restantes: " + round.Points +
                     "\nMonedas ganadas: " + round.CoinsEarned +
                     "\nBonus de puntos: " + round.BonusDrops +
-                    "\n\nMonedas totales: " + PlayerEconomy.Coins;
+                    "\n\n" + (round.RewardSaveFailed ? "Saldo no disponible" : "Monedas totales: " + PlayerEconomy.Coins);
 
+                _gameOverPage.Status.text = round.RewardSaveFailed
+                    ? "No se pudieron guardar las monedas. Revisa el almacenamiento antes de volver a jugar."
+                    : "Recompensa guardada · Tu colección te espera";
+                _gameOverPage.Status.color = round.RewardSaveFailed ? UIFactory.Coral : UIFactory.Muted;
+                _gameOverPage.Wallet.text = round.RewardSaveFailed
+                    ? "SALDO NO DISPONIBLE" : $"{PlayerEconomy.Coins:N0} MONEDAS";
                 _gameOverRoot.SetActive(true);
+                _gameOverPage.Focus();
                 _banner.alpha = 0f;
             }
             else if (!gameOver && _gameOverRoot.activeSelf)
@@ -376,9 +389,10 @@ namespace Game.UI
 
         void Retry()
         {
-            _gameOverRoot.SetActive(false);
             _lastHealth = -1;
-            RoundManager.Instance?.StartRun();
+            _bannerPhase = (RoundManager.RoundPhase)(-1);
+            _lastPreparation = -1;
+            GameMenuController.Instance?.StartGame();
         }
 
         void BackToMenu()

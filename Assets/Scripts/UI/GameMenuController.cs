@@ -1,106 +1,58 @@
-using Game.Core;
-using Game.Economy;
-using Game.Rendering;
-using Game.Rounds;
-using Game.Pokemon;
-using Game.Pokemon.Progression;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Game.Core;
+using Game.Economy;
+using Game.Pokemon;
+using Game.Pokemon.Progression;
+using Game.Rounds;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.UI;
 
 namespace Game.UI
 {
-    /// <summary>
-    /// Menú principal, pausa y configuración, construidos por código (sin imágenes).
-    ///
-    /// Flujo:
-    ///   · Al arrancar se muestra el MENÚ PRINCIPAL con Jugar / Configuración / Salir.
-    ///   · Jugar congela la partida (GameFlow.Blocked) y muestra el HUD de juego.
-    ///   · El botón de pausa (arriba a la derecha) o Escape abre PAUSA:
-    ///     Continuar / Configuración / Salir.
-    ///
-    /// Mientras hay un menú abierto la partida no avanza: Time.timeScale = 0.
-    /// </summary>
-    [DefaultExecutionOrder(-200)]
-    [DisallowMultipleComponent]
+    /// <summary>Owns navigation and user actions. Views only render progression snapshots.</summary>
+    [DefaultExecutionOrder(-200), DisallowMultipleComponent]
     public sealed class GameMenuController : MonoBehaviour
     {
         const string VolumeKey = "pketer.volumen";
         const string QualityKey = "pketer.calidad";
-
+        enum ScreenId { None, Main, Pause, Settings, Collection, Skills, Starter, Gacha, Result, Release }
         public static GameMenuController Instance { get; private set; }
+        public bool IsPlaying { get; private set; }
+        public bool IsPaused => IsPlaying && _screen != ScreenId.None;
 
-        enum SettingsOrigin { MainMenu, Pause }
-
+        readonly Dictionary<ScreenId, MenuPage> _pages = new Dictionary<ScreenId, MenuPage>();
         RectTransform _canvas;
-        RectTransform _mainPanel;
-        RectTransform _pausePanel;
-        RectTransform _settingsPanel;
-        RectTransform _collectionPanel;
-        RectTransform _skillsPanel;
-        RectTransform _starterPanel;
-        RectTransform _gachaPanel;
-        RectTransform _resultPanel;
-        RectTransform _releasePanel;
-        Text _collectionInfo;
-        Image _pokemonPreview;
-        Text _skillsInfo;
-        Button _equipButton;
-        Button _releaseButton;
-        Text _starterInfo;
-        Text _gachaInfo;
-        Text _resultInfo;
-        Image _resultPreview;
-        Text _releaseInfo;
-        Button _starterConfirm;
-        Button[] _poolButtons;
+        ScreenId _screen, _settingsOrigin, _skillsOrigin;
+        CollectionView _collection;
+        GachaView _gacha;
+        PokemonDetailsView _resultDetails;
         IReadOnlyList<SpeciesDefinition> _catalog;
         IReadOnlyList<PokemonInstance> _inventory;
         IReadOnlyList<GachaPool> _pools;
         PokemonInstance _equipped;
-        int _starterIndex;
-        string _message = "";
-        string _pullRequest;
-        string _releaseTarget;
-        bool _busy;
-        readonly List<RectTransform> _responsiveContents = new List<RectTransform>();
-        Button[] _skillButtons;
-        int _collectionIndex;
-        GameObject _pauseButton;
-        GameObject _skillsButton;
-
-        Text _volumeValue;
-        Text _qualityValue;
-        Text _walletText;
-        Slider _volumeSlider;
-        SettingsOrigin _settingsOrigin;
-
-        bool _playing;
-        bool _paused;
-        bool _settingsOpen;
-        bool _subMenuOpen;
-        bool _skillsFromPause;
-
-        float _volume = 0.8f;
+        int _collectionIndex, _starterIndex;
+        bool _busy, _starterResult;
+        string _message = "", _pullRequest, _releaseTarget;
+        float _volume;
         int _quality;
-
-        public bool IsPlaying => _playing;
-        public bool IsPaused => _paused;
+        UnityEngine.UI.Slider _volumeSlider;
+        TMPro.TMP_Text _volumeValue, _qualityValue, _starterInfo, _releaseInfo, _heroName, _heroInfo;
+        UnityEngine.UI.Image _hero;
+        UnityEngine.UI.Button _starterConfirm;
+        UnityEngine.UI.Button[] _starterButtons, _skillButtons;
+        GameObject _pauseButton, _skillsButton;
 
         void Awake()
         {
             Instance = this;
-
-            _volume = PlayerPrefs.GetFloat(VolumeKey, 0.8f);
+            _volume = Mathf.Clamp01(PlayerPrefs.GetFloat(VolumeKey, .8f));
             _quality = Mathf.Clamp(PlayerPrefs.GetInt(QualityKey, QualitySettings.GetQualityLevel()),
-                                   0, Mathf.Max(0, QualitySettings.names.Length - 1));
-
+                0, Mathf.Max(0, QualitySettings.names.Length - 1));
             AudioListener.volume = _volume;
             if (QualitySettings.names.Length > 0) QualitySettings.SetQualityLevel(_quality, true);
-
+            RefreshSnapshots();
             Build();
             PokemonCollection.Changed += OnCollectionChanged;
             ShowMainMenu();
@@ -108,146 +60,118 @@ namespace Game.UI
 
         void OnDestroy()
         {
-            if (Instance == this) Instance = null;
             PokemonCollection.Changed -= OnCollectionChanged;
-
-            GameFlow.Blocked = false;
-            GameFlow.Over = false;
-            Time.timeScale = 1f;
+            if (_canvas != null) Destroy(_canvas.gameObject);
+            if (Instance != this) return;
+            Instance = null;
+            GameFlow.Blocked = GameFlow.Over = false;
+            Time.timeScale = 1;
             AudioListener.pause = false;
         }
 
         void Update()
         {
-            RefreshPauseButton();
-            if (GameFlow.Over) return;
-            if (_starterPanel.gameObject.activeSelf || _resultPanel.gameObject.activeSelf) return;
-
-            var keyboard = Keyboard.current;
-            if (keyboard == null || !keyboard.escapeKey.wasPressedThisFrame) return;
-
-            if (_releasePanel.gameObject.activeSelf) { CancelRelease(); return; }
-            if (_settingsOpen)
+            bool controls = IsPlaying && _screen == ScreenId.None && !GameFlow.Over;
+            if (_pauseButton.activeSelf != controls) _pauseButton.SetActive(controls);
+            if (_skillsButton.activeSelf != controls) _skillsButton.SetActive(controls);
+            bool back = Keyboard.current?.escapeKey.wasPressedThisFrame == true ||
+                Gamepad.current?.buttonEast.wasPressedThisFrame == true;
+            if (!back || GameFlow.Over) return;
+            switch (_screen)
             {
-                CloseSettings();
-                return;
+                case ScreenId.None: Pause(); break;
+                case ScreenId.Pause: Resume(); break;
+                case ScreenId.Settings: CloseSettings(); break;
+                case ScreenId.Collection: ShowMainMenu(); break;
+                case ScreenId.Gacha: OpenCollection(); break;
+                case ScreenId.Release: CancelRelease(); break;
+                case ScreenId.Result: CloseResult(); break;
+                case ScreenId.Skills: CloseSkills(); break;
             }
-
-            if (_subMenuOpen) { CloseSubMenu(); return; }
-
-            if (!_playing) return;
-            if (_paused) Resume();
-            else Pause();
         }
 
-        void LateUpdate()
+        MenuPage Add(ScreenId id, string name, string title, string subtitle)
         {
-            if (_canvas == null) return;
-            var size = _canvas.rect.size;
-            float scale = Mathf.Min(1f, Mathf.Min(size.x / 1540f, size.y / 1020f));
-            foreach (var content in _responsiveContents)
-                content.localScale = Vector3.one * scale;
+            var page = new MenuPage(_canvas, name, title, subtitle);
+            _pages.Add(id, page);
+            return page;
         }
 
-        // --------------------------------------------------------------- Flujo
+        void Show(ScreenId next)
+        {
+            if (_screen == ScreenId.Settings && next != ScreenId.Settings) PlayerPrefs.Save();
+            _screen = next;
+            foreach (var entry in _pages) entry.Value.Root.gameObject.SetActive(entry.Key == next);
+            bool blocked = next != ScreenId.None || GameFlow.Over;
+            GameFlow.Blocked = blocked;
+            Time.timeScale = blocked ? 0 : 1;
+            AudioListener.pause = IsPlaying && blocked;
+            if (_pages.TryGetValue(next, out var page))
+            {
+                page.Wallet.text = PokemonCollection.Progression.IsReady
+                    ? $"{PlayerEconomy.Coins:N0} MONEDAS" : "SALDO NO DISPONIBLE";
+                page.Focus();
+            }
+        }
+
         public void ShowMainMenu()
         {
-            _playing = false;
-            _paused = false;
-            _settingsOpen = false;
-            _subMenuOpen = false;
-
+            IsPlaying = false;
             GameFlow.Over = false;
-            GameFlow.Blocked = true;
-            Time.timeScale = 0f;
-            AudioListener.pause = false;
-
             RoundManager.Instance?.StopRun();
-            RefreshWallet();
             RefreshSnapshots();
+            RefreshHero();
             if (!PokemonCollection.Progression.IsReady || PokemonCollection.NeedsStarter)
             {
                 RefreshStarter();
-                ShowPanel(_starterPanel);
+                Show(ScreenId.Starter);
             }
-            else ShowPanel(_mainPanel);
-            RefreshPauseButton();
+            else Show(ScreenId.Main);
         }
 
         public void StartGame()
         {
-            if (!PokemonCollection.Progression.IsReady || PokemonCollection.NeedsStarter ||
-                PokemonCollection.Equipped == null)
-            {
-                ShowMainMenu();
-                return;
-            }
-            _playing = true;
-            _paused = false;
-            _settingsOpen = false;
-            _subMenuOpen = false;
-
-            GameFlow.Over = false;
-            GameFlow.Blocked = false;
-            Time.timeScale = 1f;
-            AudioListener.pause = false;
-
-            HideAllPanels();
-            RefreshPauseButton();
-
+            if (!PokemonCollection.Progression.IsReady || PokemonCollection.NeedsStarter || PokemonCollection.Equipped == null)
+            { ShowMainMenu(); return; }
             RoundManager.Instance?.StartRun();
             if (RoundManager.Instance == null || !RoundManager.Instance.IsRunActive)
             {
                 ShowMainMenu();
+                _pages[ScreenId.Main].Status.text = "No se pudo iniciar la partida. Revisa el progreso y la configuración de combate.";
+                return;
             }
+            IsPlaying = true;
+            Show(ScreenId.None);
         }
 
         public void Pause()
         {
-            if (!_playing || GameFlow.Over) return;
-
-            _paused = true;
-            _settingsOpen = false;
-            GameFlow.Blocked = true;
-            Time.timeScale = 0f;
-            AudioListener.pause = true;
-
-            ShowPanel(_pausePanel);
-            RefreshPauseButton();
+            if (IsPlaying && !GameFlow.Over) Show(ScreenId.Pause);
         }
-
         public void Resume()
         {
-            if (!_playing) return;
-
-            _paused = false;
-            _settingsOpen = false;
-            _subMenuOpen = false;
-            GameFlow.Blocked = false;
-            Time.timeScale = 1f;
-            AudioListener.pause = false;
-
-            HideAllPanels();
-            RefreshPauseButton();
+            if (IsPlaying && !GameFlow.Over) Show(ScreenId.None);
         }
-
-        void OpenSettings(SettingsOrigin origin)
+        public void AbandonRun()
         {
-            _settingsOrigin = origin;
-            _settingsOpen = true;
-            GameFlow.Blocked = true;
-            ShowPanel(_settingsPanel);
-            RefreshPauseButton();
+            if (!IsPlaying) return;
+            RoundManager.Instance?.AbandonRun();
+            ShowMainMenu();
         }
-
-        void CloseSettings()
+        void OpenSettings()
         {
-            _settingsOpen = false;
-            if (_settingsOrigin == SettingsOrigin.Pause) ShowPanel(_pausePanel);
-            else ShowPanel(_mainPanel);
-            RefreshPauseButton();
+            _settingsOrigin = _screen;
+            Show(ScreenId.Settings);
         }
-
+        void CloseSettings() => Show(_settingsOrigin);
+        void OpenSkills()
+        {
+            if (!IsPlaying || RoundManager.Instance == null || !RoundManager.Instance.IsRunActive) return;
+            _skillsOrigin = _screen;
+            RefreshSkills();
+            Show(ScreenId.Skills);
+        }
+        void CloseSkills() => Show(_skillsOrigin);
         void QuitGame()
         {
             PlayerEconomy.Flush();
@@ -259,279 +183,6 @@ namespace Game.UI
 #endif
         }
 
-        public void AbandonRun()
-        {
-            if (!_playing) return;
-            RoundManager.Instance?.AbandonRun();
-            ShowMainMenu();
-        }
-
-        void HideAllPanels()
-        {
-            _mainPanel.gameObject.SetActive(false);
-            _pausePanel.gameObject.SetActive(false);
-            _settingsPanel.gameObject.SetActive(false);
-            _collectionPanel.gameObject.SetActive(false);
-            _skillsPanel.gameObject.SetActive(false);
-            _starterPanel.gameObject.SetActive(false);
-            _gachaPanel.gameObject.SetActive(false);
-            _resultPanel.gameObject.SetActive(false);
-            _releasePanel.gameObject.SetActive(false);
-        }
-
-        void ShowPanel(RectTransform panel)
-        {
-            HideAllPanels();
-            panel.gameObject.SetActive(true);
-            panel.SetAsLastSibling();
-        }
-
-        void RefreshPauseButton()
-        {
-            if (_pauseButton != null)
-                _pauseButton.SetActive(_playing && !_paused && !_settingsOpen && !_subMenuOpen && !GameFlow.Over);
-            if (_skillsButton != null)
-                _skillsButton.SetActive(_playing && !_paused && !_settingsOpen && !_subMenuOpen && !GameFlow.Over);
-        }
-
-        // ------------------------------------------------------------------ UI
-        void Build()
-        {
-            _canvas = UIFactory.CreateCanvas("UI_Menus", 100);
-
-            BuildPauseButton();
-            BuildSkillsButton();
-            BuildMainMenu();
-            BuildPauseMenu();
-            BuildSettingsMenu();
-            BuildCollectionMenu();
-            BuildStarterMenu();
-            BuildGachaMenu();
-            BuildResultMenu();
-            BuildReleaseMenu();
-            BuildSkillsMenu();
-            FitPanelContent(_starterPanel);
-            FitPanelContent(_collectionPanel);
-            FitPanelContent(_gachaPanel);
-            FitPanelContent(_resultPanel);
-            FitPanelContent(_releasePanel);
-
-            _pausePanel.gameObject.SetActive(false);
-            _settingsPanel.gameObject.SetActive(false);
-            _collectionPanel.gameObject.SetActive(false);
-            _skillsPanel.gameObject.SetActive(false);
-            _starterPanel.gameObject.SetActive(false);
-            _gachaPanel.gameObject.SetActive(false);
-            _resultPanel.gameObject.SetActive(false);
-            _releasePanel.gameObject.SetActive(false);
-        }
-
-        void BuildPauseButton()
-        {
-            var rect = UIFactory.CreateRect("PauseButton", _canvas);
-            UIFactory.Place(rect, new Vector2(1f, 1f), new Vector2(0.5f, 0.5f),
-                            new Vector2(-90f, -90f), new Vector2(116f, 116f));
-
-            var image = rect.gameObject.AddComponent<Image>();
-            image.sprite = ProceduralSprites.Circle;
-            image.color = UIFactory.Sun;
-            UIFactory.AddShadow(image, new Color(0f, 0f, 0f, 0.4f), new Vector2(0f, -6f));
-            UIFactory.AddOutline(image, UIFactory.Ink, 3f);
-
-            var button = rect.gameObject.AddComponent<Button>();
-            button.targetGraphic = image;
-            button.navigation = new Navigation { mode = Navigation.Mode.None };
-
-            var colors = button.colors;
-            colors.normalColor = Color.white;
-            colors.highlightedColor = new Color(1.1f, 1.1f, 1.1f, 1f);
-            colors.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
-            colors.selectedColor = Color.white;
-            colors.fadeDuration = 0.08f;
-            button.colors = colors;
-            button.onClick.AddListener(Pause);
-
-            var label = UIFactory.CreateText("Label", rect, "II", 54, UIFactory.Ink);
-            UIFactory.Stretch(label.rectTransform);
-
-            _pauseButton = rect.gameObject;
-        }
-
-        void BuildSkillsButton()
-        {
-            var button = UIFactory.CreateButton(_canvas, "RunSkillsButton", "EVs", UIFactory.Sky,
-                                                new Vector2(150f, 92f), OpenSkills, 35);
-            UIFactory.Place((RectTransform)button.transform, new Vector2(1f, 1f), new Vector2(.5f, .5f),
-                            new Vector2(-240f, -90f), new Vector2(150f, 92f));
-            _skillsButton = button.gameObject;
-        }
-
-        void BuildMainMenu()
-        {
-            _mainPanel = CreateOverlay("MainMenu");
-            var root = _mainPanel;
-
-            // Fondo degradado (violeta -> coral -> amarillo).
-            var background = UIFactory.CreateImage("Background", root,
-                ProceduralSprites.VerticalGradient(new Color32(66, 28, 128, 255),
-                                                   new Color32(255, 160, 92, 255)),
-                Color.white, true);
-            UIFactory.Stretch(background.rectTransform);
-
-            var glow = UIFactory.CreateImage("Glow", root, ProceduralSprites.Glow,
-                new Color(1f, 0.88f, 0.35f, 0.35f), false);
-            UIFactory.Place(glow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 280f), new Vector2(1250f, 620f));
-
-            BuildSparkles(root);
-            BuildPokeballDecoration(root);
-
-            // Título.
-            var title = UIFactory.CreateText("Title", root, "PKETER", 190, UIFactory.Sun);
-            UIFactory.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 315f), new Vector2(1500f, 270f));
-            UIFactory.AddOutline(title, UIFactory.Ink, 7f);
-
-            var subtitle = UIFactory.CreateText("Subtitle", root, "P O K É M O N   T R A I N E R", 40,
-                                                UIFactory.Cream);
-            subtitle.color = new Color(1f, 0.98f, 0.93f, 0.92f);
-            UIFactory.Place(subtitle.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 160f), new Vector2(1500f, 70f));
-
-            var play = UIFactory.CreateButton(root, "PlayButton", "JUGAR", UIFactory.Lime,
-                                             new Vector2(640f, 116f), StartGame, 50);
-            UIFactory.Place((RectTransform)play.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, 45f), new Vector2(640f, 116f));
-
-            var collection = UIFactory.CreateButton(root, "CollectionButton", "POKÉMON", UIFactory.Sky,
-                                                    new Vector2(310f, 90f), OpenCollection, 36);
-            UIFactory.Place((RectTransform)collection.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(0f, -75f), new Vector2(310f, 90f));
-
-            var settings = UIFactory.CreateButton(root, "SettingsButton", "CONFIGURACIÓN", UIFactory.Sky,
-                                                 new Vector2(640f, 116f),
-                                                 () => OpenSettings(SettingsOrigin.MainMenu), 40);
-            UIFactory.Place((RectTransform)settings.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, -185f), new Vector2(640f, 96f));
-
-            var quit = UIFactory.CreateButton(root, "QuitButton", "SALIR", UIFactory.Coral,
-                                              new Vector2(640f, 116f), QuitGame, 46);
-            UIFactory.Place((RectTransform)quit.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, -300f), new Vector2(640f, 96f));
-
-            var footer = UIFactory.CreateText("Footer", root, "v1.0  ·  Peter Games", 24,
-                                              new Color(1f, 1f, 1f, 0.65f));
-            UIFactory.Place(footer.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                            new Vector2(0f, 34f), new Vector2(900f, 40f));
-
-            BuildWalletBadge(root);
-            RefreshWallet();
-        }
-
-        /// <summary>Monedas globales (economía persistente usada por el gacha).</summary>
-        void BuildWalletBadge(Transform parent)
-        {
-            var badge = UIFactory.CreateImage("WalletBadge", parent, ProceduralSprites.RoundedRect,
-                                              new Color(0.08f, 0.04f, 0.15f, 0.68f), false, true);
-            UIFactory.Place(badge.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(40f, -40f), new Vector2(320f, 74f));
-            UIFactory.AddOutline(badge, new Color(1f, 1f, 1f, 0.18f), 2f);
-
-            var coin = UIFactory.CreateImage("Coin", badge.rectTransform, ProceduralSprites.Circle,
-                                             UIFactory.Sun, false);
-            UIFactory.Place(coin.rectTransform, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(40f, 0f), new Vector2(44f, 44f));
-            UIFactory.AddOutline(coin, UIFactory.Ink, 2f);
-
-            _walletText = UIFactory.CreateText("WalletText", badge.rectTransform, "MONEDAS 0", 28,
-                                               UIFactory.Cream, TextAnchor.MiddleLeft);
-            UIFactory.Place(_walletText.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
-                            new Vector2(74f, 0f), new Vector2(232f, 50f));
-        }
-
-        void RefreshWallet()
-        {
-            if (_walletText != null) _walletText.text = "MONEDAS " + PlayerEconomy.Coins;
-        }
-
-        void BuildPauseMenu()
-        {
-            _pausePanel = CreateOverlay("PauseMenu");
-            var root = _pausePanel;
-
-            var dim = UIFactory.CreateImage("Dim", root, null, new Color(0.03f, 0.01f, 0.07f, 0.78f), true);
-            UIFactory.Stretch(dim.rectTransform);
-
-            var card = UIFactory.CreateCard(root, new Vector2(900f, 700f),
-                                            UIFactory.DeepViolet, UIFactory.Sun);
-            UIFactory.Place(card, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            Vector2.zero, new Vector2(900f, 700f));
-
-            var title = UIFactory.CreateText("Title", card, "PAUSA", 104, UIFactory.Sun);
-            UIFactory.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 235f), new Vector2(800f, 150f));
-            UIFactory.AddOutline(title, UIFactory.Ink, 6f);
-
-            var note = UIFactory.CreateText("Note", card, "La partida está en pausa", 30,
-                                            new Color(1f, 1f, 1f, 0.7f));
-            UIFactory.Place(note.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 140f), new Vector2(700f, 50f));
-
-            var resume = UIFactory.CreateButton(card, "ResumeButton", "CONTINUAR", UIFactory.Lime,
-                                                new Vector2(600f, 95f), Resume, 46);
-            UIFactory.Place((RectTransform)resume.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, 55f), new Vector2(600f, 95f));
-
-            var evs = UIFactory.CreateButton(card, "RunSkillsButton", "ÁRBOL EV", UIFactory.Lime,
-                                             new Vector2(600f, 95f), OpenSkills, 40);
-            UIFactory.Place((RectTransform)evs.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(0f, -50f), new Vector2(600f, 95f));
-
-            var settings = UIFactory.CreateButton(card, "SettingsButton", "CONFIGURACIÓN", UIFactory.Sky,
-                                                   new Vector2(600f, 95f),
-                                                  () => OpenSettings(SettingsOrigin.Pause), 38);
-            UIFactory.Place((RectTransform)settings.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, -155f), new Vector2(600f, 95f));
-
-            var quit = UIFactory.CreateButton(card, "QuitButton", "SALIR DE PARTIDA", UIFactory.Coral,
-                                                new Vector2(600f, 95f), AbandonRun, 40);
-            UIFactory.Place((RectTransform)quit.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, -260f), new Vector2(600f, 95f));
-        }
-
-        void OpenCollection()
-        {
-            _subMenuOpen = true;
-            RefreshCollection();
-            ShowPanel(_collectionPanel);
-        }
-
-        void OpenSkills()
-        {
-            if (!_playing || RoundManager.Instance == null || !RoundManager.Instance.IsRunActive) return;
-            _skillsFromPause = _paused;
-            _subMenuOpen = true;
-            _paused = true;
-            GameFlow.Blocked = true;
-            Time.timeScale = 0f;
-            AudioListener.pause = true;
-            RefreshSkills();
-            ShowPanel(_skillsPanel);
-            RefreshPauseButton();
-        }
-
-        void CloseSubMenu()
-        {
-            _subMenuOpen = false;
-            if (_playing)
-            {
-                if (_skillsFromPause) ShowPanel(_pausePanel);
-                else Resume();
-            }
-            else ShowPanel(_mainPanel);
-            RefreshPauseButton();
-        }
-
         void RefreshSnapshots()
         {
             _catalog = PokemonCollection.Catalog;
@@ -539,130 +190,93 @@ namespace Game.UI
             _equipped = PokemonCollection.Equipped;
             _pools = PokemonCollection.GetPools();
         }
-
+        SpeciesDefinition Species(string id) => _catalog.FirstOrDefault(s => s.id == id);
         void OnCollectionChanged()
         {
             RefreshSnapshots();
-            RefreshWallet();
-            if (_collectionPanel != null && _collectionPanel.gameObject.activeSelf) RefreshCollection();
-            if (_gachaPanel != null && _gachaPanel.gameObject.activeSelf) RefreshGacha();
+            foreach (var page in _pages.Values) page.Wallet.text = $"{PlayerEconomy.Coins:N0} MONEDAS";
+            RefreshHero();
+            if (_screen == ScreenId.Collection) RefreshCollection();
+            if (_screen == ScreenId.Gacha) RefreshGacha();
         }
 
-        SpeciesDefinition Species(string id) => _catalog?.FirstOrDefault(s => s.id == id);
-        static string Category(string category) => category == "PseudoLegendary" ? "Pseudolegendario" :
-            category == "Mythical" ? "Mítico" : "Común";
-        static string Stats(StatBlock s) => $"SAL {s.health}  ATQ {s.attack}  DEF {s.defense}  VEL {s.speed}";
-        static string NatureName(Nature nature)
+        void OpenCollection()
         {
-            string[] names = { "Fuerte", "Huraña", "Audaz", "Firme", "Pícara",
-                "Osada", "Dócil", "Plácida", "Agitada", "Floja",
-                "Miedosa", "Activa", "Seria", "Alegre", "Ingenua",
-                "Modesta", "Afable", "Mansa", "Tímida", "Alocada",
-                "Serena", "Amable", "Grosera", "Cauta", "Rara" };
-            int index = (int)nature;
-            return index >= 0 && index < names.Length ? names[index] : nature.ToString();
+            _message = "";
+            RefreshSnapshots();
+            RefreshCollection();
+            Show(ScreenId.Collection);
         }
-        string Describe(PokemonInstance pokemon)
+        void SelectPokemon(int index)
         {
-            if (pokemon == null) return "Sin Pokémon";
-            var species = Species(pokemon.speciesId);
-            if (species == null) return "Especie desconocida";
-            var calculated = PokemonStats.Calculate(species.baseStats, pokemon.ivs, new StatBlock(), pokemon.nature);
-            return $"{species.name}  ·  {Category(species.category)}  ·  Rareza {pokemon.rarity}\n" +
-                $"Naturaleza: {NatureName(pokemon.nature)}\nIV: {Stats(pokemon.ivs)}\n" +
-                $"Base: {Stats(species.baseStats)}\nStats (sin EV): {Stats(calculated)}";
+            if (index < 0 || index >= _inventory.Count) return;
+            _collectionIndex = index;
+            _message = "";
+            RefreshCollection();
         }
-        static string ErrorMessage(string error)
+        void RefreshCollection()
         {
-            switch (error)
-            {
-                case "InventoryFull": return "Inventario lleno. Libera un Pokémon primero.";
-                case "InsufficientCoins": return "No tienes suficientes monedas.";
-                case "LastInstance": return "No puedes liberar tu último Pokémon.";
-                case "StarterRequired": return "Elige primero tu Pokémon inicial.";
-                case "PersistenceFailure":
-                case "SaveUnavailable": return "No se pudo guardar la partida. Reinicia y revisa el almacenamiento.";
-                case "InstanceNotFound": return "Ese Pokémon ya no está en tu inventario.";
-                default: return "No se pudo completar la operación. " + (error ?? "");
-            }
+            _collectionIndex = Mathf.Clamp(_collectionIndex, 0, Mathf.Max(0, _inventory.Count - 1));
+            _collection.Bind(_inventory, _equipped, Species, _collectionIndex,
+                PokemonCollection.InventoryCapacity, PlayerEconomy.Coins, _busy, _message);
         }
-        static void At(RectTransform rect, float x, float y, float width, float height) =>
-            UIFactory.Place(rect, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                new Vector2(x, y), new Vector2(width, height));
-        Text PanelText(Transform root, string name, string text, int size, float x, float y, float width, float height)
+        void EquipPokemon()
         {
-            var label = UIFactory.CreateText(name, root, text, size, UIFactory.Cream);
-            label.horizontalOverflow = HorizontalWrapMode.Wrap;
-            label.verticalOverflow = VerticalWrapMode.Truncate;
-            At(label.rectTransform, x, y, width, height);
-            return label;
+            if (_busy || _inventory.Count == 0) return;
+            _busy = true;
+            var result = PokemonCollection.Equip(_inventory[_collectionIndex].instanceId);
+            _busy = false;
+            _message = result.success ? "Listo para tu próxima partida." : ErrorMessage(result.error);
+            RefreshCollection();
         }
-        Button PanelButton(Transform root, string name, string label, Color color, float x, float y,
-            float width, float height, UnityEngine.Events.UnityAction action, int size = 30)
+        void AskRelease()
         {
-            var button = UIFactory.CreateButton(root, name, label, color, new Vector2(width, height), action, size);
-            At((RectTransform)button.transform, x, y, width, height);
-            var text = button.GetComponentInChildren<Text>();
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Truncate;
-            return button;
+            if (_busy || _inventory.Count <= 1) return;
+            var pokemon = _inventory[_collectionIndex];
+            _releaseTarget = pokemon.instanceId;
+            _releaseInfo.text = $"¿Liberar a {Species(pokemon.speciesId)?.name}?\n\nRareza {pokemon.rarity} · Naturaleza {PokemonUi.NatureName(pokemon.nature)}\n\nEsta acción no se puede deshacer.";
+            Show(ScreenId.Release);
         }
-        RectTransform PlainPanel(string name, string title)
+        void CancelRelease()
         {
-            var panel = CreateOverlay(name);
-            var dim = UIFactory.CreateImage("Background", panel, null, UIFactory.DeepViolet, true);
-            UIFactory.Stretch(dim.rectTransform);
-            var label = PanelText(panel, "Title", title, 66, 0, 430, 1400, 90);
-            label.color = UIFactory.Sun;
-            return panel;
+            _releaseTarget = null;
+            RefreshCollection();
+            Show(ScreenId.Collection);
         }
-        void FitPanelContent(RectTransform panel)
+        void ReleasePokemon()
         {
-            var content = UIFactory.CreateRect("ResponsiveContent", panel);
-            At(content, 0, 0, 1540, 1020);
-            var children = new List<Transform>();
-            foreach (Transform child in panel)
-                if (child != content && child.name != "Background") children.Add(child);
-            foreach (var child in children) child.SetParent(content, false);
-            _responsiveContents.Add(content);
+            if (_busy || string.IsNullOrEmpty(_releaseTarget)) return;
+            _busy = true;
+            var target = _releaseTarget;
+            _releaseTarget = null;
+            var result = PokemonCollection.Release(target);
+            _busy = false;
+            _message = result.success ? "Pokémon liberado. Tienes un espacio disponible." : ErrorMessage(result.error);
+            RefreshCollection();
+            Show(ScreenId.Collection);
         }
 
-        void BuildStarterMenu()
-        {
-            _starterPanel = PlainPanel("StarterMenu", "ELIGE TU POKÉMON INICIAL");
-            PanelText(_starterPanel, "Note", "Solo puedes elegir una vez. El inicial será gratuito.", 30, 0, 345, 1300, 55);
-            var ids = PokemonCollection.StarterIds;
-            for (int i = 0; i < ids.Count; i++)
-            {
-                int index = i;
-                float x = (i - (ids.Count - 1) * .5f) * 420f;
-                var species = PokemonCollection.Catalog.FirstOrDefault(s => s.id == ids[index]);
-                var image = UIFactory.CreateImage("StarterSprite" + i, _starterPanel,
-                    PokemonCollection.GetSprite(new PokemonInstance { speciesId = ids[index] }), Color.white);
-                image.preserveAspect = true;
-                At(image.rectTransform, x, 130, 220, 220);
-                PanelButton(_starterPanel, "Starter" + i, species?.name ?? ids[index], UIFactory.Sky,
-                    x, -30, 350, 82, () => { _starterIndex = index; _message = ""; RefreshStarter(); }, 32);
-            }
-            _starterInfo = PanelText(_starterPanel, "StarterInfo", "", 30, 0, -140, 1300, 100);
-            _starterConfirm = PanelButton(_starterPanel, "ConfirmStarter", "CONFIRMAR INICIAL", UIFactory.Lime,
-                0, -280, 500, 90, ConfirmStarter, 34);
-        }
         void RefreshStarter()
         {
-            if (!PokemonCollection.Progression.IsReady)
+            bool ready = PokemonCollection.Progression.IsReady && _starterButtons.Length > 0;
+            _starterConfirm.interactable = ready && !_busy;
+            if (!ready)
             {
                 _starterInfo.text = "No se pudo cargar el progreso. Reinicia y revisa el almacenamiento.";
-                _starterConfirm.interactable = false;
                 return;
             }
-            var ids = PokemonCollection.StarterIds;
-            if (ids.Count == 0) { _starterInfo.text = "No hay iniciales configurados."; _starterConfirm.interactable = false; return; }
-            _starterIndex = Mathf.Clamp(_starterIndex, 0, ids.Count - 1);
+            _starterIndex = Mathf.Clamp(_starterIndex, 0, _starterButtons.Length - 1);
+            for (int i = 0; i < _starterButtons.Length; i++)
+            {
+                _starterButtons[i].image.color = i == _starterIndex ? UIFactory.Sun : UIFactory.CardViolet;
+                var text = _starterButtons[i].GetComponentInChildren<TMPro.TMP_Text>();
+                text.color = i == _starterIndex ? UIFactory.Ink : UIFactory.Cream;
+                text.text = i == _starterIndex ? "SELECCIONADO" : "ELEGIR";
+            }
             var config = PokemonCollection.Configuration;
             int total = config.starterF + config.starterA + config.starterS;
-            _starterInfo.text = $"Elegido: {Species(ids[_starterIndex])?.name ?? ids[_starterIndex]} · Rareza F {Percent(config.starterF, total)} / A {Percent(config.starterA, total)} / S {Percent(config.starterS, total)}\n{_message}";
-            _starterConfirm.interactable = !_busy;
+            _starterInfo.text = string.IsNullOrEmpty(_message)
+                ? $"Rareza inicial: F {PokemonUi.Percent(config.starterF, total)} · A {PokemonUi.Percent(config.starterA, total)} · S {PokemonUi.Percent(config.starterS, total)}" : _message;
         }
         void ConfirmStarter()
         {
@@ -675,130 +289,15 @@ namespace Game.UI
             if (!result.success) { _message = ErrorMessage(result.error); RefreshStarter(); return; }
             ShowResult(result.instance, true);
         }
-        void BuildCollectionMenu()
-        {
-            _collectionPanel = PlainPanel("CollectionMenu", "INVENTARIO POKÉMON");
-            _collectionInfo = PanelText(_collectionPanel, "Info", "", 31, 220, 105, 1040, 310);
-            _pokemonPreview = UIFactory.CreateImage("PokemonPreview", _collectionPanel, null, Color.white);
-            _pokemonPreview.preserveAspect = true;
-            At(_pokemonPreview.rectTransform, -530, 130, 250, 250);
-            PanelButton(_collectionPanel, "Previous", "◀ ANTERIOR", UIFactory.Sky, -360, -110, 330, 80, () => ChangeSelection(-1));
-            PanelButton(_collectionPanel, "Next", "SIGUIENTE ▶", UIFactory.Sky, 360, -110, 330, 80, () => ChangeSelection(1));
-            _equipButton = PanelButton(_collectionPanel, "Equip", "EQUIPAR", UIFactory.Lime, -240, -230, 380, 80, EquipPokemon);
-            _releaseButton = PanelButton(_collectionPanel, "Release", "LIBERAR", UIFactory.Coral, 240, -230, 380, 80, AskRelease);
-            PanelButton(_collectionPanel, "Gacha", "MÁQUINAS GACHA", UIFactory.Sky, -240, -355, 380, 80, OpenGacha, 27);
-            PanelButton(_collectionPanel, "Back", "VOLVER", UIFactory.Coral, 240, -355, 380, 80, CloseSubMenu);
-        }
-        void ChangeSelection(int delta)
-        {
-            int count = _inventory?.Count ?? 0;
-            if (count == 0) return;
-            _collectionIndex = (_collectionIndex + delta + count) % count;
-            _message = "";
-            RefreshCollection();
-        }
-        void EquipPokemon()
-        {
-            if (_busy || _inventory.Count == 0) return;
-            _busy = true;
-            var result = PokemonCollection.Equip(_inventory[_collectionIndex].instanceId);
-            _busy = false;
-            _message = result.success ? "Pokémon equipado." : ErrorMessage(result.error);
-            RefreshCollection();
-        }
-        void BuildReleaseMenu()
-        {
-            _releasePanel = PlainPanel("ReleaseMenu", "CONFIRMAR LIBERACIÓN");
-            _releaseInfo = PanelText(_releasePanel, "ReleaseInfo", "", 36, 0, 100, 1200, 220);
-            PanelButton(_releasePanel, "CancelRelease", "CANCELAR", UIFactory.Sky, -250, -220, 400, 90, CancelRelease, 34);
-            PanelButton(_releasePanel, "ConfirmRelease", "SÍ, LIBERAR", UIFactory.Coral, 250, -220, 400, 90, ReleasePokemon, 34);
-        }
-        void AskRelease()
-        {
-            if (_busy || _inventory == null || _inventory.Count <= 1) return;
-            var pokemon = _inventory[_collectionIndex];
-            _releaseTarget = pokemon.instanceId;
-            _releaseInfo.text = $"¿Liberar a {Species(pokemon.speciesId)?.name ?? "este Pokémon"} de rareza {pokemon.rarity}?\nEsta acción no se puede deshacer.";
-            ShowPanel(_releasePanel);
-        }
-        void CancelRelease()
-        {
-            _releaseTarget = null;
-            ShowPanel(_collectionPanel);
-            RefreshCollection();
-        }
-        void ReleasePokemon()
-        {
-            if (_busy || string.IsNullOrEmpty(_releaseTarget)) return;
-            _busy = true;
-            var target = _releaseTarget;
-            _releaseTarget = null;
-            var result = PokemonCollection.Release(target);
-            _busy = false;
-            _message = result.success ? "Pokémon liberado." : ErrorMessage(result.error);
-            ShowPanel(_collectionPanel);
-            RefreshCollection();
-        }
-        void RefreshCollection()
-        {
-            int count = _inventory?.Count ?? 0;
-            if (count == 0)
-            {
-                _collectionInfo.text = "No hay Pokémon en el inventario.";
-                _pokemonPreview.sprite = null;
-                _pokemonPreview.enabled = false;
-                _equipButton.interactable = _releaseButton.interactable = false;
-                return;
-            }
-            _collectionIndex = Mathf.Clamp(_collectionIndex, 0, count - 1);
-            var pokemon = _inventory[_collectionIndex];
-            bool equipped = _equipped != null && _equipped.instanceId == pokemon.instanceId;
-            _pokemonPreview.sprite = PokemonCollection.GetSprite(pokemon);
-            _pokemonPreview.enabled = _pokemonPreview.sprite != null;
-            _collectionInfo.text = $"Instancia {_collectionIndex + 1}/{count} · Capacidad {count}/{PokemonCollection.InventoryCapacity} · Monedas {PlayerEconomy.Coins}\n" +
-                Describe(pokemon) + (equipped ? "\nEQUIPADO" : "") + "\n" + _message;
-            _equipButton.GetComponentInChildren<Text>().text = equipped ? "EQUIPADO" : "EQUIPAR";
-            _equipButton.interactable = !_busy && !equipped;
-            _releaseButton.interactable = !_busy && count > 1;
-        }
-        static string Percent(int value, int total) => total > 0 ? (100f * value / total).ToString("0.##") + "%" : "0%";
-        void BuildGachaMenu()
-        {
-            _gachaPanel = PlainPanel("GachaMenu", "MÁQUINAS GACHA");
-            _gachaInfo = PanelText(_gachaPanel, "Info", "", 28, 0, 315, 1450, 100);
-            _poolButtons = new Button[2];
-            for (int i = 0; i < _poolButtons.Length; i++)
-            {
-                int index = i;
-                float x = i == 0 ? -400 : 400;
-                _poolButtons[i] = PanelButton(_gachaPanel, "Pool" + i, "", UIFactory.Sky,
-                    x, -100, 660, 430, () => PullPool(index), 29);
-            }
-            PanelButton(_gachaPanel, "Back", "VOLVER AL INVENTARIO", UIFactory.Coral, 0, -400, 500, 75, OpenCollection, 27);
-        }
         void OpenGacha()
         {
             _message = "";
             RefreshSnapshots();
             RefreshGacha();
-            ShowPanel(_gachaPanel);
+            Show(ScreenId.Gacha);
         }
-        void RefreshGacha()
-        {
-            _gachaInfo.text = $"Monedas: {PlayerEconomy.Coins} · Inventario: {_inventory.Count}/{PokemonCollection.InventoryCapacity}\n{_message}";
-            for (int i = 0; i < _poolButtons.Length; i++)
-            {
-                var button = _poolButtons[i];
-                bool exists = i < _pools.Count;
-                button.gameObject.SetActive(exists);
-                if (!exists) continue;
-                var pool = _pools[i];
-                int total = pool.weightF + pool.weightA + pool.weightS;
-                string species = string.Join(", ", pool.species.Select(id => Species(id)?.name ?? id));
-                button.GetComponentInChildren<Text>().text = $"MÁQUINA {(i == 0 ? "BÁSICA" : "ESPECIAL")}\n\nPrecio: {pool.price} monedas\nRareza F {Percent(pool.weightF, total)} · A {Percent(pool.weightA, total)} · S {Percent(pool.weightS, total)}\n\nEspecies (igual probabilidad):\n{species}\n\nTOCA PARA TIRAR";
-                button.interactable = !_busy && _pullRequest == null && PokemonCollection.Progression.IsReady;
-            }
-        }
+        void RefreshGacha() => _gacha.Bind(_pools, Species, PlayerEconomy.Coins, _inventory.Count,
+            PokemonCollection.InventoryCapacity, _busy || _pullRequest != null, PokemonCollection.Progression.IsReady, _message);
         void PullPool(int index)
         {
             if (_busy || _pullRequest != null || index < 0 || index >= _pools.Count) return;
@@ -815,24 +314,12 @@ namespace Game.UI
             }
             ShowResult(result.instance, false);
         }
-        void BuildResultMenu()
-        {
-            _resultPanel = PlainPanel("ResultMenu", "¡POKÉMON OBTENIDO!");
-            _resultPreview = UIFactory.CreateImage("ResultSprite", _resultPanel, null, Color.white);
-            _resultPreview.preserveAspect = true;
-            At(_resultPreview.rectTransform, -480, 110, 300, 300);
-            _resultInfo = PanelText(_resultPanel, "ResultInfo", "", 34, 180, 105, 1050, 330);
-            PanelButton(_resultPanel, "CloseResult", "CONTINUAR", UIFactory.Lime, 0, -300, 450, 90, CloseResult, 36);
-        }
-        bool _starterResult;
         void ShowResult(PokemonInstance pokemon, bool starter)
         {
             _starterResult = starter;
             RefreshSnapshots();
-            _resultPreview.sprite = PokemonCollection.GetSprite(pokemon);
-            _resultPreview.enabled = _resultPreview.sprite != null;
-            _resultInfo.text = Describe(pokemon) + "\nGuardado en tu inventario.";
-            ShowPanel(_resultPanel);
+            _resultDetails.Bind(pokemon, Species(pokemon.speciesId), starter, "Guardado en tu colección.");
+            Show(ScreenId.Result);
         }
         void CloseResult()
         {
@@ -842,191 +329,203 @@ namespace Game.UI
             else OpenGacha();
         }
 
-        void BuildSkillsMenu()
+        void Build()
         {
-            _skillsPanel = CreateOverlay("SkillsMenu");
-            var dim = UIFactory.CreateImage("Dim", _skillsPanel, null, UIFactory.DeepViolet, true);
-            UIFactory.Stretch(dim.rectTransform);
-            var title = UIFactory.CreateText("Title", _skillsPanel, "ÁRBOL DE EVs", 72, UIFactory.Sun);
-            UIFactory.Place(title.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(0, 390), new Vector2(1300, 100));
-            _skillsInfo = UIFactory.CreateText("Info", _skillsPanel, "", 32, UIFactory.Cream);
-            UIFactory.Place(_skillsInfo.rectTransform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(0, 270), new Vector2(1300, 90));
-            _skillButtons = new Button[4];
+            _canvas = UIFactory.CreateCanvas("UI_Menus", 100);
+            var controls = UIFactory.SafeRoot(_canvas, "RunControls");
+            var pause = UIFactory.CreateButton(controls, "PauseButton", "PAUSA", UIFactory.CardViolet,
+                new Vector2(140, 76), Pause, 25);
+            UIFactory.Place((RectTransform)pause.transform, Vector2.one, Vector2.one,
+                new Vector2(-28, -28), new Vector2(140, 76));
+            _pauseButton = pause.gameObject;
+            var skills = UIFactory.CreateButton(controls, "RunSkillsButton", "EV", UIFactory.Sun,
+                new Vector2(90, 76), OpenSkills, 27);
+            UIFactory.Place((RectTransform)skills.transform, Vector2.one, Vector2.one,
+                new Vector2(-184, -28), new Vector2(90, 76));
+            _skillsButton = skills.gameObject;
+            BuildMain();
+            BuildPause();
+            BuildSettings();
+            _collection = new CollectionView(_canvas, SelectPokemon, EquipPokemon, AskRelease, OpenGacha, ShowMainMenu);
+            _pages.Add(ScreenId.Collection, _collection.Page);
+            _gacha = new GachaView(_canvas, PullPool, OpenCollection);
+            _pages.Add(ScreenId.Gacha, _gacha.Page);
+            BuildStarter();
+            var result = Add(ScreenId.Result, "ResultMenu", "¡Un nuevo compañero!", "Cada Pokémon tiene su propia naturaleza y potencial.");
+            _resultDetails = new PokemonDetailsView(result.Body);
+            UIFactory.Region(_resultDetails.Root, .15f, 0, .85f, 1);
+            result.Action("Continue", "CONTINUAR", UIFactory.Sun, CloseResult);
+            var release = Add(ScreenId.Release, "ReleaseMenu", "Liberar Pokémon", "Revisa tu elección antes de continuar.");
+            _releaseInfo = UIFactory.CreateText("Summary", release.Body, "", 36, UIFactory.Cream);
+            UIFactory.Stretch(_releaseInfo.rectTransform, 40);
+            release.Action("Cancel", "Conservar Pokémon", UIFactory.Sky, CancelRelease);
+            release.Action("Confirm", "Sí, liberar", UIFactory.Coral, ReleasePokemon);
+            BuildSkills();
+        }
+
+        void BuildMain()
+        {
+            var page = Add(ScreenId.Main, "MainMenu", "Tu próxima aventura", "Entrena, supera rondas y amplía tu colección.");
+            var left = UIFactory.CreateRect("Welcome", page.Body);
+            UIFactory.Region(left, 0, 0, .49f, 1, 12);
+            UIFactory.Stack(left, 16, 22);
+            UIFactory.Label(left, "Logo", "PKETER", 112, UIFactory.Sun, 150);
+            UIFactory.Label(left, "Tagline", "Un compañero.\nInfinitas rondas.", 56, UIFactory.Cream, 150);
+            UIFactory.Label(left, "Description", "Mejora tus EV durante la partida.\nGana monedas y descubre nuevos Pokémon.", 27, UIFactory.Muted, 90);
+            var play = UIFactory.CreateButton(left, "PlayButton", "JUGAR", UIFactory.Sun, new Vector2(500, 94), StartGame, 36);
+            UIFactory.Layout(play.transform, 94);
+            var showcase = UIFactory.Surface("EquippedPokemon", page.Body);
+            UIFactory.Region(showcase, .53f, 0, 1, 1);
+            var glow = UIFactory.CreateImage("Glow", showcase, Game.Rendering.ProceduralSprites.Glow, new Color(1, .87f, .25f, .18f));
+            UIFactory.Region(glow.rectTransform, 0, .12f, 1, 1);
+            var caption = UIFactory.CreateText("Caption", showcase, "TU COMPAÑERO", 23, UIFactory.Muted);
+            UIFactory.Region(caption.rectTransform, 0, .86f, 1, .96f);
+            _hero = UIFactory.CreateImage("Pokemon", showcase, null, Color.white);
+            _hero.preserveAspect = true;
+            UIFactory.Region(_hero.rectTransform, .15f, .28f, .85f, .83f);
+            _heroName = UIFactory.CreateText("Name", showcase, "", 44, UIFactory.Cream);
+            UIFactory.Region(_heroName.rectTransform, .06f, .13f, .94f, .26f);
+            _heroInfo = UIFactory.CreateText("Info", showcase, "", 24, UIFactory.Muted);
+            UIFactory.Region(_heroInfo.rectTransform, .06f, .04f, .94f, .13f);
+            page.Action("Collection", "Colección", UIFactory.CardViolet, OpenCollection);
+            page.Action("Gacha", "Gacha", UIFactory.CardViolet, OpenGacha);
+            page.Action("Settings", "Ajustes", UIFactory.CardViolet, OpenSettings);
+            page.Action("Quit", "Salir", UIFactory.CardViolet, QuitGame);
+        }
+        void RefreshHero()
+        {
+            if (_hero == null) return;
+            _hero.sprite = PokemonCollection.GetSprite(_equipped);
+            _hero.enabled = _hero.sprite != null;
+            _heroName.text = _equipped == null ? "Elige tu inicial" : Species(_equipped.speciesId)?.name;
+            _heroInfo.text = _equipped == null ? "" : $"Rareza {_equipped.rarity} · {PokemonUi.NatureName(_equipped.nature)}";
+        }
+        void BuildPause()
+        {
+            var page = Add(ScreenId.Pause, "PauseMenu", "Tómate un respiro", "La partida está en pausa.");
+            var stack = CenterStack(page);
+            UIFactory.Label(stack, "Title", "PAUSA", 76, UIFactory.Sun, 130, TextAnchor.MiddleCenter);
+            StackButton(stack, "Resume", "CONTINUAR", UIFactory.Sun, Resume);
+            StackButton(stack, "Skills", "Mejoras EV", UIFactory.CardViolet, OpenSkills);
+            StackButton(stack, "Settings", "Ajustes", UIFactory.CardViolet, OpenSettings);
+            page.Action("Abandon", "Salir de la partida", UIFactory.CardViolet, AbandonRun);
+        }
+        void BuildStarter()
+        {
+            var page = Add(ScreenId.Starter, "StarterMenu", "Elige a tu primer compañero", "Tu inicial es gratuito. Solo puedes elegirlo una vez.");
+            var row = UIFactory.CreateRect("Starters", page.Body);
+            UIFactory.Region(row, 0, .15f, 1, 1);
+            UIFactory.Row(row, 24);
+            var ids = PokemonCollection.StarterIds;
+            _starterButtons = new UnityEngine.UI.Button[ids.Count];
+            for (int i = 0; i < ids.Count; i++)
+            {
+                int index = i;
+                var card = UIFactory.Surface("Starter" + i, row);
+                var size = card.gameObject.AddComponent<UnityEngine.UI.LayoutElement>();
+                size.minWidth = size.preferredWidth = 0;
+                size.flexibleWidth = 1;
+                UIFactory.Stack(card, 24, 14);
+                var image = UIFactory.CreateImage("Portrait", card,
+                    PokemonCollection.GetSprite(new PokemonInstance { speciesId = ids[i] }), Color.white);
+                image.preserveAspect = true;
+                UIFactory.Layout(image.transform, 150, 1);
+                UIFactory.Label(card, "Name", Species(ids[i])?.name ?? ids[i], 38, UIFactory.Cream, 56, TextAnchor.MiddleCenter);
+                _starterButtons[i] = StackButton(card, "Select", "ELEGIR", UIFactory.CardViolet,
+                    () => { _starterIndex = index; _message = ""; RefreshStarter(); });
+            }
+            _starterInfo = UIFactory.CreateText("Odds", page.Body, "", 25, UIFactory.Muted);
+            UIFactory.Region(_starterInfo.rectTransform, 0, 0, 1, .13f);
+            _starterConfirm = page.Action("ConfirmStarter", "CONFIRMAR INICIAL", UIFactory.Sun, ConfirmStarter);
+        }
+        void BuildSettings()
+        {
+            var page = Add(ScreenId.Settings, "SettingsMenu", "A tu manera", "Ajusta el sonido y la calidad visual.");
+            var stack = CenterStack(page);
+            _volumeValue = UIFactory.Label(stack, "Volume", "", 34, UIFactory.Cream, 56);
+            _volumeSlider = UIFactory.CreateSlider(stack, new Vector2(600, 72), _volume, value =>
+            {
+                _volume = value;
+                AudioListener.volume = value;
+                PlayerPrefs.SetFloat(VolumeKey, value);
+                RefreshSettings();
+            });
+            UIFactory.Layout(_volumeSlider.transform, 72);
+            UIFactory.Label(stack, "QualityTitle", "Calidad gráfica", 34, UIFactory.Cream, 70);
+            var quality = StackButton(stack, "Quality", "", UIFactory.CardViolet, () =>
+            {
+                if (QualitySettings.names.Length <= 1) return;
+                _quality = (_quality + 1) % QualitySettings.names.Length;
+                QualitySettings.SetQualityLevel(_quality, true);
+                PlayerPrefs.SetInt(QualityKey, _quality);
+                RefreshSettings();
+            });
+            _qualityValue = quality.GetComponentInChildren<TMPro.TMP_Text>();
+            UIFactory.Label(stack, "Hint", "Pulsa la calidad para cambiarla. Los ajustes se guardan al volver.", 24, UIFactory.Muted, 80);
+            page.Action("Back", "Guardar y volver", UIFactory.Sun, CloseSettings);
+            RefreshSettings();
+        }
+        void RefreshSettings()
+        {
+            _volumeValue.text = $"Volumen  ·  {Mathf.RoundToInt(_volume * 100)}%";
+            _volumeSlider.SetValueWithoutNotify(_volume);
+            if (_qualityValue != null) _qualityValue.text = QualitySettings.names.Length > 0 ? QualitySettings.names[_quality] : "Predeterminada";
+        }
+        void BuildSkills()
+        {
+            var page = Add(ScreenId.Skills, "SkillsMenu", "Haz crecer tu potencial", "Los EV duran esta partida y se reinician al terminar.");
+            var stack = CenterStack(page);
             string[] names = { "SALUD", "ATAQUE", "DEFENSA", "VELOCIDAD" };
+            _skillButtons = new UnityEngine.UI.Button[names.Length];
             for (int i = 0; i < names.Length; i++)
             {
                 int stat = i;
-                var button = UIFactory.CreateButton(_skillsPanel, "EV_" + names[i], "", UIFactory.Sky,
-                                                     new Vector2(720, 100), () => { RoundManager.Instance?.BuyEV(stat); RefreshSkills(); }, 36);
-                UIFactory.Place((RectTransform)button.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                                new Vector2(0, 135 - i * 115), new Vector2(720, 100));
-                _skillButtons[i] = button;
+                _skillButtons[i] = StackButton(stack, "EV_" + names[i], "", UIFactory.CardViolet,
+                    () => { RoundManager.Instance?.BuyEV(stat); RefreshSkills(); });
             }
-            var back = UIFactory.CreateButton(_skillsPanel, "Back", "VOLVER", UIFactory.Coral,
-                                              new Vector2(360, 85), CloseSubMenu, 36);
-            UIFactory.Place((RectTransform)back.transform, new Vector2(.5f, .5f), new Vector2(.5f, .5f),
-                            new Vector2(0, -375), new Vector2(360, 85));
+            page.Action("Back", "Volver a la partida", UIFactory.Sun, CloseSkills);
         }
-
         void RefreshSkills()
         {
             var round = RoundManager.Instance;
             if (round == null) return;
-            _skillsInfo.text = (round.RunSpecies?.name ?? "Pokémon") + " · Puntos: " + round.Points +
-                               "  ·  30%: +" + round.BonusPointsPerDrop + " puntos por enemigo";
+            _pages[ScreenId.Skills].Status.text = $"{round.Points} puntos disponibles · Mejoras temporales para esta partida";
             string[] names = { "SALUD", "ATAQUE", "DEFENSA", "VELOCIDAD" };
             for (int i = 0; i < 4; i++)
             {
-                _skillButtons[i].GetComponentInChildren<Text>().text = names[i] + "  " + round.EVLevel(i) +
-                    "/10  ·  " + round.EVCost(i) + " pt";
+                int level = round.EVLevel(i);
+                _skillButtons[i].GetComponentInChildren<TMPro.TMP_Text>().text = $"{names[i]}   {level}/10  ·  " +
+                    (level >= 10 ? "MÁXIMO" : $"{round.EVCost(i)} PT");
                 _skillButtons[i].interactable = round.CanBuyEV(i);
             }
         }
-
-        void BuildSettingsMenu()
+        static RectTransform CenterStack(MenuPage page)
         {
-            _settingsPanel = CreateOverlay("SettingsMenu");
-            var root = _settingsPanel;
-
-            var dim = UIFactory.CreateImage("Dim", root, null, new Color(0.03f, 0.01f, 0.07f, 0.82f), true);
-            UIFactory.Stretch(dim.rectTransform);
-
-            var card = UIFactory.CreateCard(root, new Vector2(1080f, 660f),
-                                            UIFactory.DeepViolet, UIFactory.Sky);
-            UIFactory.Place(card, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            Vector2.zero, new Vector2(1080f, 660f));
-
-            var title = UIFactory.CreateText("Title", card, "CONFIGURACIÓN", 74, UIFactory.Cream);
-            UIFactory.Place(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 235f), new Vector2(1000f, 110f));
-            UIFactory.AddOutline(title, UIFactory.Ink, 5f);
-
-            // ----- Volumen
-            var volumeLabel = UIFactory.CreateText("VolumeLabel", card, "VOLUMEN", 34, UIFactory.Sun,
-                                                   TextAnchor.MiddleLeft);
-            UIFactory.Place(volumeLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 0.5f),
-                            new Vector2(-390f, 85f), new Vector2(280f, 50f));
-
-            _volumeSlider = UIFactory.CreateSlider(card, new Vector2(430f, 52f), _volume, OnVolumeChanged);
-            UIFactory.Place((RectTransform)_volumeSlider.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(40f, 85f), new Vector2(430f, 52f));
-
-            _volumeValue = UIFactory.CreateText("VolumeValue", card, "80%", 34, UIFactory.Cream,
-                                                TextAnchor.MiddleCenter);
-            UIFactory.Place(_volumeValue.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(345f, 85f), new Vector2(140f, 50f));
-
-            // ----- Calidad
-            var qualityLabel = UIFactory.CreateText("QualityLabel", card, "CALIDAD", 34, UIFactory.Sun,
-                                                    TextAnchor.MiddleLeft);
-            UIFactory.Place(qualityLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 0.5f),
-                            new Vector2(-390f, -25f), new Vector2(280f, 50f));
-
-            var qualityButton = UIFactory.CreateButton(card, "QualityButton", QualityName(_quality),
-                                                       UIFactory.Coral, new Vector2(300f, 86f),
-                                                       CycleQuality, 34);
-            UIFactory.Place((RectTransform)qualityButton.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(90f, -25f), new Vector2(300f, 86f));
-            _qualityValue = qualityButton.GetComponentInChildren<Text>();
-
-            var hint = UIFactory.CreateText("Hint", card, "Toca la calidad para cambiarla", 24,
-                                            new Color(1f, 1f, 1f, 0.55f));
-            UIFactory.Place(hint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, -125f), new Vector2(900f, 40f));
-
-            var back = UIFactory.CreateButton(card, "BackButton", "VOLVER", UIFactory.Lime,
-                                              new Vector2(460f, 96f), CloseSettings, 42);
-            UIFactory.Place((RectTransform)back.transform, new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f), new Vector2(0f, -240f), new Vector2(460f, 96f));
-
-            RefreshSettingsLabels();
+            var root = UIFactory.Surface("Card", page.Body);
+            UIFactory.Region(root, .18f, 0, .82f, 1);
+            UIFactory.Stack(root, 32, 24);
+            return root;
         }
-
-        void BuildPokeballDecoration(Transform parent)
+        static UnityEngine.UI.Button StackButton(Transform parent, string name, string text, Color color,
+            UnityEngine.Events.UnityAction action)
         {
-            var bigBall = UIFactory.CreateImage("Pokeball", parent, ProceduralSprites.Pokeball, Color.white, false);
-            UIFactory.Place(bigBall.rectTransform, new Vector2(1f, 1f), new Vector2(0.5f, 0.5f),
-                            new Vector2(-280f, -260f), new Vector2(340f, 340f));
-            bigBall.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -16f);
-            var spin = bigBall.gameObject.AddComponent<MenuDecoration>();
-            spin.Configure(10f, 0.9f, 12f);
-
-            var smallBall = UIFactory.CreateImage("PokeballSmall", parent, ProceduralSprites.Pokeball,
-                                                  new Color(1f, 1f, 1f, 0.9f), false);
-            UIFactory.Place(smallBall.rectTransform, new Vector2(0f, 0f), new Vector2(0.5f, 0.5f),
-                            new Vector2(240f, 235f), new Vector2(210f, 210f));
-            smallBall.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 22f);
-            var slow = smallBall.gameObject.AddComponent<MenuDecoration>();
-            slow.Configure(7f, 1.3f, -8f);
+            var button = UIFactory.CreateButton(parent, name, text, color, new Vector2(500, 84), action, 30);
+            UIFactory.Layout(button.transform, 84);
+            return button;
         }
-
-        void BuildSparkles(Transform parent)
+        static string ErrorMessage(string error)
         {
-            Color[] colors =
+            switch (error)
             {
-                UIFactory.Sun, UIFactory.Lime, UIFactory.Coral, UIFactory.Cream,
-                UIFactory.Sun, UIFactory.Sky, UIFactory.Cream, UIFactory.Coral
-            };
-
-            for (int i = 0; i < colors.Length; i++)
-            {
-                float x = Mathf.Lerp(-830f, 830f, ((i * 37) % 100) / 100f);
-                float y = Mathf.Lerp(-430f, 470f, ((i * 61 + 17) % 100) / 100f);
-                float size = 12f + ((i * 53) % 16);
-
-                var sparkle = UIFactory.CreateImage("Sparkle" + i, parent, ProceduralSprites.Circle,
-                                                    new Color(colors[i].r, colors[i].g, colors[i].b, 0.55f), false);
-                UIFactory.Place(sparkle.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                                new Vector2(x, y), new Vector2(size, size));
-
-                var floaty = sparkle.gameObject.AddComponent<MenuDecoration>();
-                floaty.Configure(6f + (i % 4) * 3f, 0.8f + i * 0.14f, 0f);
+                case "InventoryFull": return "Colección llena. Libera un Pokémon primero.";
+                case "InsufficientCoins": return "No tienes suficientes monedas.";
+                case "LastInstance": return "No puedes liberar tu último Pokémon.";
+                case "StarterRequired": return "Elige primero tu Pokémon inicial.";
+                case "PersistenceFailure":
+                case "SaveUnavailable": return "No se pudo guardar. Reinicia y revisa el almacenamiento.";
+                case "InstanceNotFound": return "Ese Pokémon ya no está en tu colección.";
+                default: return "No se pudo completar la operación.";
             }
-        }
-
-        RectTransform CreateOverlay(string name)
-        {
-            var rect = UIFactory.CreateRect(name, _canvas);
-            UIFactory.Stretch(rect);
-            return rect;
-        }
-
-        // ------------------------------------------------------------- Ajustes
-        void OnVolumeChanged(float value)
-        {
-            _volume = value;
-            AudioListener.volume = value;
-            PlayerPrefs.SetFloat(VolumeKey, value);
-            RefreshSettingsLabels();
-        }
-
-        void CycleQuality()
-        {
-            int count = QualitySettings.names.Length;
-            if (count <= 1) return;
-
-            _quality = (_quality + 1) % count;
-            QualitySettings.SetQualityLevel(_quality, true);
-            PlayerPrefs.SetInt(QualityKey, _quality);
-            RefreshSettingsLabels();
-        }
-
-        void RefreshSettingsLabels()
-        {
-            if (_volumeValue != null) _volumeValue.text = Mathf.RoundToInt(_volume * 100f) + "%";
-            if (_volumeSlider != null) _volumeSlider.SetValueWithoutNotify(_volume);
-            if (_qualityValue != null) _qualityValue.text = QualityName(_quality);
-        }
-
-        static string QualityName(int index)
-        {
-            int count = QualitySettings.names.Length;
-            if (count <= 1) return "ALTA";
-            if (index <= 0) return "BAJA";
-            if (index >= count - 1) return "ALTA";
-            return "MEDIA";
         }
     }
 }

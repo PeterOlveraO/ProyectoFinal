@@ -56,6 +56,16 @@ namespace Game.Player
 
             _area = (RectTransform)transform;
             _canvas = GetComponentInParent<Canvas>();
+            if (_canvas != null)
+            {
+                var safe = _canvas.transform.Find("TouchSafeArea") as RectTransform;
+                if (safe == null)
+                {
+                    safe = Game.UI.UIFactory.SafeRoot(_canvas.transform, "TouchSafeArea");
+                    safe.SetAsFirstSibling();
+                }
+                _area.SetParent(safe, false);
+            }
 
             // La zona recibe los toques aunque sea invisible.
             var catcher = GetComponent<Image>();
@@ -99,8 +109,18 @@ namespace Game.Player
             Release();
         }
 
+        void Update()
+        {
+            if (Game.Core.GameFlow.Blocked && _pointerId != int.MinValue) Release();
+            if (_background != null && Game.Core.GameFlow.Blocked && _background.gameObject.activeSelf)
+                _background.gameObject.SetActive(false);
+            else if (_background != null && !Game.Core.GameFlow.Blocked && pinned && !_background.gameObject.activeSelf)
+                _background.gameObject.SetActive(true);
+        }
+
         public void OnPointerDown(PointerEventData eventData)
         {
+            if (Game.Core.GameFlow.Blocked) return;
             if (_pointerId != int.MinValue) return;
             _pointerId = eventData.pointerId;
 

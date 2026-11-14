@@ -122,6 +122,7 @@ namespace Game.Rounds
         public CombatStatBlock CombatStats => _combatStats;
         public float MaxDamageReduction => _balance?.maxTotalDamageReduction ?? .65f;
         public string LastRunStartError { get; private set; }
+        public bool RewardSaveFailed { get; private set; }
 
         public RoundPhase Phase => _phase;
         public int Round { get; private set; }
@@ -251,6 +252,7 @@ namespace Game.Rounds
             _creditedEnemies.Clear();
             RebuildRunStats();
             _rewardsPaid = false;
+            RewardSaveFailed = false;
             EnemiesDefeated = 0;
             RoundsPassed = 0;
             LastRoundBonusPoints = 0;
@@ -375,11 +377,11 @@ namespace Game.Rounds
         {
             if (!IsRunActive || _rewardsPaid) return;
             _phase = RoundPhase.GameOver;
-            _rewardsPaid = true;
             GameFlow.Over = true;
             GameFlow.Blocked = true;
             ResetTemporaryStats();
-            PlayerEconomy.AddCoins(CoinsEarned);
+            _rewardsPaid = PlayerEconomy.AddCoins(CoinsEarned);
+            RewardSaveFailed = !_rewardsPaid;
             PlayerEconomy.RegisterLoss();
             PlayerEconomy.Flush();
             Changed?.Invoke();

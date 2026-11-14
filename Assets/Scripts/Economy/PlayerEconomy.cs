@@ -44,11 +44,11 @@ namespace Game.Economy
         /// <summary>Se dispara cada vez que cambia la economía global.</summary>
         public static event Action Changed;
 
-        public static void AddCoins(int amount)
+        public static bool AddCoins(int amount)
         {
-            if (amount == 0) return;
+            if (amount == 0) return PokemonCollection.Progression.IsReady;
 
-            PokemonCollection.Progression.AddCoinsClamped(amount);
+            return PokemonCollection.Progression.AddCoinsClamped(amount);
         }
 
         public static void RegisterEnemyDefeated(int count = 1)
