@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using Game.Pokemon;
 
 namespace Game.Economy
 {
@@ -9,13 +10,15 @@ namespace Game.Economy
     /// </summary>
     public static class PlayerEconomy
     {
+        static PlayerEconomy() { PokemonCollection.Changed += NotifyChanged; }
+        static void NotifyChanged() => Changed?.Invoke();
         const string CoinsKey = "pketer.monedas";
         const string EnemiesKey = "pketer.enemigos";
         const string RoundsKey = "pketer.rondas";
         const string LossesKey = "pketer.derrotas";
 
         /// <summary>Monedas globales disponibles para el gacha.</summary>
-        public static int Coins => PlayerPrefs.GetInt(CoinsKey, 0);
+        public static int Coins => PokemonCollection.Progression.Coins;
         public static int TotalLosses => PlayerPrefs.GetInt(LossesKey, 0);
 
         public static void RegisterLoss()
@@ -27,9 +30,8 @@ namespace Game.Economy
         public static bool SpendCoins(int amount)
         {
             if (amount < 0 || Coins < amount) return false;
-            PlayerPrefs.SetInt(CoinsKey, Coins - amount);
+            if (!PokemonCollection.Progression.ChangeCoins(-amount)) return false;
             Flush();
-            Changed?.Invoke();
             return true;
         }
 
@@ -46,8 +48,7 @@ namespace Game.Economy
         {
             if (amount == 0) return;
 
-            PlayerPrefs.SetInt(CoinsKey, Mathf.Max(0, Coins + amount));
-            Changed?.Invoke();
+            PokemonCollection.Progression.AddCoinsClamped(amount);
         }
 
         public static void RegisterEnemyDefeated(int count = 1)
@@ -72,6 +73,7 @@ namespace Game.Economy
         /// <summary>Borra la economía global (útil para probar el gacha desde cero).</summary>
         public static void ResetAll()
         {
+            if (!PokemonCollection.Progression.SetCoins(0)) return;
             PlayerPrefs.DeleteKey(CoinsKey);
             PlayerPrefs.DeleteKey(EnemiesKey);
             PlayerPrefs.DeleteKey(RoundsKey);

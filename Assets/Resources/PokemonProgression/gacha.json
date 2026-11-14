@@ -1,0 +1,17 @@
+{
+  "capacity": 10,
+  "starterF": 95, "starterA": 4, "starterS": 1,
+  "starters": ["jolteon", "charizard", "blastoise"],
+  "pools": [
+    {
+      "id": "basic", "price": 50,
+      "weightF": 75, "weightA": 20, "weightS": 5,
+      "species": ["jolteon", "charizard", "blastoise", "vaporeon", "flareon", "venusaur", "gengar", "gyarados", "kangaskhan", "lapras", "snorlax", "tauros", "ditto", "lucario", "aerodactyl"]
+    },
+    {
+      "id": "premium", "price": 125,
+      "weightF": 40, "weightA": 45, "weightS": 15,
+      "species": ["dragonite", "garchomp", "mew"]
+    }
+  ]
+}
