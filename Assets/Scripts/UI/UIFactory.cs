@@ -14,25 +14,26 @@ namespace Game.UI
     {
         // ------------------------------------------------------------- Paleta
         public static readonly Color Ink = new Color32(24, 13, 43, 255);
-        public static readonly Color DeepViolet = new Color32(52, 24, 100, 255);
-        public static readonly Color CardViolet = new Color32(72, 36, 132, 255);
+        public static readonly Color DeepViolet = new Color32(37, 24, 66, 255);
+        public static readonly Color CardViolet = new Color32(54, 37, 87, 255);
         public static readonly Color Sun = new Color32(255, 222, 66, 255);
         public static readonly Color Lime = new Color32(48, 209, 116, 255);
         public static readonly Color Sky = new Color32(56, 137, 255, 255);
         public static readonly Color Coral = new Color32(255, 90, 95, 255);
         public static readonly Color Cream = new Color32(255, 249, 240, 255);
+        public static readonly Color Muted = new Color32(191, 181, 211, 255);
+        public static readonly Color Border = new Color32(91, 72, 125, 255);
 
-        static Font _font;
+        static TMPro.TMP_FontAsset _font;
 
-        public static Font UiFont
+        public static TMPro.TMP_FontAsset UiFont
         {
             get
             {
                 if (_font != null) return _font;
 
-                _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                if (_font == null) _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-                if (_font == null) _font = Font.CreateDynamicFontFromOSFont("Arial", 24);
+                _font = Resources.Load<TMPro.TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+                if (_font == null) _font = TMPro.TMP_Settings.defaultFontAsset;
                 return _font;
             }
         }
@@ -95,35 +96,31 @@ namespace Game.UI
             return image;
         }
 
-        public static Text CreateText(string name, Transform parent, string content, int fontSize,
+        public static TMPro.TMP_Text CreateText(string name, Transform parent, string content, int fontSize,
                                       Color color, TextAnchor alignment = TextAnchor.MiddleCenter,
-                                      bool shadow = true)
+                                      bool shadow = false)
         {
             var rect = CreateRect(name, parent);
-            var text = rect.gameObject.AddComponent<Text>();
+            var text = rect.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
             text.font = UiFont;
             text.text = content;
             text.fontSize = fontSize;
-            text.fontStyle = FontStyle.Bold;
+            text.fontStyle = fontSize >= 32 ? TMPro.FontStyles.Bold : TMPro.FontStyles.Normal;
             text.color = color;
-            text.alignment = alignment;
-            text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.alignment = Alignment(alignment);
+            text.textWrappingMode = TMPro.TextWrappingModes.Normal;
+            text.overflowMode = TMPro.TextOverflowModes.Ellipsis;
+            text.enableAutoSizing = false;
             text.raycastTarget = false;
-            text.supportRichText = true;
-
-            if (shadow)
-            {
-                var effect = rect.gameObject.AddComponent<Shadow>();
-                effect.effectColor = new Color(0f, 0f, 0f, 0.55f);
-                effect.effectDistance = new Vector2(3f, -4f);
-            }
+            text.richText = true;
 
             return text;
         }
 
         public static Outline AddOutline(Graphic graphic, Color color, float thickness = 4f)
         {
+            // TMP owns its geometry; uGUI mesh effects must not be added to TMP text.
+            if (graphic is TMPro.TMP_Text) return null;
             var outline = graphic.gameObject.AddComponent<Outline>();
             outline.effectColor = color;
             outline.effectDistance = new Vector2(thickness, -thickness);
@@ -150,25 +147,25 @@ namespace Game.UI
             image.type = Image.Type.Sliced;
             image.color = color;
 
-            AddShadow(image, new Color(0f, 0f, 0f, 0.35f), new Vector2(0f, -9f));
-            AddOutline(image, Lighten(color, 0.32f), 3f);
-
             var button = rect.gameObject.AddComponent<Button>();
             button.targetGraphic = image;
-            button.navigation = new Navigation { mode = Navigation.Mode.None };
+            button.navigation = new Navigation { mode = Navigation.Mode.Automatic };
+            rect.gameObject.AddComponent<UIFocusFeedback>();
 
             var colors = button.colors;
             colors.normalColor = Color.white;
             colors.highlightedColor = new Color(1.12f, 1.12f, 1.12f, 1f);
             colors.pressedColor = new Color(0.78f, 0.78f, 0.78f, 1f);
-            colors.selectedColor = Color.white;
+            colors.selectedColor = new Color(1.12f, 1.12f, 1.12f, 1f);
             colors.disabledColor = new Color(0.55f, 0.55f, 0.55f, 0.7f);
             colors.fadeDuration = 0.08f;
             button.colors = colors;
 
             if (onClick != null) button.onClick.AddListener(onClick);
 
-            var text = CreateText("Label", rect, label, fontSize, Cream);
+            var text = CreateText("Label", rect, label, fontSize,
+                color == Sun || color == Lime ? Ink : Cream);
+            text.fontStyle = TMPro.FontStyles.Bold;
             Stretch(text.rectTransform);
             text.rectTransform.offsetMin = new Vector2(20f, 4f);
             text.rectTransform.offsetMax = new Vector2(-20f, -4f);
@@ -187,7 +184,7 @@ namespace Game.UI
             borderImage.type = Image.Type.Sliced;
             borderImage.color = border;
             borderImage.raycastTarget = false;
-            AddShadow(borderImage, new Color(0f, 0f, 0f, 0.45f), new Vector2(0f, -14f));
+            AddShadow(borderImage, new Color(0f, 0f, 0f, 0.18f), new Vector2(0f, -3f));
 
             var cardRect = CreateRect("Card", borderRect);
             Stretch(cardRect, 5f);
@@ -206,6 +203,9 @@ namespace Game.UI
         {
             var rect = CreateRect("Slider", parent);
             rect.sizeDelta = size;
+            var hitArea = rect.gameObject.AddComponent<UnityEngine.UI.Image>();
+            hitArea.color = Color.clear;
+            hitArea.raycastTarget = true;
 
             var track = CreateImage("Track", rect, ProceduralSprites.RoundedRect,
                                     new Color(0.10f, 0.05f, 0.20f, 0.85f), false, true);
@@ -237,7 +237,7 @@ namespace Game.UI
             slider.minValue = 0f;
             slider.maxValue = 1f;
             slider.wholeNumbers = false;
-            slider.navigation = new Navigation { mode = Navigation.Mode.None };
+            slider.navigation = new Navigation { mode = Navigation.Mode.Automatic };
 
             var colors = slider.colors;
             colors.normalColor = Color.white;
@@ -251,6 +251,87 @@ namespace Game.UI
             if (onChange != null) slider.onValueChanged.AddListener(onChange);
             return slider;
         }
+
+        static TMPro.TextAlignmentOptions Alignment(TextAnchor anchor)
+        {
+            switch (anchor)
+            {
+                case TextAnchor.UpperLeft: return TMPro.TextAlignmentOptions.TopLeft;
+                case TextAnchor.UpperCenter: return TMPro.TextAlignmentOptions.Top;
+                case TextAnchor.UpperRight: return TMPro.TextAlignmentOptions.TopRight;
+                case TextAnchor.MiddleLeft: return TMPro.TextAlignmentOptions.MidlineLeft;
+                case TextAnchor.MiddleRight: return TMPro.TextAlignmentOptions.MidlineRight;
+                case TextAnchor.LowerLeft: return TMPro.TextAlignmentOptions.BottomLeft;
+                case TextAnchor.LowerCenter: return TMPro.TextAlignmentOptions.Bottom;
+                case TextAnchor.LowerRight: return TMPro.TextAlignmentOptions.BottomRight;
+                default: return TMPro.TextAlignmentOptions.Midline;
+            }
+        }
+
+        public static RectTransform Surface(string name, Transform parent, Color? color = null)
+        {
+            return CreateImage(name, parent, ProceduralSprites.RoundedRect,
+                color ?? CardViolet, false, true).rectTransform;
+        }
+
+        public static RectTransform SafeRoot(Transform parent, string name = "SafeArea")
+        {
+            var root = CreateRect(name, parent);
+            Stretch(root);
+            root.gameObject.AddComponent<SafeAreaLayout>();
+            return root;
+        }
+
+        public static void Region(RectTransform rect, float left, float bottom, float right, float top,
+            float padding = 0f)
+        {
+            rect.anchorMin = new Vector2(left, bottom);
+            rect.anchorMax = new Vector2(right, top);
+            rect.offsetMin = new Vector2(padding, padding);
+            rect.offsetMax = new Vector2(-padding, -padding);
+        }
+
+        public static UnityEngine.UI.LayoutElement Layout(Transform item, float height, float flex = 0f)
+        {
+            var element = item.gameObject.AddComponent<UnityEngine.UI.LayoutElement>();
+            element.minHeight = height;
+            element.preferredHeight = height;
+            element.flexibleHeight = flex;
+            return element;
+        }
+
+        public static UnityEngine.UI.VerticalLayoutGroup Stack(RectTransform root, int padding = 0, float gap = 16f)
+        {
+            var group = root.gameObject.AddComponent<UnityEngine.UI.VerticalLayoutGroup>();
+            group.padding = new RectOffset(padding, padding, padding, padding);
+            group.spacing = gap;
+            group.childControlWidth = group.childControlHeight = true;
+            group.childForceExpandWidth = true;
+            group.childForceExpandHeight = false;
+            return group;
+        }
+
+        public static UnityEngine.UI.HorizontalLayoutGroup Row(RectTransform root, float gap = 16f)
+        {
+            var group = root.gameObject.AddComponent<UnityEngine.UI.HorizontalLayoutGroup>();
+            group.spacing = gap;
+            group.childControlWidth = group.childControlHeight = true;
+            group.childForceExpandWidth = true;
+            group.childForceExpandHeight = true;
+            return group;
+        }
+
+        public static TMPro.TMP_Text Label(Transform parent, string name, string value, int size,
+            Color color, float height, TextAnchor alignment = TextAnchor.MiddleLeft)
+        {
+            var text = CreateText(name, parent, value, size, color, alignment);
+            Layout(text.transform, height);
+            return text;
+        }
+
+        public static Color RarityColor(Game.Pokemon.Progression.Rarity rarity) =>
+            rarity == Game.Pokemon.Progression.Rarity.S ? Sun :
+            rarity == Game.Pokemon.Progression.Rarity.A ? Sky : Muted;
 
         // ------------------------------------------------------------- Color
         public static Color Lighten(Color color, float amount)

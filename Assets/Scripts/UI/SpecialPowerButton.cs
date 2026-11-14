@@ -15,7 +15,9 @@ namespace Game.UI
     {
         Button _button;
         Image _cooldown;
-        Text _label;
+        TMPro.TMP_Text _label;
+        RectTransform _root;
+        int _displayedSeconds = int.MinValue;
 
         void Start()
         {
@@ -25,6 +27,9 @@ namespace Game.UI
         void Update()
         {
             if (_button == null) return;
+            if (_root.gameObject.activeSelf != GameFlow.Playing)
+                _root.gameObject.SetActive(GameFlow.Playing);
+            if (!GameFlow.Playing) return;
 
             var player = PlayerSphereController.Instance;
             if (player == null) return;
@@ -37,21 +42,33 @@ namespace Game.UI
 
             if (invincibility > 0.05f)
             {
-                _label.text = Mathf.CeilToInt(invincibility).ToString();
+                SetSeconds(Mathf.CeilToInt(invincibility));
                 _cooldown.color = new Color(0.18f, 0.85f, 0.45f, 0.45f);
             }
             else if (!ready)
             {
-                _label.text = Mathf.CeilToInt(cooldown).ToString();
+                SetSeconds(Mathf.CeilToInt(cooldown));
                 _cooldown.color = new Color(0.02f, 0.01f, 0.06f, 0.62f);
             }
             else
             {
-                _label.text = "PODER";
+                SetSeconds(0);
                 _cooldown.color = new Color(0f, 0f, 0f, 0f);
             }
 
             _cooldown.fillAmount = ready ? 0f : Mathf.Clamp01(cooldown / player.PowerCooldownDuration);
+        }
+
+        void SetSeconds(int seconds)
+        {
+            if (_displayedSeconds == seconds) return;
+            _displayedSeconds = seconds;
+            _label.text = seconds == 0 ? "PODER" : seconds.ToString();
+        }
+
+        void OnDestroy()
+        {
+            if (_root != null) Destroy(_root.gameObject);
         }
 
         public void Activate()
@@ -70,9 +87,10 @@ namespace Game.UI
                 return;
             }
 
-            var rect = UIFactory.CreateRect("PowerButton", canvas.transform);
-            UIFactory.Place(rect, new Vector2(0.75f, 0.6f), new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, 135f), new Vector2(164f, 164f));
+            _root = UIFactory.SafeRoot(canvas.transform, "PowerSafeArea");
+            var rect = UIFactory.CreateRect("PowerButton", _root);
+            UIFactory.Place(rect, new Vector2(1f, 0f), new Vector2(1f, 0f),
+                            new Vector2(-48f, 310f), new Vector2(140f, 140f));
 
             var halo = UIFactory.CreateImage("Halo", rect, ProceduralSprites.Circle,
                                              new Color(1f, 0.86f, 0.3f, 0.28f), false);
@@ -86,7 +104,8 @@ namespace Game.UI
 
             _button = rect.gameObject.AddComponent<Button>();
             _button.targetGraphic = image;
-            _button.navigation = new Navigation { mode = Navigation.Mode.None };
+            _button.navigation = new Navigation { mode = Navigation.Mode.Automatic };
+            rect.gameObject.AddComponent<UIFocusFeedback>();
 
             var colors = _button.colors;
             colors.normalColor = Color.white;
