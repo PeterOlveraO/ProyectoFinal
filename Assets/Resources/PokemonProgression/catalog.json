@@ -1,0 +1,220 @@
+{
+  "species": [
+    {
+      "id": "jolteon",
+      "name": "Jolteon",
+      "category": "Common",
+      "baseStats": {
+        "health": 65,
+        "attack": 65,
+        "defense": 60,
+        "speed": 130
+      },
+      "spriteName": "poke_139"
+    },
+    {
+      "id": "charizard",
+      "name": "Charizard",
+      "category": "Common",
+      "baseStats": {
+        "health": 78,
+        "attack": 84,
+        "defense": 78,
+        "speed": 100
+      },
+      "spriteName": "species_charizard"
+    },
+    {
+      "id": "garchomp",
+      "name": "Garchomp",
+      "category": "PseudoLegendary",
+      "baseStats": {
+        "health": 108,
+        "attack": 130,
+        "defense": 95,
+        "speed": 102
+      },
+      "spriteName": "species_garchomp"
+    },
+    {
+      "id": "vaporeon",
+      "name": "Vaporeon",
+      "category": "Common",
+      "baseStats": {
+        "health": 130,
+        "attack": 65,
+        "defense": 60,
+        "speed": 65
+      },
+      "spriteName": "species_vaporeon"
+    },
+    {
+      "id": "flareon",
+      "name": "Flareon",
+      "category": "Common",
+      "baseStats": {
+        "health": 65,
+        "attack": 130,
+        "defense": 60,
+        "speed": 65
+      },
+      "spriteName": "species_flareon"
+    },
+    {
+      "id": "snorlax",
+      "name": "Snorlax",
+      "category": "Common",
+      "baseStats": {
+        "health": 160,
+        "attack": 110,
+        "defense": 65,
+        "speed": 30
+      },
+      "spriteName": "species_snorlax"
+    },
+    {
+      "id": "blastoise",
+      "name": "Blastoise",
+      "category": "Common",
+      "baseStats": {
+        "health": 79,
+        "attack": 83,
+        "defense": 100,
+        "speed": 78
+      },
+      "spriteName": "species_blastoise"
+    },
+    {
+      "id": "dragonite",
+      "name": "Dragonite",
+      "category": "PseudoLegendary",
+      "baseStats": {
+        "health": 91,
+        "attack": 134,
+        "defense": 95,
+        "speed": 80
+      },
+      "spriteName": "species_dragonite"
+    },
+    {
+      "id": "lucario",
+      "name": "Lucario",
+      "category": "Common",
+      "baseStats": {
+        "health": 70,
+        "attack": 110,
+        "defense": 70,
+        "speed": 90
+      },
+      "spriteName": "poke_092"
+    },
+    {
+      "id": "venusaur",
+      "name": "Venusaur",
+      "category": "Common",
+      "baseStats": {
+        "health": 80,
+        "attack": 82,
+        "defense": 83,
+        "speed": 80
+      },
+      "spriteName": "species_venusaur"
+    },
+    {
+      "id": "gengar",
+      "name": "Gengar",
+      "category": "Common",
+      "baseStats": {
+        "health": 60,
+        "attack": 65,
+        "defense": 60,
+        "speed": 110
+      },
+      "spriteName": "species_gengar"
+    },
+    {
+      "id": "gyarados",
+      "name": "Gyarados",
+      "category": "Common",
+      "baseStats": {
+        "health": 95,
+        "attack": 125,
+        "defense": 79,
+        "speed": 81
+      },
+      "spriteName": "species_gyarados"
+    },
+    {
+      "id": "lapras",
+      "name": "Lapras",
+      "category": "Common",
+      "baseStats": {
+        "health": 130,
+        "attack": 85,
+        "defense": 80,
+        "speed": 60
+      },
+      "spriteName": "species_lapras"
+    },
+    {
+      "id": "ditto",
+      "name": "Ditto",
+      "category": "Common",
+      "baseStats": {
+        "health": 48,
+        "attack": 48,
+        "defense": 48,
+        "speed": 48
+      },
+      "spriteName": "species_ditto"
+    },
+    {
+      "id": "aerodactyl",
+      "name": "Aerodactyl",
+      "category": "Common",
+      "baseStats": {
+        "health": 80,
+        "attack": 105,
+        "defense": 65,
+        "speed": 130
+      },
+      "spriteName": "poke_140"
+    },
+    {
+      "id": "kangaskhan",
+      "name": "Kangaskhan",
+      "category": "Common",
+      "baseStats": {
+        "health": 105,
+        "attack": 95,
+        "defense": 80,
+        "speed": 90
+      },
+      "spriteName": "species_kangaskhan"
+    },
+    {
+      "id": "tauros",
+      "name": "Tauros",
+      "category": "Common",
+      "baseStats": {
+        "health": 75,
+        "attack": 100,
+        "defense": 95,
+        "speed": 110
+      },
+      "spriteName": "species_tauros"
+    },
+    {
+      "id": "mew",
+      "name": "Mew",
+      "category": "Mythical",
+      "baseStats": {
+        "health": 100,
+        "attack": 100,
+        "defense": 100,
+        "speed": 100
+      },
+      "spriteName": "species_mew"
+    }
+  ]
+}
