@@ -32,9 +32,22 @@ namespace Game.Pokemon.Tests
         [Test] public void CatalogAndPoolsHaveExpectedMembership()
         {
             Assert.AreEqual(18, catalog.species.Count);
+            Assert.AreEqual(10, config.capacity);
+            CollectionAssert.AreEquivalent(new[] { "jolteon", "charizard", "blastoise" }, config.starters);
+            Assert.AreEqual(95, config.starterF);
+            Assert.AreEqual(4, config.starterA);
+            Assert.AreEqual(1, config.starterS);
             var basic = config.pools.Single(p => p.id == "basic");
             var premium = config.pools.Single(p => p.id == "premium");
+            Assert.AreEqual(50, basic.price);
+            Assert.AreEqual(75, basic.weightF);
+            Assert.AreEqual(20, basic.weightA);
+            Assert.AreEqual(5, basic.weightS);
             Assert.AreEqual(15, basic.species.Length);
+            Assert.AreEqual(125, premium.price);
+            Assert.AreEqual(40, premium.weightF);
+            Assert.AreEqual(45, premium.weightA);
+            Assert.AreEqual(15, premium.weightS);
             CollectionAssert.AreEquivalent(new[] { "dragonite", "garchomp", "mew" }, premium.species);
             CollectionAssert.AreEquivalent(catalog.species.Select(s => s.id), basic.species.Concat(premium.species));
             Assert.IsTrue(Open(new MemoryStore()).IsReady);
@@ -127,8 +140,13 @@ namespace Game.Pokemon.Tests
             Assert.AreEqual(before, store.data);
             Assert.IsFalse(service.IsReady);
             store.fail = false;
-            Assert.AreEqual(1000, Open(store).Coins);
-            Assert.AreEqual(1, Open(store).Inventory.Count);
+            var reloaded = Open(store);
+            Assert.AreEqual(1000, reloaded.Coins);
+            Assert.AreEqual(1, reloaded.Inventory.Count);
+            var retry = reloaded.Pull("basic", "failure");
+            Assert.IsTrue(retry.success);
+            Assert.AreEqual(950, Open(store).Coins);
+            Assert.AreEqual(2, Open(store).Inventory.Count);
         }
         [Test] public void CorruptAndFutureSavesAreNotOverwritten()
         {
