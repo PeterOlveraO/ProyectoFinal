@@ -1,4 +1,5 @@
 using Game.Player;
+using Game.Rounds;
 using UnityEngine;
 
 namespace Game.Pokemon
@@ -22,6 +23,7 @@ namespace Game.Pokemon
 
         SpriteRenderer _renderer;
         PlayerSphereController _controller;
+        RoundManager _rounds;
         Color _baseColor = Color.white;
         Vector3 _lastPosition;
         bool _hasLastPosition;
@@ -31,15 +33,33 @@ namespace Game.Pokemon
             _controller = GetComponent<PlayerSphereController>();
             _lastPosition = transform.position;
             _hasLastPosition = true;
+            SubscribeRounds();
             RefreshPokemon();
         }
 
-        void OnEnable() => PokemonCollection.Changed += RefreshPokemon;
-        void OnDisable() => PokemonCollection.Changed -= RefreshPokemon;
+        void OnEnable()
+        {
+            PokemonCollection.Changed += RefreshPokemon;
+            SubscribeRounds();
+        }
+        void SubscribeRounds()
+        {
+            if (_rounds != null) return;
+            _rounds = RoundManager.Instance;
+            if (_rounds != null) _rounds.Changed += RefreshPokemon;
+        }
+        void OnDisable()
+        {
+            PokemonCollection.Changed -= RefreshPokemon;
+            if (_rounds != null) _rounds.Changed -= RefreshPokemon;
+            _rounds = null;
+        }
 
         void RefreshPokemon()
         {
-            var equipped = PokemonCollection.Equipped;
+            // Combat and visuals must share the immutable instance captured at run start.
+            var rounds = RoundManager.Instance;
+            var equipped = rounds != null && rounds.IsRunActive ? rounds.RunPokemon : PokemonCollection.Equipped;
             var sprite = PokemonCollection.GetSprite(equipped);
             if (sprite == null)
             {
@@ -54,7 +74,7 @@ namespace Game.Pokemon
             }
             _renderer.sprite = sprite;
             _renderer.enabled = true;
-            PokemonSpriteLibrary.SetPlayerIndex(PokemonCollection.Selected);
+            PokemonSpriteLibrary.SetPlayerSprite(sprite);
         }
 
         void Update()

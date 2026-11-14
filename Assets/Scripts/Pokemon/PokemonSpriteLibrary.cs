@@ -31,6 +31,12 @@ namespace Game.Pokemon
 
         public static void SetPlayerIndex(int index) => _playerIndex = index;
 
+        public static void SetPlayerSprite(Sprite sprite)
+        {
+            EnsureLoaded();
+            _playerIndex = System.Array.IndexOf(_pool, sprite);
+        }
+
         /// <summary>Sprite aleatorio para el personaje principal.</summary>
         public static Sprite RandomForPlayer()
         {

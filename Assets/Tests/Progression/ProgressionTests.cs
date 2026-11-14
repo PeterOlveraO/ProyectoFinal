@@ -52,6 +52,27 @@ namespace Game.Pokemon.Tests
             CollectionAssert.AreEquivalent(catalog.species.Select(s => s.id), basic.species.Concat(premium.species));
             Assert.IsTrue(Open(new MemoryStore()).IsReady);
         }
+
+        [Test] public void RelativeStorePathSupportsAtomicReloadAndCompareAndSwap()
+        {
+            string relative = "progression-relative-" + Guid.NewGuid().ToString("N") + ".json";
+            string absolute = Path.GetFullPath(relative);
+            try
+            {
+                var store = new AtomicProgressionStore(relative);
+                store.Write(null, "first");
+                Assert.AreEqual("first", new AtomicProgressionStore(absolute).Read());
+                Assert.Throws<IOException>(() => store.Write("stale", "bad"));
+                Assert.AreEqual("first", store.Read());
+                store.Write("first", "second");
+                Assert.AreEqual("second", new AtomicProgressionStore(relative).Read());
+            }
+            finally
+            {
+                if (File.Exists(absolute)) File.Delete(absolute);
+                if (File.Exists(absolute + ".lock")) File.Delete(absolute + ".lock");
+            }
+        }
         [Test] public void StarterIsOnceAndLegacyCoinsAreImportedOnlyOnce()
         {
             var store = new MemoryStore(); var service = Open(store, 789);

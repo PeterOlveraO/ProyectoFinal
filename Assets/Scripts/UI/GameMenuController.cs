@@ -196,6 +196,10 @@ namespace Game.UI
             RefreshPauseButton();
 
             RoundManager.Instance?.StartRun();
+            if (RoundManager.Instance == null || !RoundManager.Instance.IsRunActive)
+            {
+                ShowMainMenu();
+            }
         }
 
         public void Pause()
@@ -870,7 +874,7 @@ namespace Game.UI
         {
             var round = RoundManager.Instance;
             if (round == null) return;
-            _skillsInfo.text = PokemonCollection.GetName(PokemonCollection.Selected) + " · Puntos: " + round.Points +
+            _skillsInfo.text = (round.RunSpecies?.name ?? "Pokémon") + " · Puntos: " + round.Points +
                                "  ·  30%: +" + round.BonusPointsPerDrop + " puntos por enemigo";
             string[] names = { "SALUD", "ATAQUE", "DEFENSA", "VELOCIDAD" };
             for (int i = 0; i < 4; i++)

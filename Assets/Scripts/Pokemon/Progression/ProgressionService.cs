@@ -16,7 +16,7 @@ namespace Game.Pokemon.Progression
     public sealed class AtomicProgressionStore : IProgressionStore
     {
         readonly string path;
-        public AtomicProgressionStore(string path) { this.path = path; }
+        public AtomicProgressionStore(string path) { this.path = Path.GetFullPath(path); }
         public string Read() => File.Exists(path) ? File.ReadAllText(path) : null;
         public void Write(string expected, string next)
         {
