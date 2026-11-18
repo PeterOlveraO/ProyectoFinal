@@ -28,6 +28,7 @@ namespace Game.Terrain
         Mesh[] _meshes = new Mesh[0];
         Material[] _materials;
         Material _waterMaterial;
+        readonly System.Collections.Generic.List<Mesh> _lakeMeshes = new System.Collections.Generic.List<Mesh>();
         Vector2Int _playerChunk;
         bool _hasPlayerChunk;
         int _activeCount;
@@ -72,6 +73,8 @@ namespace Game.Terrain
             if (Instance == this) Instance = null;
 
             foreach (var mesh in _meshes)
+                if (mesh != null) Destroy(mesh);
+            foreach (var mesh in _lakeMeshes)
                 if (mesh != null) Destroy(mesh);
             TerrainMaterials.Destroy(_materials);
             if (_waterMaterial != null) Destroy(_waterMaterial);
@@ -119,23 +122,52 @@ namespace Game.Terrain
             return _map.Contains(x, z) ? _map.GetZone(x, z) : 0;
         }
 
-        /// <summary>True si la posición está sobre el agua de un lago.</summary>
+        /// <summary>Consulta XZ, ignora Y. Misma máscara de celdas que agua y colliders.</summary>
         public bool IsLakeAtWorld(Vector3 worldPosition)
         {
             if (_map == null) return false;
 
             Vector3 local = worldPosition - transform.position;
+            return _map.IsLakeCell(Mathf.FloorToInt(local.x / settings.blockSize),
+                                   Mathf.FloorToInt(local.z / settings.blockSize));
+        }
+
+        /// <summary>
+        /// Proyecta sobre la tapa de la celda conservando XZ, sin buscar otra posición.
+        /// clearance es radio horizontal en unidades de mundo (incluye huella física).
+        /// Rechaza agua/borde del mundo. No consulta decoraciones, otros colliders,
+        /// desniveles ni carga de chunks: los consumidores comprueban eso por separado.
+        /// </summary>
+        public bool TryGetWalkablePosition(Vector3 worldPosition, out Vector3 surfacePosition, float clearance = 0f)
+        {
+            surfacePosition = default;
+            if (_map == null || float.IsNaN(clearance) || float.IsInfinity(clearance)) return false;
+            Vector3 local = worldPosition - transform.position;
             float bx = local.x / settings.blockSize;
             float bz = local.z / settings.blockSize;
-
-            foreach (var lake in _map.Lakes)
+            if (float.IsNaN(bx) || float.IsNaN(bz) || float.IsInfinity(bx) || float.IsInfinity(bz)) return false;
+            float radius = Mathf.Max(0f, clearance) / settings.blockSize;
+            if (bx - radius < 0f || bz - radius < 0f ||
+                bx + radius >= _map.Width || bz + radius >= _map.Depth) return false;
+            int x = Mathf.FloorToInt(bx);
+            int z = Mathf.FloorToInt(bz);
+            if (_map.IsLakeCell(x, z)) return false;
+            if (radius > 0f)
             {
-                float dx = bx - (lake.Center.x + 0.5f);
-                float dz = bz - (lake.Center.y + 0.5f);
-                float radius = lake.Radius + 0.5f;
-                if (dx * dx + dz * dz <= radius * radius) return true;
+                for (int nz = Mathf.FloorToInt(bz - radius); nz <= Mathf.FloorToInt(bz + radius); nz++)
+                {
+                    for (int nx = Mathf.FloorToInt(bx - radius); nx <= Mathf.FloorToInt(bx + radius); nx++)
+                    {
+                        if (!_map.IsLakeCell(nx, nz)) continue;
+                        float dx = Mathf.Max(Mathf.Max(nx - bx, 0f), bx - nx - 1f);
+                        float dz = Mathf.Max(Mathf.Max(nz - bz, 0f), bz - nz - 1f);
+                        if (dx * dx + dz * dz <= radius * radius) return false;
+                    }
+                }
             }
-            return false;
+            surfacePosition = new Vector3(worldPosition.x,
+                transform.position.y + _map.Get(x, z) * settings.stepHeight, worldPosition.z);
+            return true;
         }
 
         public GameObject GetChunk(int chunkX, int chunkZ)
@@ -197,7 +229,7 @@ namespace Game.Terrain
             _hasPlayerChunk = false;
         }
 
-        /// <summary>Agua y volumen de respawn de cada lago generado por el mapa.</summary>
+        /// <summary>Agua y obstáculos sólidos con la misma máscara que el mapa.</summary>
         void CreateLakes()
         {
             if (_map.Lakes.Count == 0) return;
@@ -210,36 +242,20 @@ namespace Game.Terrain
             for (int i = 0; i < _map.Lakes.Count; i++)
             {
                 var lake = _map.Lakes[i];
-                float diameter = lake.Radius * 2f * settings.blockSize;
                 float rimY = lake.RimLevel * settings.stepHeight;
                 float bottomY = lake.BottomLevel * settings.stepHeight;
-                var center = transform.position + new Vector3(
-                    (lake.Center.x + 0.5f) * settings.blockSize, 0f, (lake.Center.y + 0.5f) * settings.blockSize);
+                var water = new GameObject("Lake_" + i + "_Water");
+                water.transform.SetParent(root.transform, false);
+                var mesh = LakeGeometry.BuildWaterMesh(lake, settings.blockSize,
+                    rimY - settings.stepHeight * 0.25f);
+                _lakeMeshes.Add(mesh);
+                water.AddComponent<MeshFilter>().sharedMesh = mesh;
+                water.AddComponent<MeshRenderer>().sharedMaterial = _waterMaterial;
 
-                // Lámina de agua, justo por debajo del borde.
-                var water = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                water.name = "Lake_" + i + "_Water";
-                water.transform.SetParent(root.transform, true);
-                water.transform.position = center + Vector3.up * (rimY - settings.stepHeight * 0.25f);
-                water.transform.localScale = new Vector3(diameter, settings.stepHeight * 0.15f, diameter);
-                var waterCollider = water.GetComponent<Collider>();
-                if (waterCollider != null) Destroy(waterCollider);
-                water.GetComponent<MeshRenderer>().sharedMaterial = _waterMaterial;
-
-                // Volumen que devuelve al jugador a un punto seguro si cae al lago.
-                var triggerGo = new GameObject("Lake_" + i + "_Trigger");
-                triggerGo.transform.SetParent(root.transform, true);
-                triggerGo.transform.position = center + Vector3.up * ((rimY + bottomY) * 0.5f);
-
-                var box = triggerGo.AddComponent<BoxCollider>();
-                box.isTrigger = true;
-                box.size = new Vector3(diameter * 0.8f, Mathf.Max(0.1f, rimY - bottomY), diameter * 0.8f);
-
-                var body = triggerGo.AddComponent<Rigidbody>();
-                body.isKinematic = true;
-                body.useGravity = false;
-
-                triggerGo.AddComponent<LakeVolume>();
+                // Siempre activos, también si el chunk vecino se descarga. No dependen
+                // de OnTriggerEnter ni de conocer el controlador concreto del jugador.
+                LakeGeometry.AddBlockers(water, lake, settings.blockSize, bottomY - settings.stepHeight,
+                    Mathf.Max(rimY, settings.maxLevel * settings.stepHeight) + 4f);
             }
         }
 

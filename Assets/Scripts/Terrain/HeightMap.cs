@@ -3,13 +3,29 @@ using UnityEngine;
 
 namespace Game.Terrain
 {
-    /// <summary>Lago circular decorativo: centro y radio en bloques, y niveles del borde y del fondo.</summary>
+    /// <summary>Disco de celdas: la misma máscara define excavación, agua y obstáculos.</summary>
     public struct LakeInfo
     {
         public Vector2Int Center;
         public int Radius;
         public int RimLevel;
         public int BottomLevel;
+
+        public bool ContainsCell(int x, int z)
+        {
+            int dx = x - Center.x;
+            int dz = z - Center.y;
+            return dx * dx + dz * dz <= Radius * Radius;
+        }
+
+        /// <summary>Tramo inclusivo de una fila del disco (z debe estar dentro del radio).</summary>
+        public void GetRowBounds(int z, out int minX, out int maxX)
+        {
+            int dz = z - Center.y;
+            int extent = Mathf.FloorToInt(Mathf.Sqrt(Mathf.Max(0, Radius * Radius - dz * dz)));
+            minX = Center.x - extent;
+            maxX = Center.x + extent;
+        }
     }
 
     /// <summary>
@@ -24,7 +40,7 @@ namespace Game.Terrain
         readonly int[] _levels;
         readonly byte[] _zones;
 
-        /// <summary>Lagos generados (solo informativo: el terreno ya está excavado en _levels).</summary>
+        /// <summary>Lagos generados: máscara compartida con agua, colliders y consultas.</summary>
         public readonly List<LakeInfo> Lakes = new List<LakeInfo>();
 
         public HeightMap(int width, int depth)
@@ -49,5 +65,13 @@ namespace Game.Terrain
         }
 
         public void SetZone(int x, int z, int zone) => _zones[z * Width + x] = (byte)Mathf.Clamp(zone, 1, 3);
+
+        public bool IsLakeCell(int x, int z)
+        {
+            if (!Contains(x, z)) return false;
+            foreach (var lake in Lakes)
+                if (lake.ContainsCell(x, z)) return true;
+            return false;
+        }
     }
 }

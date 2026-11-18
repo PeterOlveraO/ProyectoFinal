@@ -206,6 +206,116 @@ namespace Game.Terrain.Tests
             }
         }
 
+        [TestCase(12345, 10, 36f)]
+        [TestCase(12345, 11, 42f)]
+        [TestCase(777, 11, 42f)]
+        [TestCase(778, 12, 42f)]
+        public void LargeLake_ExistsAndPreservesSpawnAndCardinalAccess(int seed, int radius, float zoneRadius)
+        {
+            var settings = CreateSettings(seed);
+            settings.zone1Radius = zoneRadius;
+            settings.lakeRadius = radius;
+            settings.lakeCount = 1;
+            var map = HeightMapGenerator.Generate(settings);
+            var repeated = HeightMapGenerator.Generate(settings);
+            settings.lakeCount = 0;
+            var dry = HeightMapGenerator.Generate(settings);
+
+            Assert.AreEqual(1, map.Lakes.Count, "Una configuración factible no puede quedarse sin lago.");
+            Assert.AreEqual(radius, map.Lakes[0].Radius);
+            Assert.AreEqual(map.Lakes[0].Center, repeated.Lakes[0].Center);
+            Assert.AreEqual(map.Lakes[0].RimLevel, repeated.Lakes[0].RimLevel);
+            for (int z = 0; z < map.Depth; z++)
+            {
+                for (int x = 0; x < map.Width; x++)
+                {
+                    Assert.AreEqual(map.Get(x, z), repeated.Get(x, z));
+                    float dx = x + 0.5f - map.Width * 0.5f;
+                    float dz = z + 0.5f - map.Depth * 0.5f;
+                    float angle = Mathf.Atan2(dz, dx) * Mathf.Rad2Deg;
+                    bool corridor = Mathf.Abs(Mathf.DeltaAngle(angle, Mathf.Round(angle / 90f) * 90f))
+                                    <= settings.rampHalfAngle;
+                    if (dx * dx + dz * dz <= settings.flatRadius * settings.flatRadius || corridor)
+                    {
+                        Assert.IsFalse(map.IsLakeCell(x, z), $"Acceso ocupado en {x},{z}");
+                        Assert.AreEqual(dry.Get(x, z), map.Get(x, z), $"Acceso alterado en {x},{z}");
+                    }
+                    if (map.IsLakeCell(x, z))
+                        Assert.AreEqual(map.Lakes[0].BottomLevel, map.Get(x, z));
+                }
+            }
+        }
+
+        [Test]
+        public void LargeLake_InfeasibleSettingsDoNotDamageSpawnOrShrinkRequestedLake()
+        {
+            var settings = CreateSettings();
+            settings.lakeRadius = 12;
+            settings.zone1Radius = 24f;
+            var map = HeightMapGenerator.Generate(settings);
+            Assert.AreEqual(0, map.Lakes.Count);
+            Assert.AreEqual(settings.flatLevel, map.Get(map.Width / 2, map.Depth / 2));
+        }
+
+        [Test]
+        public void LakeWaterRows_ExactlyMatchExcavationMask()
+        {
+            var lake = new LakeInfo { Center = new Vector2Int(30, 40), Radius = 11 };
+            Mesh mesh = LakeGeometry.BuildWaterMesh(lake, 1f, 2f);
+            try
+            {
+                Assert.AreEqual(23 * 4, mesh.vertexCount);
+                var vertices = mesh.vertices;
+                for (int z = lake.Center.y - 12; z <= lake.Center.y + 12; z++)
+                {
+                    for (int x = lake.Center.x - 12; x <= lake.Center.x + 12; x++)
+                    {
+                        bool overWater = false;
+                        for (int i = 0; i < vertices.Length; i += 4)
+                            overWater |= x + 0.5f >= vertices[i].x && x + 0.5f < vertices[i + 1].x &&
+                                         z + 0.5f >= vertices[i].z && z + 0.5f < vertices[i + 2].z;
+                        Assert.AreEqual(lake.ContainsCell(x, z), overWater, $"Máscara en {x},{z}");
+                    }
+                }
+                var indices = mesh.triangles;
+                for (int i = 0; i < indices.Length; i += 3)
+                    Assert.Greater(Vector3.Cross(vertices[indices[i + 1]] - vertices[indices[i]],
+                        vertices[indices[i + 2]] - vertices[indices[i]]).y, 0f);
+            }
+            finally { Object.DestroyImmediate(mesh); }
+        }
+
+        [Test]
+        public void GrassAtlas_TonesVaryWithoutExtraVerticesOrSubmeshes()
+        {
+            var map = new HeightMap(16, 16);
+            var a = new ChunkMeshData();
+            var b = new ChunkMeshData();
+            ChunkMeshBuilder.Build(map, 0, 0, 16, 1f, 0.5f, a);
+            ChunkMeshBuilder.Build(map, 0, 0, 16, 1f, 0.5f, b);
+            CollectionAssert.AreEqual(a.UVs, b.UVs);
+            var tiles = new HashSet<Vector2>();
+            for (int i = 0; i < a.Triangles[0].Count; i += 6) tiles.Add(a.UVs[a.Triangles[0][i]]);
+            Assert.Greater(tiles.Count, 8, "El pasto no debe repetir un único tono por bloque.");
+            Assert.AreEqual(6, a.SubMeshCount);
+            Assert.AreEqual(16 * 16 * 4 + 16 * 4 * 4, a.Vertices.Count);
+            Assert.AreEqual(a.Vertices.Count, a.UVs.Count);
+        }
+
+        [Test]
+        public void GrassAtlas_GlobalCellKeepsToneAcrossChunkSizes()
+        {
+            var map = new HeightMap(32, 32);
+            var whole = new ChunkMeshData();
+            var right = new ChunkMeshData();
+            ChunkMeshBuilder.Build(map, 0, 0, 32, 1f, 0.5f, whole);
+            ChunkMeshBuilder.Build(map, 1, 0, 16, 1f, 0.5f, right);
+            int wholeTop = whole.Triangles[0][(5 * 32 + 16) * 6];
+            int rightTop = right.Triangles[0][5 * 16 * 6];
+            for (int corner = 0; corner < 4; corner++)
+                Assert.AreEqual(whole.UVs[wholeTop + corner], right.UVs[rightTop + corner]);
+        }
+
         // ---------------------------------------------------------------
         // Chunk mesh building
         // ---------------------------------------------------------------

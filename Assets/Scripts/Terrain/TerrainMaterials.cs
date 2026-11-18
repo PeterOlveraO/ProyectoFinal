@@ -5,7 +5,7 @@ namespace Game.Terrain
 {
     /// <summary>
     /// Materiales del terreno generados por código:
-    ///   - Textura de cuadrícula (filtro Point) que marca el contorno de cada cara de bloque.
+    ///   - Atlas de pasto Point: variación tonal por bloque y pequeñas briznas sin geometría.
     ///   - Una tapa por zona, con el color de esa zona, y un costado más oscuro de la misma gama.
     ///   - URP Lit.
     /// El orden coincide con los submeshes de <see cref="ChunkMeshBuilder"/>:
@@ -18,11 +18,12 @@ namespace Game.Terrain
     /// </summary>
     public static class TerrainMaterials
     {
-        const int GridTextureSize = 16;
+        public const int GrassTilesPerAxis = 4;
+        const int TileSize = 16;
 
         public static Material[] Create(TerrainSettings settings)
         {
-            var texture = CreateGridTexture();
+            var texture = CreateGrassTexture();
 
             var zoneColors = new[]
             {
@@ -49,6 +50,7 @@ namespace Game.Terrain
         {
             var water = NewMaterial(settings);
             water.name = "Water";
+            water.mainTexture = null;
             water.color = new Color(0.10f, 0.42f, 0.72f, 1f);
             if (water.HasProperty("_Smoothness")) water.SetFloat("_Smoothness", 0.75f);
             if (water.HasProperty("_Glossiness")) water.SetFloat("_Glossiness", 0.75f);
@@ -107,26 +109,34 @@ namespace Game.Terrain
             return material;
         }
 
-        static Texture2D CreateGridTexture()
+        static Texture2D CreateGrassTexture()
         {
-            const int size = GridTextureSize;
+            const int size = TileSize * GrassTilesPerAxis;
             var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
             {
-                name = "Terrain_Grid",
+                name = "Terrain_GrassAtlas",
                 filterMode = FilterMode.Point,
                 wrapMode = TextureWrapMode.Repeat
             };
 
-            var fill = new Color(1f, 1f, 1f, 1f);
-            var line = new Color(0.7f, 0.7f, 0.7f, 1f);
             var pixels = new Color[size * size];
 
             for (int y = 0; y < size; y++)
             {
                 for (int x = 0; x < size; x++)
                 {
-                    bool edge = x == 0 || y == 0 || x == size - 1 || y == size - 1;
-                    pixels[y * size + x] = edge ? line : fill;
+                    int tile = (y / TileSize) * GrassTilesPerAxis + x / TileSize;
+                    int tx = x % TileSize;
+                    int ty = y % TileSize;
+                    // Hash entero, no estado global de Random. 16 tonos suaves y
+                    // briznas de 1-2 texels; atlas compartido de solo 64x64 (16 KiB).
+                    uint hash = unchecked((uint)(tx * 374761393 + (ty / 2) * 668265263 + tile * 1274126177));
+                    hash = (hash ^ (hash >> 13)) * 1274126177u;
+                    float shade = 0.85f + tile * 0.01f;
+                    if (hash % 13u < 2u) shade *= ty % 2 == 0 ? 0.78f : 1.08f;
+                    if (tx == 0 || ty == 0 || tx == TileSize - 1 || ty == TileSize - 1)
+                        shade *= 0.9f;
+                    pixels[y * size + x] = new Color(shade, shade, shade, 1f);
                 }
             }
 
