@@ -52,6 +52,32 @@ python3 ci/validate_test_results.py artifacts/unity-tests
 Code coverage instrumentation is intentionally disabled; this is behavioral
 regression coverage, not a measured line-coverage claim.
 
+### GameCI parser compatibility
+
+Run [`44229222400`](https://github.com/PeterOlveraO/ProyectoFinal/actions/runs/44229222400)
+exposed an incompatibility **before Unity starts**: test-runner v4 translates
+its `coverageEnabled: false` input into `--no-coverageEnabled`, but CLI v0.1.73
+disables yargs boolean negation and rejects it as `noCoverageEnabled`.
+The workflow therefore omits that input and sets the CLI's supported
+`GAME_CI_COVERAGE_ENABLED: "false"` environment option instead. The wrapper's
+default `true` emits no CLI flag, so the environment option reaches Docker as
+`COVERAGE_ENABLED=false`. Both test platforms and the fail-closed XML gate stay
+enabled. The builder/export CLI remains pinned to v0.1.73.
+
+The released Linux v0.1.73 and v0.1.76 binaries were probed with the wrapper's
+exact arguments (minus the unsupported negation). To repeat without Unity,
+Docker, licensing or secrets, extract a CLI release archive and run:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 ci/probe_gameci_cli.py /path/to/game-ci
+```
+
+This diagnostic intercepts `docker run` with a temporary fake executable,
+checks `RUN_TESTS=true`, both modes, artifact location and
+`COVERAGE_ENABLED=false`, and requires the CLI to fail when the fake container
+fails. It never starts Unity, never creates real test results, and is not used
+as a substitute for the workflow's actual tests.
+
 ## IPA validation
 
 Before publishing `ProyectoFinal-ipa`, `validate_ipa.py` checks ZIP integrity,

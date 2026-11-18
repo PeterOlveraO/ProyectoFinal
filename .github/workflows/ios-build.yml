@@ -69,6 +69,10 @@ jobs:
       - name: Ejecutar EditMode y PlayMode (Unity 6000.5.11f1)
         uses: game-ci/unity-test-runner@v4
         env:
+          # v4 emite --no-coverageEnabled si su input es false; CLI v0.1.73
+          # rechaza la negación. Usar su opción de entorno soportada conserva
+          # COVERAGE_ENABLED=false sin impedir que arranquen ambos modos.
+          GAME_CI_COVERAGE_ENABLED: "false"
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
@@ -76,7 +80,7 @@ jobs:
         with:
           cliVersion: v0.1.73
           testMode: all
-          coverageEnabled: false
+          # Omitir coverageEnabled: false: generaría el argumento incompatible.
           artifactsPath: artifacts/unity-tests
           # El código de salida y los XML gobiernan el gate; no requiere checks:write.
           githubToken: ""
