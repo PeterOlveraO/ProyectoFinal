@@ -10,7 +10,7 @@
         "defense": 60,
         "speed": 130
       },
-      "spriteName": "poke_139"
+      "spriteName": "species_jolteon"
     },
     {
       "id": "charizard",
@@ -106,7 +106,7 @@
         "defense": 70,
         "speed": 90
       },
-      "spriteName": "poke_092"
+      "spriteName": "species_lucario"
     },
     {
       "id": "venusaur",

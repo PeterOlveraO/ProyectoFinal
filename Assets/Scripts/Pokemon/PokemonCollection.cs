@@ -13,6 +13,7 @@ namespace Game.Pokemon
         public const int Price = 50;
         static ProgressionService service;
         static Sprite[] sprites;
+        static readonly Dictionary<string, Sprite> portraits = new Dictionary<string, Sprite>();
         public static ProgressionService Progression
         {
             get
@@ -64,8 +65,19 @@ namespace Game.Pokemon
         public static Sprite GetSprite(int index)
         {
             if (index < 0 || index >= Count) return null;
-            if (sprites == null) sprites = Resources.LoadAll<Sprite>("PokemonSprites");
             string name = Catalog[index].spriteName;
+
+            if (!string.IsNullOrEmpty(name))
+            {
+                if (!portraits.TryGetValue(name, out var portrait))
+                {
+                    portrait = Resources.Load<Sprite>("PokemonPortraits/" + name);
+                    portraits[name] = portrait;
+                }
+                if (portrait != null) return portrait;
+            }
+
+            if (sprites == null) sprites = Resources.LoadAll<Sprite>("PokemonSprites");
             return sprites.FirstOrDefault(s => s.name == name);
         }
         public static Sprite GetSprite(PokemonInstance instance)

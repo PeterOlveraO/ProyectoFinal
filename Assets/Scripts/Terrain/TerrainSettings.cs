@@ -64,7 +64,7 @@ namespace Game.Terrain
 
         [Header("Zonas concéntricas")]
         [Tooltip("Radio en bloques de la zona 1 (terreno normal, la de siempre).")]
-        [Min(4f)] public float zone1Radius = 36f;
+        [Min(4f)] public float zone1Radius = 42f;
 
         [Tooltip("Radio en bloques de la zona 2 (rodea la zona 1). El resto hasta el borde es la zona 3.")]
         [Min(5f)] public float zone2Radius = 58f;
@@ -89,8 +89,8 @@ namespace Game.Terrain
 
         [Header("Colores de zona")]
         public Color zone1Color = new Color(0.30f, 0.55f, 0.28f, 1f);
-        public Color zone2Color = new Color(0.80f, 0.52f, 0.18f, 1f);
-        public Color zone3Color = new Color(0.30f, 0.45f, 0.75f, 1f);
+        public Color zone2Color = new Color(0.38f, 0.61f, 0.30f, 1f);
+        public Color zone3Color = new Color(0.24f, 0.46f, 0.23f, 1f);
 
         [Header("Materiales")]
         [Tooltip("Material base del terreno y del agua. Es un asset a propósito: al compilar, Unity " +
@@ -99,11 +99,11 @@ namespace Game.Terrain
         public Material terrainMaterial;
 
         [Header("Lagos")]
-        [Tooltip("Cantidad de lagos decorativos (solo en la zona 1).")]
-        [Range(0, 12)] public int lakeCount = 3;
+        [Tooltip("Máximo de lagos infranqueables en la zona 1. Solo se colocan donde caben sin cortar spawn/rampas.")]
+        [Range(0, 12)] public int lakeCount = 1;
 
         [Tooltip("Radio en bloques de cada lago.")]
-        [Range(2, 12)] public int lakeRadius = 4;
+        [Range(2, 12)] public int lakeRadius = 11;
 
         [Tooltip("Profundidad en bloques. 2 bloques ya no se pueden escalar.")]
         [Range(1, 4)] public int lakeDepth = 2;

@@ -6,9 +6,6 @@ namespace Game.Pokemon
     /// Pokémon que sustituye por completo al antiguo prisma triangular. Es el único visual
     /// del enemigo: un sprite billboard que se apoya en el suelo y conserva siempre el mismo
     /// Pokémon asignado.
-    ///
-    /// Como los sprites solo tienen vista frontal, la variante de caminar se resuelve
-    /// espejando horizontalmente el sprite según la dirección lateral en la que se mueve.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PokemonEnemyVisual : MonoBehaviour
@@ -22,11 +19,10 @@ namespace Game.Pokemon
         [Tooltip("Desplazamiento hacia la cámara para separar el sprite del terreno.")]
         [SerializeField] float cameraOffset = 0.2f;
 
-        [Tooltip("Umbral de movimiento lateral para espejar el sprite.")]
-        [SerializeField, Min(0f)] float facingThreshold = 0.05f;
-
         SpriteRenderer _renderer;
         Transform _visual;
+        PokemonVisuals.DirectionalAnimation _animation;
+        Vector3 _lastPosition;
 
         /// <summary>Añade el Pokémon a un enemigo recién creado.</summary>
         public static PokemonEnemyVisual Attach(GameObject enemy, Sprite sprite)
@@ -44,6 +40,8 @@ namespace Game.Pokemon
             _renderer = PokemonVisuals.CreateBillboard(transform, "Pokemon " + sprite.name,
                                                        sprite, height, true);
             _visual = _renderer.transform;
+            _animation = new PokemonVisuals.DirectionalAnimation(_renderer, sprite);
+            _lastPosition = transform.position;
             UpdatePosition();
 
             var enemy = GetComponent<Game.Enemies.EnemyTriangle>();
@@ -53,7 +51,9 @@ namespace Game.Pokemon
         void LateUpdate()
         {
             UpdatePosition();
-            UpdateFacing();
+            Vector3 delta = transform.position - _lastPosition;
+            _lastPosition = transform.position;
+            if (_animation != null) _animation.Update(delta, Camera.main, Time.deltaTime);
         }
 
         void UpdatePosition()
@@ -73,18 +73,5 @@ namespace Game.Pokemon
             _visual.position = transform.position + offset;
         }
 
-        /// <summary>Voltea el sprite a izquierda/derecha según hacia dónde camina el enemigo.</summary>
-        void UpdateFacing()
-        {
-            if (_renderer == null) return;
-
-            var camera = Camera.main;
-            if (camera == null) return;
-
-            // transform.forward es la dirección de persecución; su componente lateral
-            // respecto a la cámara decide si el personaje camina a izquierda o derecha.
-            float lateral = Vector3.Dot(transform.forward, camera.transform.right);
-            if (Mathf.Abs(lateral) > facingThreshold) _renderer.flipX = lateral < 0f;
-        }
     }
 }

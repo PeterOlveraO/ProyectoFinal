@@ -103,6 +103,8 @@ namespace Game.Rounds
         readonly int[] _evLevels = new int[4];
         bool _rewardsPaid;
         DrinkStations _drinks;
+        ShotStations _shotStations;
+        readonly ShotLoadout _shots = new ShotLoadout();
         CombatBalance _balance;
         PokemonInstance _runPokemon;
         SpeciesDefinition _runSpecies;
@@ -111,6 +113,30 @@ namespace Game.Rounds
         readonly System.Collections.Generic.HashSet<EnemyTriangle> _creditedEnemies = new System.Collections.Generic.HashSet<EnemyTriangle>();
 
         public DrinkStations Drinks => _drinks;
+        public ShotStations ShotStations => _shotStations;
+        public ShotLoadout Shots => _shots;
+
+        public bool EquipShot(ShotType type)
+        {
+            if (!CanUseShotShop() || !_shots.TryEquip(type)) return false;
+            PlayerSphereController.Instance.GetComponent<PlayerAttack>()?.CancelPendingShots();
+            Changed?.Invoke();
+            return true;
+        }
+
+        public bool BuyShot(int offer)
+        {
+            if (!CanUseShotShop() || _shotStations == null ||
+                _shotStations.NearbyOffer(PlayerSphereController.Instance.transform.position) != offer ||
+                offer < 0 || offer >= 3) return false;
+            if (!_shots.TryBuyAndEquip((ShotType)(offer + 1), SpendPoints)) return false;
+            PlayerSphereController.Instance.GetComponent<PlayerAttack>()?.CancelPendingShots();
+            Changed?.Invoke();
+            return true;
+        }
+
+        bool CanUseShotShop() => GameFlow.Playing && IsRunActive &&
+            PlayerSphereController.Instance != null && PlayerSphereController.Instance.IsAlive;
         public bool HasRunPokemon => _runPokemon != null;
         public PokemonInstance RunPokemon => _runPokemon?.Copy();
         public SpeciesDefinition RunSpecies => _runSpecies == null ? null : new SpeciesDefinition
@@ -131,7 +157,7 @@ namespace Game.Rounds
         public int AliveCount { get; private set; }
         public float PreparationRemaining => Mathf.Max(0f, _prepRemaining);
 
-        /// <summary>Saldo de puntos para comprar EVs y bebidas durante esta partida.</summary>
+        /// <summary>Saldo de puntos para comprar EVs, bebidas y disparos durante esta partida.</summary>
         public int Points { get; private set; }
         public int TotalPointsEarned { get; private set; }
         public int CoinsEarned { get; private set; }
@@ -171,6 +197,8 @@ namespace Game.Rounds
             Instance = this;
             if (GetComponent<DrinkStations>() == null) gameObject.AddComponent<DrinkStations>();
             _drinks = GetComponent<DrinkStations>();
+            if (GetComponent<ShotStations>() == null) gameObject.AddComponent<ShotStations>();
+            _shotStations = GetComponent<ShotStations>();
 
             // Los valores del inspector tienen prioridad; solo se corrigen si quedaron raros.
             spawnRadiusMax = Mathf.Max(spawnRadiusMax, spawnRadiusMin + 1f);
@@ -243,6 +271,8 @@ namespace Game.Rounds
             }
             ClearEnemies();
             _drinks?.ResetRun();
+            _shots.ResetRun();
+            ClearPlayerShots();
 
             Points = 0;
             TotalPointsEarned = 0;
@@ -356,7 +386,15 @@ namespace Game.Rounds
         {
             Array.Clear(_evLevels, 0, _evLevels.Length);
             _drinks?.ResetRun();
+            _shots.ResetRun();
+            ClearPlayerShots();
             RebuildRunStats();
+        }
+
+        static void ClearPlayerShots()
+        {
+            PlayerSphereController.Instance?.GetComponent<PlayerAttack>()?.CancelPendingShots();
+            AttackProjectile.ClearAll();
         }
 
         public bool SpendPoints(int amount)
