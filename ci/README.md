@@ -25,6 +25,29 @@ The result validator requires all existing EditMode assemblies:
 | `Pokemon.Combat.Tests` | 8 |
 | `Game.Runtime.PlayMode.Tests` | 8 |
 
+The gate also reads the names declared by `Assets/Tests/**/*.asmdef` in **the
+current checkout**. Each additional suite below becomes mandatory only when its
+asmdef exists on that branch; moving/renaming the file does not disable it.
+No lookup of another worktree, editor state, or graphics/gameplay assets is used.
+
+| Conditional assembly | Mode | Minimum passed cases |
+| --- | --- | ---: |
+| `Game.PlayerAim.Tests` | EditMode | 15 |
+| `Game.WorldProps.Tests` | EditMode | 5 |
+| `Game.Rounds.Shop.Tests` | EditMode | 6 |
+| `Game.Terrain.PlayMode.Tests` | PlayMode | 2 |
+| `Game.ShotShop.EditMode.Tests` | EditMode | 10 |
+| `Game.ShotShop.PlayMode.Tests` | PlayMode | 17 |
+| `Game.DirectionalSprites.Tests` | EditMode | 10 |
+
+Counts include each NUnit `[TestCase]` instance, not just test methods.
+Missing/partially discovered conditional suites fail the gate even if all
+baseline cases pass. An absent feature asmdef does not impose its suite or
+asset requirements on independent branches. Invalid/duplicate asmdefs fail
+closed, and `gate-summary.md` lists the required assemblies/floors.
+For XML from a different checkout, pass `--project-root /path/to/checkout`;
+CI uses its own working directory by default.
+
 The PlayMode suite exercises real components across frames: projectile
 pause/resume, single-target impact, enemy destruction/registry cleanup, projectile
 range expiry, health/death/revive, special power/menu/cooldown, touch pointer
