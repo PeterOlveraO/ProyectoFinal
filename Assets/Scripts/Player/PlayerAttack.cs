@@ -9,7 +9,7 @@ namespace Game.Player
 {
     /// <summary>
     /// Ataque del jugador: el joystick derecho apunta y, mientras se mantiene pulsado,
-    /// lanza una bala cada <see cref="fireInterval"/> segundos en esa dirección.
+    /// inicia el patrón equipado cada <see cref="fireInterval"/> segundos en esa dirección.
     ///
     /// En el editor también se puede probar con el ratón: mantener el botón izquierdo
     /// dispara hacia el cursor (útil para verificar el sistema sin móvil).
@@ -38,6 +38,10 @@ namespace Game.Player
 
         float _timer;
         Vector3 _lastAim = Vector3.forward;
+        int _burstRemaining;
+        float _burstTimer;
+        Vector3 _burstAim;
+        int _burstDamage;
 
         public Vector3 LastAimDirection => _lastAim;
         public int Damage => (RoundManager.Instance != null && RoundManager.Instance.HasRunPokemon ?
@@ -47,18 +51,37 @@ namespace Game.Player
 
         public void ResetRun()
         {
+            CancelPendingShots();
             _timer = fireInterval;
             _lastAim = Vector3.forward;
         }
+
+        public void CancelPendingShots()
+        {
+            _burstRemaining = 0;
+            _burstTimer = 0f;
+        }
+
+        void OnDisable() => CancelPendingShots();
 
         /// <summary>Asigna el joystick de ataque desde el bootstrap de la escena.</summary>
         public void SetJoystick(VirtualJoystick value) => joystick = value;
 
         void Update()
         {
-            if (GameFlow.Blocked || GameFlow.Over)
+            Vector3 worldDirection = Vector3.zero;
+            bool hasAim = GameFlow.Playing && TryReadAim(out worldDirection);
+            TickAttack(Time.deltaTime, hasAim, worldDirection);
+        }
+
+        // Explicit delta keeps burst timing testable without coroutines or delayed callbacks.
+        void TickAttack(float deltaTime, bool hasAim, Vector3 worldDirection)
+        {
+            var round = RoundManager.Instance;
+            if (!GameFlow.Playing || (round != null && !round.IsRunActive))
             {
                 // Al volver a jugar, el primer toque dispara de inmediato.
+                CancelPendingShots();
                 _timer = fireInterval;
                 return;
             }
@@ -66,20 +89,34 @@ namespace Game.Player
             var player = PlayerSphereController.Instance;
             if (player != null && !player.IsAlive)
             {
+                CancelPendingShots();
                 _timer = fireInterval;
                 return;
             }
 
-            if (!TryReadAim(out Vector3 worldDirection))
+            if (!hasAim)
             {
+                CancelPendingShots();
                 _timer = fireInterval;
                 return;
             }
 
             _lastAim = worldDirection;
 
-            _timer += Time.deltaTime;
-            var drinks = RoundManager.Instance != null ? RoundManager.Instance.Drinks : null;
+            _timer += deltaTime;
+            if (_burstRemaining > 0)
+            {
+                _burstTimer -= deltaTime;
+                if (_burstTimer <= 0f)
+                {
+                    // At most one pulse per frame: never catch up with a large mobile-frame burst.
+                    FireProjectile(_burstAim, _burstDamage, ShotType.Burst);
+                    _burstRemaining--;
+                    _burstTimer = ShotDefinitions.BurstPulseInterval;
+                }
+                return;
+            }
+            var drinks = round != null ? round.Drinks : null;
             float interval = drinks != null && drinks.Has(DrinkType.RapidFire) ? fireInterval * .7f : fireInterval;
             if (_timer < interval) return;
 
@@ -89,8 +126,29 @@ namespace Game.Player
 
         void Fire()
         {
-            Vector3 origin = transform.position + Vector3.up * muzzleHeight + _lastAim * 0.55f;
-            AttackProjectile.Spawn(origin, _lastAim, projectileSpeed, range, Damage, projectileColor);
+            var round = RoundManager.Instance;
+            var type = round != null ? round.Shots.Equipped : ShotType.Basic;
+            int shotDamage = Damage;
+            if (type == ShotType.Fan)
+            {
+                for (int i = 0; i < 3; i++)
+                    FireProjectile(ShotDefinitions.FanDirection(_lastAim, i), shotDamage, type);
+                return;
+            }
+            FireProjectile(_lastAim, shotDamage, type);
+            if (type != ShotType.Burst) return;
+            _burstAim = _lastAim;
+            _burstDamage = shotDamage;
+            _burstRemaining = 2;
+            _burstTimer = ShotDefinitions.BurstPulseInterval;
+        }
+
+        void FireProjectile(Vector3 direction, int shotDamage, ShotType type)
+        {
+            Vector3 origin = transform.position + Vector3.up * muzzleHeight + direction * .55f;
+            AttackProjectile.Spawn(origin, direction, projectileSpeed, range, shotDamage,
+                type == ShotType.Basic ? projectileColor : ShotDefinitions.Color(type),
+                type == ShotType.Piercing ? ShotDefinitions.MaxPiercingTargets : 1);
         }
 
         bool TryReadAim(out Vector3 worldDirection)

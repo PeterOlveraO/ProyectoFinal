@@ -1,3 +1,5 @@
+using Game.Combat;
+using Game.Core;
 using Game.Economy;
 using Game.Player;
 using Game.Rendering;
@@ -28,6 +30,16 @@ namespace Game.UI
         Button _drinkButton;
         TMPro.TMP_Text _drinkLabel;
         int _nearbyDrink = -1;
+        readonly Button[] _shotChoices = new Button[ShotDefinitions.Count];
+        readonly TMPro.TMP_Text[] _shotChoiceLabels = new TMPro.TMP_Text[ShotDefinitions.Count];
+        TMPro.TMP_Text _equippedShotLabel;
+        Button _shotButton;
+        TMPro.TMP_Text _shotLabel;
+        int _nearbyShot = -1;
+        int _displayedShotOffer = -2;
+        int _displayedShotPoints = -1;
+        bool _displayedShotOwned;
+        ShotType _displayedShotEquipped = (ShotType)(-1);
 
         CanvasGroup _banner;
         TMPro.TMP_Text _bannerTitle;
@@ -84,12 +96,14 @@ namespace Game.UI
             if (_numbersDirty)
             {
                 UpdateNumbers(round, player);
+                UpdateShotLoadout(round);
                 _numbersDirty = false;
             }
             UpdateBanner(round, showHud);
             UpdateFlash();
             UpdateGameOver(round, gameOver);
             UpdateDrink(round, player, playing && !gameOver && (menu == null || !menu.IsPaused));
+            UpdateShotOffer(round, player, showHud && GameFlow.Playing);
         }
 
         // ------------------------------------------------------------- Construcción
@@ -115,6 +129,7 @@ namespace Game.UI
             BuildStatusPanel(root);
             BuildBanner(root);
             BuildDrinkButton(root);
+            BuildShotShop(root);
 
             // La pantalla de derrota vive en su propio Canvas por encima de todo el HUD.
             _overlay = UIFactory.CreateCanvas("UI_GameOver", 120);
@@ -210,6 +225,80 @@ namespace Game.UI
         void BuyDrink()
         {
             RoundManager.Instance?.Drinks?.Buy(_nearbyDrink);
+        }
+
+        void BuildShotShop(Transform parent)
+        {
+            // Top-center loadout, away from the top-left status and bottom-corner sticks.
+            var panel = UIFactory.CreateRect("ShotLoadout", parent);
+            UIFactory.Place(panel, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
+                new Vector2(0f, -24f), new Vector2(650f, 148f));
+            var background = UIFactory.CreateImage("Background", panel, ProceduralSprites.RoundedRect,
+                UIFactory.DeepViolet, false, true);
+            UIFactory.Stretch(background.rectTransform);
+            _equippedShotLabel = UIFactory.CreateText("EquippedShot", panel, "DISPARO · BÁSICO", 26, UIFactory.Sun);
+            UIFactory.Place(_equippedShotLabel.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
+                new Vector2(0f, -8f), new Vector2(630f, 38f));
+            for (int i = 0; i < _shotChoices.Length; i++)
+            {
+                var type = (ShotType)i;
+                var button = UIFactory.CreateButton(panel, "Equip" + type, "", UIFactory.CardViolet,
+                    new Vector2(150f, 82f), () => RoundManager.Instance?.EquipShot(type), 22);
+                UIFactory.Place((RectTransform)button.transform, new Vector2(0f, 0f), Vector2.zero,
+                    new Vector2(10f + i * 160f, 10f), new Vector2(150f, 82f));
+                _shotChoices[i] = button;
+                _shotChoiceLabels[i] = button.GetComponentInChildren<TMPro.TMP_Text>();
+                // More room for the longest name without shrinking the mobile touch target.
+                _shotChoiceLabels[i].rectTransform.offsetMin = new Vector2(4f, 4f);
+                _shotChoiceLabels[i].rectTransform.offsetMax = new Vector2(-4f, -4f);
+            }
+
+            // Separate vertical slot above the drink offer (35..135), never over it.
+            _shotButton = UIFactory.CreateButton(parent, "BuyShot", "", UIFactory.CardViolet,
+                new Vector2(650f, 110f), () => RoundManager.Instance?.BuyShot(_nearbyShot), 28);
+            UIFactory.Place((RectTransform)_shotButton.transform, new Vector2(.5f, 0f), new Vector2(.5f, 0f),
+                new Vector2(0f, 155f), new Vector2(650f, 110f));
+            _shotLabel = _shotButton.GetComponentInChildren<TMPro.TMP_Text>();
+            _shotButton.gameObject.SetActive(false);
+        }
+
+        void UpdateShotLoadout(RoundManager round)
+        {
+            if (_equippedShotLabel == null) return;
+            var equipped = round != null ? round.Shots.Equipped : ShotType.Basic;
+            _equippedShotLabel.text = "DISPARO EQUIPADO · " + ShotDefinitions.Name(equipped);
+            for (int i = 0; i < _shotChoices.Length; i++)
+            {
+                var type = (ShotType)i;
+                bool owned = type == ShotType.Basic || (round != null && round.Shots.Has(type));
+                bool selected = type == equipped;
+                _shotChoiceLabels[i].text = ShotDefinitions.Name(type) + "\n" +
+                    (selected ? "EQUIPADO" : owned ? "EQUIPAR GRATIS" : ShotDefinitions.Price(type) + " PT");
+                _shotChoices[i].interactable = round != null && round.IsRunActive && owned && !selected;
+            }
+        }
+
+        void UpdateShotOffer(RoundManager round, PlayerSphereController player, bool playing)
+        {
+            if (_shotButton == null) return;
+            var stations = round != null ? round.ShotStations : null;
+            _nearbyShot = playing && round != null && round.IsRunActive && player != null && player.IsAlive &&
+                stations != null ? stations.NearbyOffer(player.transform.position) : -1;
+            _shotButton.gameObject.SetActive(_nearbyShot >= 0);
+            if (_nearbyShot < 0) return;
+            var type = (ShotType)(_nearbyShot + 1);
+            bool owned = round.Shots.Has(type);
+            var equipped = round.Shots.Equipped;
+            if (_displayedShotOffer == _nearbyShot && _displayedShotPoints == round.Points &&
+                _displayedShotOwned == owned && _displayedShotEquipped == equipped) return;
+            _displayedShotOffer = _nearbyShot;
+            _displayedShotPoints = round.Points;
+            _displayedShotOwned = owned;
+            _displayedShotEquipped = equipped;
+            _shotLabel.text = "DISPARO " + ShotDefinitions.Name(type) + "\n" +
+                (equipped == type ? "EQUIPADO · ADQUIRIDO" : owned ? "EQUIPAR · SIN COSTE" :
+                    "COMPRAR Y EQUIPAR · " + ShotDefinitions.Price(type) + " PUNTOS");
+            _shotButton.interactable = equipped != type && (owned || round.Points >= ShotDefinitions.Price(type));
         }
 
         void BuildBanner(Transform parent)
