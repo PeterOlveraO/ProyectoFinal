@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Game.Core;
 using Game.Player;
 using Game.Rendering;
@@ -9,11 +11,13 @@ namespace Game.Rounds
     public enum DrinkType { Power, Vitality, Sprint, Armor, RapidFire }
 
     /// <summary>Cinco puestos de bebidas provisionales en el mapa. Una compra por tipo y partida.</summary>
+    [DefaultExecutionOrder(0)]
     [DisallowMultipleComponent]
     public sealed class DrinkStations : MonoBehaviour
     {
         public static readonly string[] Names = { "FUERZA", "VITALIDAD", "SPRINT", "ESCUDO", "RÁFAGA" };
-        public static readonly int[] Prices = { 10, 15, 12, 15, 20 };
+        // Coste por partida (no se guarda como moneda persistente).
+        public static readonly int[] Prices = { 30, 45, 35, 45, 60 };
         static readonly Color[] Colors =
         {
             new Color(1f, .28f, .22f), new Color(.35f, 1f, .45f),
@@ -22,31 +26,39 @@ namespace Game.Rounds
 
         readonly Transform[] _stands = new Transform[5];
         readonly bool[] _purchased = new bool[5];
+        IReadOnlyList<Vector3> _positions = Array.AsReadOnly(new Vector3[0]);
         WorldTerrain _terrain;
+
+        /// <summary>
+        /// Posiciones de suelo de los puestos, en orden de DrinkType. Los consumidores deben
+        /// iniciar después de DrinkStations (execution order mayor que 0) antes de reservarlas.
+        /// </summary>
+        public IReadOnlyList<Vector3> Positions => _positions;
 
         void Start()
         {
             _terrain = WorldTerrain.Instance;
-            if (_terrain == null || _terrain.Map == null) return;
-
-            Vector3 spawn = _terrain.SpawnPosition;
-            for (int i = 0; i < _stands.Length; i++)
+            if (_terrain == null || _terrain.Map == null)
             {
-                // Pequeño anillo alrededor del spawn, sin agua ni pendientes grandes.
-                for (int attempt = 0; attempt < 32; attempt++)
-                {
-                    float angle = (i * 72f + attempt * 11f) * Mathf.Deg2Rad;
-                    Vector3 candidate = spawn + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * (7f + attempt * .15f);
-                    Vector3 local = candidate - _terrain.transform.position;
-                    int x = Mathf.FloorToInt(local.x / _terrain.BlockSize);
-                    int z = Mathf.FloorToInt(local.z / _terrain.BlockSize);
-                    if (!_terrain.Map.Contains(x, z) || _terrain.IsLakeAtWorld(candidate)) continue;
-                    Vector3 ground = _terrain.BlockTopCenter(x, z);
-                    if (Mathf.Abs(ground.y - spawn.y) > _terrain.StepHeight * 2f) continue;
-                    CreateStand(i, ground);
-                    break;
-                }
+                Debug.LogError("[DrinkStations] No hay un WorldTerrain generado; no se pudieron colocar los cinco puestos.", this);
+                return;
             }
+
+            Vector3[] positions;
+            try
+            {
+                // seedOffset separa determinísticamente este grupo de otros grupos del mismo mapa.
+                positions = WorldShopPlacement.FindPositions(_terrain, _stands.Length, 0x51A7);
+            }
+            catch (InvalidOperationException exception)
+            {
+                Debug.LogError("[DrinkStations] " + exception.Message, this);
+                return;
+            }
+
+            for (int i = 0; i < _stands.Length; i++)
+                CreateStand(i, positions[i]);
+            _positions = Array.AsReadOnly((Vector3[])positions.Clone());
         }
 
         void CreateStand(int index, Vector3 ground)
