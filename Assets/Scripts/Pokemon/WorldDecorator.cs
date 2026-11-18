@@ -55,7 +55,8 @@ namespace Game.Pokemon
             var root = new GameObject("Decor").transform;
             root.SetParent(transform, false);
 
-            PlaceGroup(terrain, root, CatalogBuildings(), buildings, 12f, 34f);
+            // El lago puede ocupar casi toda la zona central: buscar también en los anillos exteriores.
+            PlaceGroup(terrain, root, CatalogBuildings(), buildings, 12f, 70f);
             PlaceGroup(terrain, root, CatalogExtras(), extras, 12f, 70f);
             PlaceGroup(terrain, root, CatalogTrees(), trees, 12f, 76f);
             PlaceGroup(terrain, root, CatalogProps(), props, 12f, 60f);
