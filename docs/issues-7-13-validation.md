@@ -100,6 +100,42 @@ En `Captures/Issues7-13/`:
 
 El workflow bloquea la exportación si faltan suites requeridas o falla alguna
 prueba. El paquete final se valida como ZIP con `Payload/*.app`, bundle
-`com.peterolvera.proyectofinal` y ejecutable arm64. Los resultados del build final
-y su artefacto se anotarán cuando termine Actions. La instalación y prueba física
-en iPhone requieren firmar el IPA y aún no se han realizado.
+`com.peterolvera.proyectofinal` y ejecutable arm64.
+
+### Resultado final en `main`
+
+- [PR #21](https://github.com/PeterOlveraO/ProyectoFinal/pull/21) fusionado;
+  issues #7–#13 cerradas.
+- Commit compilado: `6fbd3d0f8350215b5fa458018864df13d0560d8b`.
+- [Pipeline final aprobado](https://github.com/PeterOlveraO/ProyectoFinal/actions/runs/44235657392):
+  **89/89 EditMode + 27/27 PlayMode**, exportación Unity y compilación Xcode.
+  Los XML descargados pasaron también el validador local de suites completas.
+- [Artefacto `ProyectoFinal-ipa`](https://github.com/PeterOlveraO/ProyectoFinal/actions/runs/44235657392/artifacts/14397864525),
+  ID `14397864525`.
+- Archivo `ProyectoFinal-unsigned.ipa`: **43.824.537 bytes**.
+- SHA-256 del IPA:
+  `cc29c53a012cc611c5f5f2a05c7c6865783b3b9d1ea91aac20a525d79a91a8f4`.
+- Validación local del archivo descargado: ZIP/CRC, aplicación única, bundle y
+  ejecutable Mach-O arm64 correctos.
+
+La [CI de integración](https://github.com/PeterOlveraO/ProyectoFinal/actions/runs/44233138604)
+también aprobó las 116 pruebas y produjo un IPA validado localmente, sobre
+`3cb98a8628c608c48edfa24e4bcbad085c2acd6c`.
+
+### Pipelines individuales
+
+Las siete ramas completaron tests, exportación y compilación. Cada IPA se
+descargó y pasó `ci/validate_ipa.py`; los hashes están registrados en su PR.
+
+| Issue | Pipeline aprobado | PR con evidencia |
+| --- | --- | --- |
+| #7 | [44230235243](https://github.com/PeterOlveraO/ProyectoFinal/actions/runs/44230235243) | [#15](https://github.com/PeterOlveraO/ProyectoFinal/pull/15) |
+| #8 | [44232284380](https://github.com/PeterOlveraO/ProyectoFinal/actions/runs/44232284380) | [#20](https://github.com/PeterOlveraO/ProyectoFinal/pull/20) |
+| #9 | [44230942725](https://github.com/PeterOlveraO/ProyectoFinal/actions/runs/44230942725) | [#18](https://github.com/PeterOlveraO/ProyectoFinal/pull/18) |
+| #10 | [44231931315](https://github.com/PeterOlveraO/ProyectoFinal/actions/runs/44231931315) | [#19](https://github.com/PeterOlveraO/ProyectoFinal/pull/19) |
+| #11 | [44232397397](https://github.com/PeterOlveraO/ProyectoFinal/actions/runs/44232397397) | [#14](https://github.com/PeterOlveraO/ProyectoFinal/pull/14) |
+| #12 | [44231931734](https://github.com/PeterOlveraO/ProyectoFinal/actions/runs/44231931734) | [#16](https://github.com/PeterOlveraO/ProyectoFinal/pull/16) |
+| #13 | [44230651402](https://github.com/PeterOlveraO/ProyectoFinal/actions/runs/44230651402) | [#17](https://github.com/PeterOlveraO/ProyectoFinal/pull/17) |
+
+Los IPA están **sin firmar**. La instalación y prueba física en iPhone requieren
+firmarlos y aún no se han realizado.
