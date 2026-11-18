@@ -11,7 +11,10 @@ sealed class PokemonAnimationImporter : AssetPostprocessor
         importer.textureType = TextureImporterType.Sprite;
         importer.spriteImportMode = SpriteImportMode.Single;
         importer.spritePixelsPerUnit = 32f;
-        importer.spriteAlignment = (int)SpriteAlignment.Center;
+        var settings = new TextureImporterSettings();
+        importer.ReadTextureSettings(settings);
+        settings.spriteAlignment = (int)SpriteAlignment.Center;
+        importer.SetTextureSettings(settings);
         importer.filterMode = FilterMode.Point;
         importer.mipmapEnabled = false;
         importer.textureCompression = TextureImporterCompression.Uncompressed;
