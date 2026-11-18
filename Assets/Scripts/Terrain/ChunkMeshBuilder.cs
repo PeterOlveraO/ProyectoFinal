@@ -44,7 +44,7 @@ namespace Game.Terrain
     ///     Los vecinos se leen del mapa GLOBAL, así que en las uniones entre chunks no se
     ///     generan caras ocultas.
     ///   - En el borde del mundo los costados bajan hasta el nivel -1 (losa de cierre).
-    /// Cada cara de bloque lleva UV 0..1 para que la textura de cuadrícula marque los bloques.
+    /// Cada cara usa un tile del atlas de pasto, con tono determinista por celda global.
     /// La malla queda en espacio local del chunk (origen en su esquina mínima).
     /// </summary>
     public static class ChunkMeshBuilder
@@ -84,6 +84,7 @@ namespace Game.Terrain
                             new Vector3(x0, y, z0), new Vector3(x1, y, z0),
                             new Vector3(x1, y, z1), new Vector3(x0, y, z1),
                             Vector3.up, false);
+                    SetGrassUVs(data, gx, gz);
 
                     // Costados hacia vecinos más bajos (o hacia el borde del mundo).
                     var sides = data.Triangles[data.SideSubMesh(zone)];
@@ -134,6 +135,23 @@ namespace Game.Terrain
             return map.Contains(x, z) ? map.Get(x, z) : BorderBottomLevel;
         }
 
+        static void SetGrassUVs(ChunkMeshData data, int x, int z)
+        {
+            // Coordenadas globales: mismo tono aunque cambie el tamaño/orden del chunk.
+            uint hash = unchecked((uint)(x * 73856093) ^ (uint)(z * 19349663));
+            hash ^= hash >> 13;
+            const int tiles = TerrainMaterials.GrassTilesPerAxis;
+            int tile = (int)(hash % (tiles * tiles));
+            float scale = 1f / tiles;
+            float u = tile % tiles * scale;
+            float v = tile / tiles * scale;
+            int start = data.UVs.Count - 4;
+            data.UVs[start] = new Vector2(u, v);
+            data.UVs[start + 1] = new Vector2(u + scale, v);
+            data.UVs[start + 2] = new Vector2(u + scale, v + scale);
+            data.UVs[start + 3] = new Vector2(u, v + scale);
+        }
+
         /// <summary>
         /// Quad p0..p3. Para tapas: p0=(x0,z0) p1=(x1,z0) p2=(x1,z1) p3=(x0,z1).
         /// Para costados: p0 abajo, p1 arriba, p2 arriba, p3 abajo.
@@ -158,9 +176,9 @@ namespace Game.Terrain
             if (side)
             {
                 data.UVs.Add(new Vector2(0f, 0f));
-                data.UVs.Add(new Vector2(0f, 1f));
-                data.UVs.Add(new Vector2(1f, 1f));
-                data.UVs.Add(new Vector2(1f, 0f));
+                data.UVs.Add(new Vector2(0f, 1f / TerrainMaterials.GrassTilesPerAxis));
+                data.UVs.Add(new Vector2(1f / TerrainMaterials.GrassTilesPerAxis, 1f / TerrainMaterials.GrassTilesPerAxis));
+                data.UVs.Add(new Vector2(1f / TerrainMaterials.GrassTilesPerAxis, 0f));
             }
             else
             {

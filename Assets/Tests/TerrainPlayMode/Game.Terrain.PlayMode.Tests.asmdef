@@ -1,0 +1,14 @@
+{
+    "name": "Game.Terrain.PlayMode.Tests",
+    "rootNamespace": "Game.Terrain.Tests",
+    "references": ["Game.Terrain", "UnityEngine.TestRunner"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": ["nunit.framework.dll"],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

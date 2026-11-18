@@ -105,7 +105,7 @@ namespace Game.Terrain
                 }
             }
 
-            CarveLakes(map, settings, rng, centerX, centerZ, zone1Radius, rampHalfWidth);
+            CarveLakes(map, settings, rng, centerX, centerZ, zone1Radius);
             return map;
         }
 
@@ -134,7 +134,7 @@ namespace Game.Terrain
         }
 
         static void CarveLakes(HeightMap map, TerrainSettings settings, System.Random rng,
-                               float centerX, float centerZ, float zone1Radius, float rampHalfWidth)
+                               float centerX, float centerZ, float zone1Radius)
         {
             int lakeCount = Mathf.Clamp(settings.lakeCount, 0, 12);
             if (lakeCount == 0) return;
@@ -142,23 +142,42 @@ namespace Game.Terrain
             int radius = Mathf.Clamp(settings.lakeRadius, 2, 12);
             int depth = Mathf.Clamp(settings.lakeDepth, 1, 4);
 
-            float minRadius = settings.flatRadius + 6f;
-            float maxRadius = zone1Radius - rampHalfWidth - radius - 2f;
-            if (maxRadius <= minRadius) return;
+            // El radio es el del agua, no el del centro: reservar también la orilla y
+            // las esquinas de sus celdas. No restar rampHalfWidth a TODO el anillo:
+            // las rampas solo ocupan cuatro sectores angulares.
+            float footprint = radius + 1f + Mathf.Sqrt(0.5f);
+            float minRadius = Mathf.Max(0f, settings.flatRadius) + footprint;
+            float maxRadius = zone1Radius - footprint;
+            if (maxRadius < minRadius) return;
 
-            int attempts = 0;
-            int maxAttempts = lakeCount * 60;
-
-            while (map.Lakes.Count < lakeCount && attempts < maxAttempts)
+            var candidates = new System.Collections.Generic.List<Vector2Int>();
+            for (int z = radius + 1; z < map.Depth - radius - 1; z++)
             {
-                attempts++;
+                for (int x = radius + 1; x < map.Width - radius - 1; x++)
+                {
+                    float dx = x + 0.5f - centerX;
+                    float dz = z + 0.5f - centerZ;
+                    float distance = Mathf.Sqrt(dx * dx + dz * dz);
+                    if (distance < minRadius || distance > maxRadius) continue;
 
-                float angle = (float)(rng.NextDouble() * Mathf.PI * 2.0);
-                float distance = Mathf.Lerp(minRadius, maxRadius, (float)rng.NextDouble());
-                int cx = Mathf.FloorToInt(centerX + Mathf.Cos(angle) * distance);
-                int cz = Mathf.FloorToInt(centerZ + Mathf.Sin(angle) * distance);
+                    // Mantener el corredor completo desde el spawn hasta cada rampa,
+                    // no solo las celdas situadas en la propia frontera.
+                    float angularRadius = Mathf.Asin(Mathf.Clamp01(footprint / distance)) * Mathf.Rad2Deg;
+                    if (IsRampAngle(dx, dz, Mathf.Clamp(settings.rampHalfAngle, 1f, 45f) + angularRadius)) continue;
+                    candidates.Add(new Vector2Int(x, z));
+                }
+            }
 
-                if (!map.Contains(cx, cz) || map.GetZone(cx, cz) != 1) continue;
+            // Barajado parcial: búsqueda exhaustiva acotada, sin fallos aleatorios de
+            // los antiguos 60 intentos, sin modificar UnityEngine.Random.
+            for (int i = 0; i < candidates.Count && map.Lakes.Count < lakeCount; i++)
+            {
+                int chosen = rng.Next(i, candidates.Count);
+                var candidate = candidates[chosen];
+                candidates[chosen] = candidates[i];
+                candidates[i] = candidate;
+                int cx = candidate.x;
+                int cz = candidate.y;
                 if (OverlapsLake(map, cx, cz, radius)) continue;
 
                 // Borde del lago: el punto más alto en un anillo alrededor del hoyo.
@@ -174,7 +193,10 @@ namespace Game.Terrain
                     }
                 }
 
-                if (rimLevel < depth + 1) continue;
+                // Un terreno bajo también puede tener un lago: no eliminarlo por ruido.
+                // La orilla se limita al rango válido del mapa.
+                rimLevel = Mathf.Clamp(Mathf.Max(rimLevel, depth), 0, settings.maxLevel);
+                if (rimLevel < depth) continue;
 
                 int bottomLevel = Mathf.Max(0, rimLevel - depth);
 
@@ -185,10 +207,10 @@ namespace Game.Terrain
                     {
                         if (!map.Contains(x, z)) continue;
 
-                        float d = Mathf.Sqrt((x - cx) * (x - cx) + (z - cz) * (z - cz));
-                        if (d <= radius)
+                        int d2 = (x - cx) * (x - cx) + (z - cz) * (z - cz);
+                        if (d2 <= radius * radius)
                             map.Set(x, z, bottomLevel);
-                        else if (d <= radius + 1f)
+                        else if (d2 <= (radius + 1) * (radius + 1))
                             map.Set(x, z, rimLevel);
                     }
                 }
