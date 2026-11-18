@@ -25,7 +25,7 @@ namespace Game.PlayerAim.Tests
         Touchscreen _touchscreen;
         Mouse _previousMouse;
         Touchscreen _previousTouchscreen;
-        Pointer _previousPointer;
+        UnityEngine.InputSystem.Pointer _previousPointer;
         EventSystem _previousEventSystem;
 
         [SetUp]
@@ -33,7 +33,7 @@ namespace Game.PlayerAim.Tests
         {
             _previousMouse = Mouse.current;
             _previousTouchscreen = Touchscreen.current;
-            _previousPointer = Pointer.current;
+            _previousPointer = UnityEngine.InputSystem.Pointer.current;
             _previousEventSystem = EventSystem.current;
 
             // EditMode can run with the user's scene open. Keep its cameras and UI
