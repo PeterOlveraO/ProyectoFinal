@@ -8,8 +8,7 @@ namespace Game.Pokemon
     /// Visual del jugador: únicamente un Pokémon (sprite 2D). La esfera 3D ya no se usa.
     /// El CharacterController y toda la lógica siguen intactos: solo existe el sprite.
     ///
-    /// El Pokémon asignado es fijo durante toda la partida. La única variante es el espejado
-    /// horizontal según la dirección en la que camina.
+    /// El Pokémon asignado es fijo durante toda la partida.
     /// </summary>
     [DefaultExecutionOrder(5)]
     [DisallowMultipleComponent]
@@ -18,21 +17,18 @@ namespace Game.Pokemon
         [Tooltip("Altura del Pokémon en unidades de mundo.")]
         [SerializeField, Min(0.2f)] float height = 1.65f;
 
-        [Tooltip("Umbral de movimiento lateral para espejar el sprite.")]
-        [SerializeField, Min(0f)] float facingThreshold = 0.01f;
-
         SpriteRenderer _renderer;
+        PokemonVisuals.DirectionalAnimation _animation;
+        Sprite _source;
         PlayerSphereController _controller;
         RoundManager _rounds;
         Color _baseColor = Color.white;
         Vector3 _lastPosition;
-        bool _hasLastPosition;
 
         void Start()
         {
             _controller = GetComponent<PlayerSphereController>();
             _lastPosition = transform.position;
-            _hasLastPosition = true;
             SubscribeRounds();
             RefreshPokemon();
         }
@@ -72,7 +68,14 @@ namespace Game.Pokemon
                 _baseColor = _renderer.color;
                 _renderer.transform.localPosition = new Vector3(0f, -0.5f + height * 0.5f, 0f);
             }
-            _renderer.sprite = sprite;
+            if (_source != sprite)
+            {
+                _source = sprite;
+                float spriteHeight = sprite.rect.height / sprite.pixelsPerUnit;
+                float scale = spriteHeight > 0.0001f ? height / spriteHeight : 1f;
+                _renderer.transform.localScale = new Vector3(scale, scale, 1f);
+                _animation = new PokemonVisuals.DirectionalAnimation(_renderer, sprite);
+            }
             _renderer.enabled = true;
             PokemonSpriteLibrary.SetPlayerSprite(sprite);
         }
@@ -81,25 +84,15 @@ namespace Game.Pokemon
         {
             if (_renderer == null) return;
 
-            UpdateFacing();
-
             bool invincible = _controller != null && _controller.IsInvincible;
             _renderer.color = invincible ? new Color(1f, 0.85f, 0.2f, 1f) : _baseColor;
         }
 
-        /// <summary>Voltea el sprite a izquierda/derecha según la dirección de caminar.</summary>
-        void UpdateFacing()
+        void LateUpdate()
         {
             Vector3 delta = transform.position - _lastPosition;
             _lastPosition = transform.position;
-
-            if (!_hasLastPosition || delta.sqrMagnitude < 0.000001f) return;
-
-            var camera = Camera.main;
-            if (camera == null) return;
-
-            float lateral = Vector3.Dot(new Vector3(delta.x, 0f, delta.z), camera.transform.right);
-            if (Mathf.Abs(lateral) > facingThreshold) _renderer.flipX = lateral < 0f;
+            if (_animation != null) _animation.Update(delta, Camera.main, Time.deltaTime);
         }
     }
 }

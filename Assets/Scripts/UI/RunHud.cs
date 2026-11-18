@@ -251,6 +251,11 @@ namespace Game.UI
                 // More room for the longest name without shrinking the mobile touch target.
                 _shotChoiceLabels[i].rectTransform.offsetMin = new Vector2(4f, 4f);
                 _shotChoiceLabels[i].rectTransform.offsetMax = new Vector2(-4f, -4f);
+                _shotChoiceLabels[i].fontStyle = TMPro.FontStyles.Normal;
+                _shotChoiceLabels[i].enableAutoSizing = true;
+                _shotChoiceLabels[i].fontSizeMin = 18f;
+                _shotChoiceLabels[i].fontSizeMax = 22f;
+                _shotChoiceLabels[i].textWrappingMode = TMPro.TextWrappingModes.NoWrap;
             }
 
             // Separate vertical slot above the drink offer (35..135), never over it.
@@ -273,7 +278,7 @@ namespace Game.UI
                 bool owned = type == ShotType.Basic || (round != null && round.Shots.Has(type));
                 bool selected = type == equipped;
                 _shotChoiceLabels[i].text = ShotDefinitions.Name(type) + "\n" +
-                    (selected ? "EQUIPADO" : owned ? "EQUIPAR GRATIS" : ShotDefinitions.Price(type) + " PT");
+                    (selected ? "EQUIPADO" : owned ? "EQUIPAR\nGRATIS" : ShotDefinitions.Price(type) + " PT");
                 _shotChoices[i].interactable = round != null && round.IsRunActive && owned && !selected;
             }
         }
