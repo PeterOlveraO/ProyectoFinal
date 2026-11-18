@@ -1,7 +1,7 @@
 {
     "name": "Game.PlayerAim.Tests",
     "rootNamespace": "Game.PlayerAim.Tests",
-    "references": ["Game.Runtime", "Unity.InputSystem", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+    "references": ["Game.Runtime", "Unity.InputSystem", "UnityEngine.UI", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

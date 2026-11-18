@@ -5,6 +5,7 @@ using Game.Enemies;
 using Game.Player;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
@@ -15,29 +16,73 @@ namespace Game.PlayerAim.Tests
         const BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
         const BindingFlags PrivateStatic = BindingFlags.Static | BindingFlags.NonPublic;
         readonly List<GameObject> _objects = new List<GameObject>();
+        readonly List<Camera> _disabledCameras = new List<Camera>();
+        readonly List<EventSystem> _disabledEventSystems = new List<EventSystem>();
         PlayerAttack _attack;
         VirtualJoystick _joystick;
         Camera _camera;
         Mouse _mouse;
+        Touchscreen _touchscreen;
+        Mouse _previousMouse;
+        Touchscreen _previousTouchscreen;
+        Pointer _previousPointer;
+        EventSystem _previousEventSystem;
 
         [SetUp]
         public void SetUp()
         {
+            _previousMouse = Mouse.current;
+            _previousTouchscreen = Touchscreen.current;
+            _previousPointer = Pointer.current;
+            _previousEventSystem = EventSystem.current;
+
+            // EditMode can run with the user's scene open. Keep its cameras and UI
+            // from affecting aim and restore only the components we disabled.
+            foreach (var camera in Object.FindObjectsOfType<Camera>())
+            {
+                if (!camera.enabled || !camera.CompareTag("MainCamera")) continue;
+                _disabledCameras.Add(camera);
+                camera.enabled = false;
+            }
+            foreach (var eventSystem in Object.FindObjectsOfType<EventSystem>())
+            {
+                if (!eventSystem.enabled) continue;
+                _disabledEventSystems.Add(eventSystem);
+                eventSystem.enabled = false;
+            }
+
             _attack = Create("Player").AddComponent<PlayerAttack>();
             _joystick = Create("AttackJoystick", typeof(RectTransform)).AddComponent<VirtualJoystick>();
             _attack.SetJoystick(_joystick);
             _camera = Create("AimCamera").AddComponent<Camera>();
             _camera.tag = "MainCamera";
             _mouse = InputSystem.AddDevice<Mouse>();
+            _touchscreen = InputSystem.AddDevice<Touchscreen>();
+            Assert.That(Camera.main, Is.EqualTo(_camera));
+            Assert.That(EventSystem.current, Is.Null);
         }
 
         [TearDown]
         public void TearDown()
         {
             if (_mouse != null) InputSystem.RemoveDevice(_mouse);
+            if (_touchscreen != null) InputSystem.RemoveDevice(_touchscreen);
+            if (_previousMouse != null && _previousMouse.added) _previousMouse.MakeCurrent();
+            if (_previousTouchscreen != null && _previousTouchscreen.added) _previousTouchscreen.MakeCurrent();
+            if (_previousPointer != null && _previousPointer.added) _previousPointer.MakeCurrent();
             foreach (var go in _objects)
                 if (go != null) Object.DestroyImmediate(go);
             _objects.Clear();
+            foreach (var camera in _disabledCameras)
+                if (camera != null) camera.enabled = true;
+            _disabledCameras.Clear();
+            foreach (var eventSystem in _disabledEventSystems)
+                if (eventSystem != null) eventSystem.enabled = true;
+            _disabledEventSystems.Clear();
+            if (_previousEventSystem != null && _previousEventSystem.isActiveAndEnabled)
+                EventSystem.current = _previousEventSystem;
+            _mouse = null;
+            _touchscreen = null;
         }
 
         GameObject Create(string name, params System.Type[] components)
@@ -121,6 +166,8 @@ namespace Game.PlayerAim.Tests
             Vector2 cursor = new Vector2(Screen.width * 0.75f, Screen.height * 0.5f);
             InputSystem.QueueStateEvent(_mouse, new MouseState { position = cursor }.WithButton(MouseButton.Left));
             InputSystem.Update();
+            _mouse.MakeCurrent();
+            _touchscreen.MakeCurrent();
 
             Assert.That(ReadAim(out var cursorAim), Is.True);
             var ray = _camera.ScreenPointToRay(cursor);
@@ -139,24 +186,18 @@ namespace Game.PlayerAim.Tests
         {
             _camera.transform.position = new Vector3(0f, 10f, -10f);
             _camera.transform.rotation = Quaternion.Euler(45f, 0f, 0f);
-            var touchscreen = InputSystem.AddDevice<Touchscreen>();
-            try
+            var cursor = new Vector2(Screen.width * 0.75f, Screen.height * 0.5f);
+            InputSystem.QueueStateEvent(_mouse, new MouseState { position = cursor }.WithButton(MouseButton.Left));
+            InputSystem.QueueStateEvent(_touchscreen, new TouchState
             {
-                var cursor = new Vector2(Screen.width * 0.75f, Screen.height * 0.5f);
-                InputSystem.QueueStateEvent(_mouse, new MouseState { position = cursor }.WithButton(MouseButton.Left));
-                InputSystem.QueueStateEvent(touchscreen, new TouchState
-                {
-                    touchId = 1,
-                    phase = UnityEngine.InputSystem.TouchPhase.Began,
-                    position = cursor
-                });
-                InputSystem.Update();
-                Assert.That(ReadAim(out _), Is.False);
-            }
-            finally
-            {
-                InputSystem.RemoveDevice(touchscreen);
-            }
+                touchId = 1,
+                phase = UnityEngine.InputSystem.TouchPhase.Began,
+                position = cursor
+            });
+            InputSystem.Update();
+            _mouse.MakeCurrent();
+            _touchscreen.MakeCurrent();
+            Assert.That(ReadAim(out _), Is.False);
         }
 
         [Test]
