@@ -1,6 +1,7 @@
 """Fail closed on missing, failed, skipped or incompletely discovered Unity tests."""
 
 import argparse
+import json
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
@@ -15,6 +16,44 @@ REQUIRED = {
     },
     "playmode": {"Game.Runtime.PlayMode.Tests": 8},
 }
+
+# These assemblies are integrated independently. Require their full regression
+# floor only when their asmdef is present in this checkout, never from another
+# worktree or from a CI result left by a different branch.
+# Counts include individual NUnit TestCase instances, not just test methods.
+CONDITIONAL = {
+    "Game.PlayerAim.Tests": ("editmode", 15),
+    "Game.WorldProps.Tests": ("editmode", 5),
+    "Game.Rounds.Shop.Tests": ("editmode", 6),
+    "Game.Terrain.PlayMode.Tests": ("playmode", 2),
+    "Game.ShotShop.EditMode.Tests": ("editmode", 10),
+    "Game.ShotShop.PlayMode.Tests": ("playmode", 17),
+    "Game.DirectionalSprites.Tests": ("editmode", 10),
+}
+
+
+def required_for_checkout(project):
+    required = {mode: dict(assemblies) for mode, assemblies in REQUIRED.items()}
+    tests = Path(project) / "Assets" / "Tests"
+    if not tests.is_dir():
+        raise ValueError(f"{tests}: checkout test directory is missing")
+    seen = set()
+    for path in sorted(tests.rglob("*.asmdef")):
+        try:
+            definition = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError) as error:
+            raise ValueError(f"{path}: cannot read test asmdef: {error}") from error
+        if (not isinstance(definition, dict) or not isinstance(definition.get("name"), str)
+                or not definition["name"].strip()):
+            raise ValueError(f"{path}: test asmdef must declare an assembly name")
+        name = definition["name"]
+        if name in seen:
+            raise ValueError(f"{path}: duplicate test assembly name {name}")
+        seen.add(name)
+        if name in CONDITIONAL:
+            mode, minimum = CONDITIONAL[name]
+            required[mode][name] = minimum
+    return required
 
 
 def validate(path, required):
@@ -36,13 +75,23 @@ def validate(path, required):
     return len(cases)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("artifacts", type=Path)
-    args = parser.parse_args()
+    parser.add_argument("--project-root", type=Path, default=Path.cwd(),
+                        help="Checkout to inspect for conditional test asmdefs (default: cwd)")
+    args = parser.parse_args(argv)
     failures = []
     summary = []
-    for mode, required in REQUIRED.items():
+    try:
+        requirements = required_for_checkout(args.project_root)
+    except ValueError as error:
+        failures.append(str(error))
+        summary.append(f"- Checkout: FAILED — {error}")
+        requirements = {}
+    for mode, required in requirements.items():
+        expected = ", ".join(f"{name} >= {minimum}" for name, minimum in required.items())
+        summary.append(f"- Required {mode}: {expected}")
         try:
             count = validate(args.artifacts / f"{mode}-results.xml", required)
             summary.append(f"- {mode}: {count} passed; all required assemblies present")
