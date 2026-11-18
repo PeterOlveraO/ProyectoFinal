@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System;
+using Game.Player;
 using Game.Terrain;
 using UnityEngine;
 
@@ -15,6 +16,7 @@ namespace Game.Rounds
         const float SpawnClearance = 7f;
         const float CollisionRadius = 0.48f;
         const float CollisionHeight = 0.72f;
+        static readonly Collider[] OverlapBuffer = new Collider[32];
 
         /// <summary>
         /// Encuentra exactamente <paramref name="count"/> posiciones de suelo. reserved permite
@@ -43,10 +45,11 @@ namespace Game.Rounds
                 Vector3 point = terrain.BlockTopCenter(x, z);
                 Vector3 delta = point - spawn;
                 delta.y = 0f;
-                if (delta.sqrMagnitude < SpawnClearance * SpawnClearance || terrain.IsLakeAtWorld(point))
+                if (delta.sqrMagnitude < SpawnClearance * SpawnClearance ||
+                    !IsDryAndInsideClearance(terrain, point))
                     continue;
 
-                if (IsReserved(point, reserved) || HasBlockingCollider(point))
+                if (IsReserved(point, reserved) || HasBlockingCollider(terrain, point))
                     continue;
 
                 candidates.Add(new Candidate(x, z, map.GetZone(x, z),
@@ -81,7 +84,7 @@ namespace Game.Rounds
         }
 
         static void SelectFromZone(WorldTerrain terrain, List<Candidate> candidates, int zone, int quota,
-            IList<Vector3> reserved, List<Vector3> selected)
+            IReadOnlyList<Vector3> reserved, List<Vector3> selected)
         {
             for (int i = 0; i < quota; i++)
             {
@@ -107,7 +110,7 @@ namespace Game.Rounds
         }
 
         static void SelectFromAnyZone(WorldTerrain terrain, List<Candidate> candidates, int count,
-            IList<Vector3> reserved, List<Vector3> selected)
+            IReadOnlyList<Vector3> reserved, List<Vector3> selected)
         {
             while (selected.Count < count)
             {
@@ -173,10 +176,55 @@ namespace Game.Rounds
             return false;
         }
 
-        static bool HasBlockingCollider(Vector3 ground)
+        static bool HasBlockingCollider(WorldTerrain terrain, Vector3 ground)
         {
-            return Physics.CheckSphere(ground + Vector3.up * CollisionHeight, CollisionRadius,
-                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            int count = Physics.OverlapSphereNonAlloc(ground + Vector3.up * CollisionHeight, CollisionRadius,
+                OverlapBuffer, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            // Un resultado lleno puede haber truncado colliders: fallar de forma conservadora.
+            if (count == OverlapBuffer.Length) return true;
+            for (int i = 0; i < count; i++)
+                if (BlocksPath(OverlapBuffer[i], terrain))
+                    return true;
+            return false;
+        }
+
+        static bool IsDryAndInsideClearance(WorldTerrain terrain, Vector3 position)
+        {
+            HeightMap map = terrain.Map;
+            float blockSize = terrain.BlockSize;
+            float bx = (position.x - terrain.transform.position.x) / blockSize;
+            float bz = (position.z - terrain.transform.position.z) / blockSize;
+            float radius = CollisionRadius / blockSize;
+            if (bx - radius < 0f || bz - radius < 0f ||
+                bx + radius >= map.Width || bz + radius >= map.Depth)
+                return false;
+
+            int minX = Mathf.FloorToInt(bx - radius);
+            int maxX = Mathf.FloorToInt(bx + radius);
+            int minZ = Mathf.FloorToInt(bz - radius);
+            int maxZ = Mathf.FloorToInt(bz + radius);
+            for (int z = minZ; z <= maxZ; z++)
+            for (int x = minX; x <= maxX; x++)
+            {
+                Vector3 cellCenter = terrain.BlockTopCenter(x, z);
+                if (!terrain.IsLakeAtWorld(cellCenter)) continue;
+                float dx = Mathf.Max(Mathf.Max(x - bx, 0f), bx - x - 1f);
+                float dz = Mathf.Max(Mathf.Max(z - bz, 0f), bz - z - 1f);
+                if (dx * dx + dz * dz <= radius * radius) return false;
+            }
+            return true;
+        }
+
+        static bool BlocksPath(Collider collider, WorldTerrain terrain)
+        {
+            if (collider == null ||
+                (collider is MeshCollider && collider.transform.parent == terrain.transform))
+                return false;
+            // El jugador y los cuerpos móviles no convierten una ruta en inaccesible.
+            if (collider.GetComponentInParent<PlayerSphereController>() != null) return false;
+            Rigidbody body = collider.attachedRigidbody;
+            if (body != null && !body.isKinematic) return false;
+            return true;
         }
 
         static bool IsLocallyFlat(HeightMap map, int x, int z)
@@ -193,7 +241,11 @@ namespace Game.Rounds
         {
             HeightMap map = terrain.Map;
             var reachable = new bool[map.Width, map.Depth];
-            if (!map.Contains(startX, startZ) || terrain.IsLakeAtWorld(terrain.BlockTopCenter(startX, startZ)))
+            Physics.SyncTransforms();
+            if (!map.Contains(startX, startZ))
+                return reachable;
+            Vector3 start = terrain.BlockTopCenter(startX, startZ);
+            if (!IsDryAndInsideClearance(terrain, start) || HasBlockingCollider(terrain, start))
                 return reachable;
 
             var queue = new Queue<Vector2Int>();
@@ -211,7 +263,8 @@ namespace Game.Rounds
                     if (!map.Contains(x, z) || reachable[x, z]) continue;
                     if (Mathf.Abs(map.Get(x, z) - map.Get(cell.x, cell.y)) > 1) continue;
                     Vector3 point = terrain.BlockTopCenter(x, z);
-                    if (terrain.IsLakeAtWorld(point)) continue;
+                    if (!IsDryAndInsideClearance(terrain, point) || HasBlockingCollider(terrain, point))
+                        continue;
                     reachable[x, z] = true;
                     queue.Enqueue(new Vector2Int(x, z));
                 }
