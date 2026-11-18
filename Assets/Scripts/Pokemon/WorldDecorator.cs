@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Game.Rendering;
 using Game.Terrain;
@@ -5,180 +6,209 @@ using UnityEngine;
 
 namespace Game.Pokemon
 {
-    /// <summary>
-    /// Decora el mundo con los sprites de <c>Assets/Imagenes</c>:
-    ///
-    ///   * Buildings -> edificios (buildings.png).
-    ///   * Extras    -> barcos, estatuas y casas (extras.png).
-    ///   * Trees     -> árboles y rocas (floor.png).
-    ///   * Props     -> farolas, carteles, vallas... (tileset-pokemon_dawn.png).
-    ///
-    /// Todo se coloca en <see cref="Start"/>, cuando <see cref="WorldTerrain"/> ya generó el mapa.
-    /// Se buscan bloques llanos, fuera de los lagos y lejos del punto de aparición del jugador.
-    /// </summary>
+    /// <summary>Decoración determinista con huellas físicas independientes del billboard.</summary>
     [DefaultExecutionOrder(-20)]
     [DisallowMultipleComponent]
     public sealed class WorldDecorator : MonoBehaviour
     {
-        [Header("Cantidades")]
+        [Header("Cantidades máximas")]
         [SerializeField] int buildings = 20;
         [SerializeField] int extras = 20;
         [SerializeField] int trees = 90;
         [SerializeField] int props = 34;
-
-        [Tooltip("Radio (bloques) alrededor del spawn del jugador que se deja despejado.")]
         [SerializeField, Min(0f)] float spawnClearRadius = 6f;
 
-        readonly List<Vector3> _placed = new List<Vector3>(256);
+        enum Kind { Building, Tree, Object, Shore }
+        struct Profile
+        {
+            public string Path;
+            public Kind Kind;
+            public float Height, Width, Footprint, ColliderHeight;
+            public Profile(string path, Kind kind, float height, float width, float footprint, float colliderHeight)
+            {
+                Path = path; Kind = kind; Height = height; Width = width;
+                Footprint = footprint; ColliderHeight = colliderHeight;
+            }
+        }
+
+        struct Occupied
+        {
+            public Vector3 Position;
+            public float Radius;
+            public Occupied(Vector3 position, float radius) { Position = position; Radius = radius; }
+        }
+
+        readonly List<Occupied> _placed = new List<Occupied>();
+        System.Random _random;
 
         void Start()
         {
             var terrain = WorldTerrain.Instance;
-            if (terrain == null || terrain.Map == null)
+            if (terrain == null || terrain.Map == null || terrain.Settings == null)
             {
                 Debug.LogError("[WorldDecorator] No hay WorldTerrain generado en la escena.", this);
                 return;
             }
 
-            var buildingSprites = Load("Decor/Buildings");
-            var extraSprites = Load("Decor/Extras");
-            var treeSprites = Load("Decor/Trees");
-            var propSprites = Load("Decor/Props");
-
+            _random = new System.Random(unchecked(terrain.Settings.seed * 7919 + 101));
+            _placed.Clear();
             var root = new GameObject("Decor").transform;
             root.SetParent(transform, false);
 
-            // Barajado determinista para que la decoración sea la misma en cada partida.
-            Random.State previous = Random.state;
-            Random.InitState(terrain.Settings.seed * 7919 + 101);
-            _placed.Clear();
-
-            PlaceGroup(terrain, root, buildingSprites, buildings, 9f, 34f, 3.0f, 5.0f, 7.5f, 4.5f, true, "Edificio");
-            PlaceGroup(terrain, root, extraSprites, extras, 36f, 70f, 2.6f, 4.4f, 6.5f, 5f, true, "Extra");
-            PlaceGroup(terrain, root, treeSprites, trees, 5f, 76f, 1.4f, 2.6f, 3.2f, 1.2f, false, "Arbol");
-            PlaceGroup(terrain, root, propSprites, props, 6f, 56f, 1.2f, 3.0f, 4.0f, 2.0f, true, "Prop");
-
-            Random.state = previous;
-
-            Debug.Log($"[WorldDecorator] Colocados {_placed.Count} elementos: {buildings} edificios, " +
-                      $"{extras} extras, {trees} árboles y {props} props.");
+            PlaceGroup(terrain, root, CatalogBuildings(), buildings, 12f, 34f);
+            PlaceGroup(terrain, root, CatalogExtras(), extras, 12f, 70f);
+            PlaceGroup(terrain, root, CatalogTrees(), trees, 12f, 76f);
+            PlaceGroup(terrain, root, CatalogProps(), props, 12f, 60f);
+            Debug.Log($"[WorldDecorator] Colocados {_placed.Count} elementos; cantidades configuradas son máximos.");
         }
 
-        static Sprite[] Load(string path)
+        static void Add(List<Profile> list, string folder, string prefix, int[] ids, Kind kind,
+                        float height, float width, float footprint, float colliderHeight)
         {
-            var sprites = Resources.LoadAll<Sprite>(path);
-            if (sprites == null || sprites.Length == 0)
-                Debug.LogWarning("[WorldDecorator] Sin sprites en Resources/" + path);
-            return sprites;
+            foreach (int id in ids)
+                list.Add(new Profile("Decor/" + folder + "/" + prefix + "_" + id.ToString("00"),
+                                     kind, height, width, footprint, colliderHeight));
         }
 
-        void PlaceGroup(WorldTerrain terrain, Transform root, Sprite[] sprites, int count,
-                        float minRadius, float maxRadius, float minHeight, float maxHeight,
-                        float maxWidth, float separation, bool requireFlat, string prefix)
+        static List<Profile> CatalogBuildings()
         {
-            if (sprites == null || sprites.Length == 0 || count <= 0) return;
+            var p = new List<Profile>();
+            Add(p, "Buildings", "building", new[] { 0, 1, 3, 4, 5, 6, 7, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19 },
+                Kind.Building, 4.5f, 5f, 1.8f, 2.6f);
+            return p;
+        }
 
-            int placed = 0;
+        static List<Profile> CatalogExtras()
+        {
+            var p = new List<Profile>();
+            Add(p, "Extras", "extra", new[] { 1, 2, 3, 6, 7, 8, 9, 10, 11 },
+                Kind.Building, 3.5f, 4.5f, 1.5f, 2f);
+            Add(p, "Extras", "extra", new[] { 12, 13, 14 }, Kind.Object, 2.5f, 2.5f, .75f, 1.5f);
+            Add(p, "Extras", "extra", new[] { 4, 5 }, Kind.Shore, 2f, 4f, 1.3f, 1f);
+            return p;
+        }
+
+        static List<Profile> CatalogTrees()
+        {
+            var p = new List<Profile>();
+            Add(p, "Trees", "tree", new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43 },
+                Kind.Tree, 2.6f, 2.8f, .4f, 1.5f);
+            return p;
+        }
+
+        static List<Profile> CatalogProps()
+        {
+            var p = new List<Profile>();
+            Add(p, "Props", "prop", new[] { 1, 5, 7, 8, 14, 16, 17 }, Kind.Tree, 3f, 3.2f, .5f, 1.6f);
+            Add(p, "Props", "prop", new[] { 20, 31 }, Kind.Object, 2f, 2.4f, .8f, 1.3f);
+            Add(p, "Props", "prop", new[] { 25, 27, 30, 33, 35, 37, 40, 43 },
+                Kind.Building, 3.4f, 4.5f, 1.5f, 2f);
+            return p;
+        }
+
+        void PlaceGroup(WorldTerrain terrain, Transform root, List<Profile> profiles, int count, float minRadius, float maxRadius)
+        {
             for (int i = 0; i < count; i++)
             {
-                var sprite = sprites[Random.Range(0, sprites.Length)];
-                if (sprite == null) continue;
-                if (!TryFindSpot(terrain, minRadius, maxRadius, separation, requireFlat, out Vector3 position))
+                Profile profile = profiles[_random.Next(profiles.Count)];
+                Sprite sprite = Resources.Load<Sprite>(profile.Path);
+                if (sprite == null)
+                {
+                    Debug.LogWarning("[WorldDecorator] Sprite no encontrado: " + profile.Path);
                     continue;
-
-                Spawn(terrain, root, sprite, position, Random.Range(minHeight, maxHeight), maxWidth, prefix);
-                placed++;
+                }
+                if (TryFindSpot(terrain, profile, minRadius, maxRadius, out Vector3 position))
+                    Spawn(terrain, root, sprite, profile, position);
             }
-
-            if (placed < count)
-                Debug.Log($"[WorldDecorator] {prefix}: {placed}/{count} (no quedaban huecos llanos).");
         }
 
-        void Spawn(WorldTerrain terrain, Transform root, Sprite sprite, Vector3 position,
-                   float targetHeight, float maxWidth, string prefix)
+        void Spawn(WorldTerrain terrain, Transform root, Sprite sprite, Profile profile, Vector3 position)
         {
-            var go = new GameObject(prefix + " " + sprite.name);
-
-            // Se cuelga del chunk del terreno: así la decoración aparece y desaparece
-            // junto con el trozo de mundo que se carga alrededor del jugador.
-            var chunk = terrain.GetChunk(terrain.WorldToChunk(position).x, terrain.WorldToChunk(position).y);
+            var go = new GameObject("Decor " + sprite.name);
+            var coord = terrain.WorldToChunk(position);
+            var chunk = terrain.GetChunk(coord.x, coord.y);
             go.transform.SetParent(chunk != null ? chunk.transform : root, true);
             go.transform.position = position;
+            var collider = go.AddComponent<BoxCollider>();
+            collider.size = new Vector3(profile.Footprint * 2f, profile.ColliderHeight, profile.Footprint * 2f);
+            collider.center = Vector3.up * (profile.ColliderHeight * .5f);
 
-            var renderer = go.AddComponent<SpriteRenderer>();
+            var visual = new GameObject("Visual");
+            visual.transform.SetParent(go.transform, false);
+            var renderer = visual.AddComponent<SpriteRenderer>();
             renderer.sprite = sprite;
-            renderer.color = Color.white;
-
             float spriteHeight = sprite.rect.height / sprite.pixelsPerUnit;
             float spriteWidth = sprite.rect.width / sprite.pixelsPerUnit;
-            float scale = spriteHeight > 0.0001f ? targetHeight / spriteHeight : 1f;
-            if (spriteWidth * scale > maxWidth && spriteWidth > 0.0001f)
-                scale = maxWidth / spriteWidth;
-
-            go.transform.localScale = new Vector3(scale, scale, 1f);
-            go.AddComponent<BillboardSprite>();
+            float scale = Mathf.Min(profile.Height / spriteHeight, profile.Width / spriteWidth);
+            visual.transform.localScale = Vector3.one * scale;
+            // Independiente del pivot de importación: el borde inferior toca el suelo.
+            visual.transform.localPosition = Vector3.up * (sprite.pivot.y / sprite.pixelsPerUnit * scale);
+            visual.AddComponent<BillboardSprite>();
         }
 
-        bool TryFindSpot(WorldTerrain terrain, float minRadius, float maxRadius, float separation,
-                         bool requireFlat, out Vector3 position)
+        bool TryFindSpot(WorldTerrain terrain, Profile profile, float minRadius, float maxRadius, out Vector3 position)
         {
-            position = Vector3.zero;
-
             var map = terrain.Map;
-            float centerX = map.Width * 0.5f;
-            float centerZ = map.Depth * 0.5f;
             Vector3 spawn = terrain.SpawnPosition;
-
-            for (int attempt = 0; attempt < 60; attempt++)
+            position = Vector3.zero;
+            float block = terrain.BlockSize;
+            for (int attempt = 0; attempt < 160; attempt++)
             {
-                float angle = Random.value * Mathf.PI * 2f;
-                float radius = Mathf.Lerp(minRadius, maxRadius, Mathf.Sqrt(Random.value));
-
-                int x = Mathf.RoundToInt(centerX + Mathf.Cos(angle) * radius);
-                int z = Mathf.RoundToInt(centerZ + Mathf.Sin(angle) * radius);
-
+                double angle = _random.NextDouble() * Math.PI * 2;
+                float radius = Mathf.Lerp(minRadius, maxRadius, Mathf.Sqrt((float)_random.NextDouble()));
+                int x = Mathf.RoundToInt(map.Width * .5f + (float)Math.Cos(angle) * radius);
+                int z = Mathf.RoundToInt(map.Depth * .5f + (float)Math.Sin(angle) * radius);
                 if (!map.Contains(x, z)) continue;
-                if (map.GetZone(x, z) == 0) continue;
-
                 Vector3 candidate = terrain.BlockTopCenter(x, z);
-                if (terrain.IsLakeAtWorld(candidate)) continue;
-
-                if (Mathf.Abs(candidate.x - spawn.x) < spawnClearRadius &&
-                    Mathf.Abs(candidate.z - spawn.z) < spawnClearRadius) continue;
-
-                if (requireFlat && !IsFlat(map, x, z)) continue;
-
-                bool tooClose = false;
+                float dx = candidate.x - spawn.x, dz = candidate.z - spawn.z;
+                // La zona de tiendas puede extenderse hasta 11.65 unidades desde spawn.
+                float clear = Mathf.Max(spawnClearRadius, 15f) + profile.Footprint;
+                if (dx * dx + dz * dz < clear * clear) continue;
+                // Corredores cardinales, incluyendo rampas; se amplían con la distancia angular.
+                float corridor = Mathf.Max(terrain.Settings.rampWidth * block * .5f,
+                    Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz)) * Mathf.Tan(terrain.Settings.rampHalfAngle * Mathf.Deg2Rad));
+                if (Mathf.Min(Mathf.Abs(dx), Mathf.Abs(dz)) < corridor + profile.Footprint + 2f) continue;
+                if (!SuitableGround(terrain, x, z, profile)) continue;
+                bool close = false;
                 foreach (var other in _placed)
                 {
-                    if ((other - candidate).sqrMagnitude < separation * separation)
-                    {
-                        tooClose = true;
-                        break;
-                    }
+                    float separation = profile.Footprint + other.Radius + 2.5f;
+                    float ox = other.Position.x - candidate.x, oz = other.Position.z - candidate.z;
+                    if (ox * ox + oz * oz < separation * separation) { close = true; break; }
                 }
-                if (tooClose) continue;
-
-                // Pequeño desvío para que no queden todos clavados en el centro del bloque.
-                candidate.x += Random.Range(-0.22f, 0.22f);
-                candidate.z += Random.Range(-0.22f, 0.22f);
-
+                if (close) continue;
                 position = candidate;
-                _placed.Add(candidate);
+                _placed.Add(new Occupied(candidate, profile.Footprint));
                 return true;
             }
-
             return false;
         }
 
-        static bool IsFlat(HeightMap map, int x, int z)
+        static bool SuitableGround(WorldTerrain terrain, int x, int z, Profile profile)
         {
+            var map = terrain.Map;
             int level = map.Get(x, z);
-            if (!map.Contains(x + 1, z) || map.Get(x + 1, z) != level) return false;
-            if (!map.Contains(x - 1, z) || map.Get(x - 1, z) != level) return false;
-            if (!map.Contains(x, z + 1) || map.Get(x, z + 1) != level) return false;
-            if (!map.Contains(x, z - 1) || map.Get(x, z - 1) != level) return false;
-            return true;
+            // Margen extra mantiene despejadas las orillas y evita bordes y pendientes.
+            int cells = Mathf.CeilToInt((profile.Footprint + 2f) / terrain.BlockSize);
+            for (int dz = -cells; dz <= cells; dz++)
+                for (int dx = -cells; dx <= cells; dx++)
+                {
+                    int sx = x + dx, sz = z + dz;
+                    if (!map.Contains(sx, sz) || map.Get(sx, sz) != level ||
+                        terrain.IsLakeAtWorld(terrain.BlockTopCenter(sx, sz))) return false;
+                }
+            if (profile.Kind != Kind.Shore) return true;
+            // Barcos varados en tierra cerca de agua, sin ocupar el acceso ni el agua.
+            int outer = cells + Mathf.CeilToInt(5f / terrain.BlockSize);
+            for (int dz = -outer; dz <= outer; dz++)
+                for (int dx = -outer; dx <= outer; dx++)
+                {
+                    if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz)) <= cells) continue;
+                    int sx = x + dx, sz = z + dz;
+                    if (map.Contains(sx, sz) && terrain.IsLakeAtWorld(terrain.BlockTopCenter(sx, sz)))
+                        return true;
+                }
+            return false;
         }
     }
 }
