@@ -67,9 +67,9 @@ namespace Game.DirectionalSprites.Tests
                 Assert.AreSame(sprite, renderer.sprite);
                 update.Invoke(animation, new object[] { Vector3.left, camera, 0.2f });
                 Assert.AreSame(sprite, renderer.sprite);
-                Assert.IsTrue(renderer.flipX);
+                Assert.IsFalse(renderer.flipX);
                 update.Invoke(animation, new object[] { Vector3.zero, camera, 0.2f });
-                Assert.IsTrue(renderer.flipX);
+                Assert.IsFalse(renderer.flipX);
             }
             finally
             {
@@ -77,6 +77,61 @@ namespace Game.DirectionalSprites.Tests
                 UnityEngine.Object.DestroyImmediate(cameraObject);
                 UnityEngine.Object.DestroyImmediate(sprite);
                 UnityEngine.Object.DestroyImmediate(texture);
+            }
+        }
+
+        [Test]
+        public void EveryPoolSpriteHasSixSeparateAnimationFrames()
+        {
+            var pool = Resources.LoadAll<Sprite>("PokemonSprites");
+            Assert.GreaterOrEqual(pool.Length, 178);
+            foreach (var source in pool)
+            foreach (string view in new[] { "front", "back", "side" })
+            for (int i = 0; i < 2; i++)
+            {
+                string path = $"PokemonAnimations/{source.name}/{view}_{i}";
+                var frame = Resources.Load<Sprite>(path);
+                Assert.IsNotNull(frame, path);
+                Assert.AreEqual(32, frame.rect.width, path);
+                Assert.AreEqual(32, frame.rect.height, path);
+                Assert.AreEqual(new Vector2(16, 16), frame.pivot, path);
+                Assert.AreEqual(FilterMode.Point, frame.texture.filterMode, path);
+            }
+        }
+
+        [Test]
+        public void DirectionChangesImmediatelyAndIdleRetainsTheView()
+        {
+            var actor = new GameObject("sprite test");
+            var cameraObject = new GameObject("camera test");
+            try
+            {
+                var source = Resources.Load<Sprite>("PokemonSprites/species_charizard");
+                Assert.IsNotNull(source);
+                var renderer = actor.AddComponent<SpriteRenderer>();
+                var camera = cameraObject.AddComponent<Camera>();
+                var type = visuals.GetNestedType("DirectionalAnimation");
+                var animation = Activator.CreateInstance(type, renderer, source);
+                var update = type.GetMethod("Update");
+                update.Invoke(animation, new object[] { Vector3.forward, camera, 0f });
+                Assert.AreSame(Resources.Load<Sprite>("PokemonAnimations/species_charizard/back_0"), renderer.sprite);
+                update.Invoke(animation, new object[] { Vector3.left, camera, 0f });
+                Assert.AreSame(Resources.Load<Sprite>("PokemonAnimations/species_charizard/side_0"), renderer.sprite);
+                Assert.IsFalse(renderer.flipX);
+                update.Invoke(animation, new object[] { Vector3.zero, camera, 1f });
+                Assert.AreSame(Resources.Load<Sprite>("PokemonAnimations/species_charizard/side_0"), renderer.sprite);
+                Assert.IsFalse(renderer.flipX);
+                update.Invoke(animation, new object[] { Vector3.right, camera, 0f });
+                Assert.AreSame(Resources.Load<Sprite>("PokemonAnimations/species_charizard/side_0"), renderer.sprite);
+                Assert.IsTrue(renderer.flipX);
+                update.Invoke(animation, new object[] { Vector3.back, camera, 0f });
+                Assert.AreSame(Resources.Load<Sprite>("PokemonAnimations/species_charizard/front_0"), renderer.sprite);
+                Assert.IsFalse(renderer.flipX);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(actor);
+                UnityEngine.Object.DestroyImmediate(cameraObject);
             }
         }
     }

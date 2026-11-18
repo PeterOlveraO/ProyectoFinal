@@ -71,6 +71,9 @@ namespace Game.Pokemon
             if (_source != sprite)
             {
                 _source = sprite;
+                float spriteHeight = sprite.rect.height / sprite.pixelsPerUnit;
+                float scale = spriteHeight > 0.0001f ? height / spriteHeight : 1f;
+                _renderer.transform.localScale = new Vector3(scale, scale, 1f);
                 _animation = new PokemonVisuals.DirectionalAnimation(_renderer, sprite);
             }
             _renderer.enabled = true;

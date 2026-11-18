@@ -77,8 +77,11 @@ namespace Game.Pokemon
 
                 int view = facing == Facing.Front ? 0 : facing == Facing.Back ? 2 : 4;
                 int frame = moving ? (int)(elapsed / FrameDuration) % 2 : 0;
-                renderer.sprite = frames[view + frame] ?? frames[view] ?? source;
-                renderer.flipX = facing == Facing.Left;
+                Sprite frameSprite = frames[view + frame] ?? frames[view] ?? source;
+                renderer.sprite = frameSprite;
+                // BillboardSprite faces back towards the camera, so its local right
+                // points to screen left (opposite the camera's right vector).
+                renderer.flipX = facing == Facing.Right;
             }
         }
 
