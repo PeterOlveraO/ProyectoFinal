@@ -112,6 +112,10 @@ namespace Game.Player
                 }
             }
 
+            // Nunca interpretar un toque o un ratón emulado como apuntado en móvil.
+            // En equipos táctiles de escritorio tampoco se convierte un dedo en cursor.
+            if (!CanUseMouseAim(Application.isMobilePlatform, HasActiveTouch())) return false;
+
             // Alternativa de escritorio: disparar hacia el cursor.
             var mouse = Mouse.current;
             if (mouse == null || !mouse.leftButton.isPressed) return false;
@@ -130,6 +134,17 @@ namespace Game.Player
 
             worldDirection = toCursor.normalized;
             return true;
+        }
+
+        static bool CanUseMouseAim(bool isMobile, bool hasActiveTouch) => !isMobile && !hasActiveTouch;
+
+        static bool HasActiveTouch()
+        {
+            var touchscreen = Touchscreen.current;
+            if (touchscreen == null) return false;
+            foreach (var touch in touchscreen.touches)
+                if (touch.press.isPressed) return true;
+            return false;
         }
 
         static float CameraYaw()
