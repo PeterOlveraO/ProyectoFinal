@@ -12,18 +12,20 @@ namespace Game.Pokemon
     public sealed class WorldDecorator : MonoBehaviour
     {
         [Header("Cantidades máximas")]
-        [SerializeField] int buildings = 20;
-        [SerializeField] int extras = 20;
-        [SerializeField] int trees = 90;
-        [SerializeField] int props = 34;
-        [SerializeField, Min(0f)] float spawnClearRadius = 6f;
+        // Nuevos campos: las cantidades antiguas de la escena no limitan la nueva flora.
+        [SerializeField, Min(0)] int canopyTrees = 150;
+        [SerializeField, Min(0)] int shrubs = 80;
+        [SerializeField, Min(0)] int groundPlants = 60;
+        [SerializeField, Min(15f)] float spawnClearRadius = 15f;
 
-        enum Kind { Building, Tree, Object, Shore }
+        enum Kind { Tree, Shrub, Plant }
         struct Profile
         {
             public string Path;
             public Kind Kind;
             public float Height, Width, Footprint, ColliderHeight;
+            // El billboard puede girar: reservar también su semiancho, no solo el tronco.
+            public float Clearance => Mathf.Max(Footprint, Width * .5f);
             public Profile(string path, Kind kind, float height, float width, float footprint, float colliderHeight)
             {
                 Path = path; Kind = kind; Height = height; Width = width;
@@ -56,10 +58,9 @@ namespace Game.Pokemon
             root.SetParent(transform, false);
 
             // El lago puede ocupar casi toda la zona central: buscar también en los anillos exteriores.
-            PlaceGroup(terrain, root, CatalogBuildings(), buildings, 12f, 70f);
-            PlaceGroup(terrain, root, CatalogExtras(), extras, 12f, 70f);
-            PlaceGroup(terrain, root, CatalogTrees(), trees, 12f, 76f);
-            PlaceGroup(terrain, root, CatalogProps(), props, 12f, 60f);
+            PlaceGroup(terrain, root, CatalogTrees(), canopyTrees, 12f, 76f);
+            PlaceGroup(terrain, root, CatalogShrubs(), shrubs, 12f, 76f);
+            PlaceGroup(terrain, root, CatalogPlants(), groundPlants, 12f, 76f);
             Debug.Log($"[WorldDecorator] Colocados {_placed.Count} elementos; cantidades configuradas son máximos.");
         }
 
@@ -71,39 +72,30 @@ namespace Game.Pokemon
                                      kind, height, width, footprint, colliderHeight));
         }
 
-        static List<Profile> CatalogBuildings()
-        {
-            var p = new List<Profile>();
-            Add(p, "Buildings", "building", new[] { 0, 1, 3, 4, 5, 6, 7, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19 },
-                Kind.Building, 4.5f, 5f, 1.8f, 2.6f);
-            return p;
-        }
-
-        static List<Profile> CatalogExtras()
-        {
-            var p = new List<Profile>();
-            Add(p, "Extras", "extra", new[] { 1, 2, 3, 6, 7, 8, 9, 10, 11 },
-                Kind.Building, 3.5f, 4.5f, 1.5f, 2f);
-            Add(p, "Extras", "extra", new[] { 12, 13, 14 }, Kind.Object, 2.5f, 2.5f, .75f, 1.5f);
-            Add(p, "Extras", "extra", new[] { 4, 5 }, Kind.Shore, 2f, 4f, 1.3f, 1f);
-            return p;
-        }
-
         static List<Profile> CatalogTrees()
         {
             var p = new List<Profile>();
-            Add(p, "Trees", "tree", new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43 },
-                Kind.Tree, 2.6f, 2.8f, .4f, 1.5f);
+            // Inspección de PNG: árboles verdes completos; 23 está vacío, 20-22 son otoñales,
+            // 40-43 son arbustos. Props contiene recortes/carteles incluso junto a algunos árboles.
+            Add(p, "Trees", "tree", new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+                16, 17, 18, 19, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39 },
+                Kind.Tree, 2.6f, 2.8f, .22f, 1.3f);
             return p;
         }
 
-        static List<Profile> CatalogProps()
+        static List<Profile> CatalogShrubs()
         {
             var p = new List<Profile>();
-            Add(p, "Props", "prop", new[] { 1, 5, 7, 8, 14, 16, 17 }, Kind.Tree, 3f, 3.2f, .5f, 1.6f);
-            Add(p, "Props", "prop", new[] { 20, 31 }, Kind.Object, 2f, 2.4f, .8f, 1.3f);
-            Add(p, "Props", "prop", new[] { 25, 27, 30, 33, 35, 37, 40, 43 },
-                Kind.Building, 3.4f, 4.5f, 1.5f, 2f);
+            Add(p, "Trees", "tree", new[] { 40, 41, 42, 43 }, Kind.Shrub, 1f, 1.1f, .32f, .75f);
+            return p;
+        }
+
+        static List<Profile> CatalogPlants()
+        {
+            var p = new List<Profile>();
+            // Follaje redondeado sin tronco visible, reutilizado a escala de planta baja.
+            // Transitable: no crea pequeños obstáculos invisibles bajo el jugador.
+            Add(p, "Trees", "tree", new[] { 12, 13, 14, 15 }, Kind.Plant, .45f, .6f, .2f, 0f);
             return p;
         }
 
@@ -130,9 +122,7 @@ namespace Game.Pokemon
             var chunk = terrain.GetChunk(coord.x, coord.y);
             go.transform.SetParent(chunk != null ? chunk.transform : root, true);
             go.transform.position = position;
-            var collider = go.AddComponent<BoxCollider>();
-            collider.size = new Vector3(profile.Footprint * 2f, profile.ColliderHeight, profile.Footprint * 2f);
-            collider.center = Vector3.up * (profile.ColliderHeight * .5f);
+            AddFloraCollider(go, profile);
 
             var visual = new GameObject("Visual");
             visual.transform.SetParent(go.transform, false);
@@ -147,13 +137,36 @@ namespace Game.Pokemon
             visual.AddComponent<BillboardSprite>();
         }
 
+        static void AddFloraCollider(GameObject go, Profile profile)
+        {
+            if (profile.Kind == Kind.Plant) return;
+            // Cápsula vertical: tronco/arbusto redondeado, sin esquinas ni copa sólida.
+            // Está en la raíz y no gira con el billboard.
+            var collider = go.AddComponent<CapsuleCollider>();
+            collider.direction = 1;
+            collider.radius = profile.Footprint;
+            collider.height = profile.ColliderHeight;
+            collider.center = Vector3.up * (profile.ColliderHeight * .5f);
+        }
+
+        static bool IsReserved(Vector3 offset, float clearance, float spawnRadius,
+                               float rampWidth, float rampHalfAngle)
+        {
+            float clear = Mathf.Max(spawnRadius, 15f) + clearance;
+            if (offset.x * offset.x + offset.z * offset.z < clear * clear) return true;
+            float corridor = Mathf.Max(rampWidth * .5f,
+                Mathf.Max(Mathf.Abs(offset.x), Mathf.Abs(offset.z)) *
+                Mathf.Tan(rampHalfAngle * Mathf.Deg2Rad));
+            return Mathf.Min(Mathf.Abs(offset.x), Mathf.Abs(offset.z)) < corridor + clearance + 2f;
+        }
+
         bool TryFindSpot(WorldTerrain terrain, Profile profile, float minRadius, float maxRadius, out Vector3 position)
         {
             var map = terrain.Map;
             Vector3 spawn = terrain.SpawnPosition;
             position = Vector3.zero;
             float block = terrain.BlockSize;
-            for (int attempt = 0; attempt < 160; attempt++)
+            for (int attempt = 0; attempt < 640; attempt++)
             {
                 double angle = _random.NextDouble() * Math.PI * 2;
                 float radius = Mathf.Lerp(minRadius, maxRadius, Mathf.Sqrt((float)_random.NextDouble()));
@@ -161,25 +174,20 @@ namespace Game.Pokemon
                 int z = Mathf.RoundToInt(map.Depth * .5f + (float)Math.Sin(angle) * radius);
                 if (!map.Contains(x, z)) continue;
                 Vector3 candidate = terrain.BlockTopCenter(x, z);
-                float dx = candidate.x - spawn.x, dz = candidate.z - spawn.z;
-                // La zona de tiendas puede extenderse hasta 11.65 unidades desde spawn.
-                float clear = Mathf.Max(spawnClearRadius, 15f) + profile.Footprint;
-                if (dx * dx + dz * dz < clear * clear) continue;
-                // Corredores cardinales, incluyendo rampas; se amplían con la distancia angular.
-                float corridor = Mathf.Max(terrain.Settings.rampWidth * block * .5f,
-                    Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz)) * Mathf.Tan(terrain.Settings.rampHalfAngle * Mathf.Deg2Rad));
-                if (Mathf.Min(Mathf.Abs(dx), Mathf.Abs(dz)) < corridor + profile.Footprint + 2f) continue;
+                // Reserva tycoon: disco de radio >=15 MÁS huella visual, y cuatro corredores.
+                if (IsReserved(candidate - spawn, profile.Clearance, spawnClearRadius,
+                    terrain.Settings.rampWidth * block, terrain.Settings.rampHalfAngle)) continue;
                 if (!SuitableGround(terrain, x, z, profile)) continue;
                 bool close = false;
                 foreach (var other in _placed)
                 {
-                    float separation = profile.Footprint + other.Radius + 2.5f;
+                    float separation = profile.Clearance + other.Radius + 2.5f;
                     float ox = other.Position.x - candidate.x, oz = other.Position.z - candidate.z;
                     if (ox * ox + oz * oz < separation * separation) { close = true; break; }
                 }
                 if (close) continue;
                 position = candidate;
-                _placed.Add(new Occupied(candidate, profile.Footprint));
+                _placed.Add(new Occupied(candidate, profile.Clearance));
                 return true;
             }
             return false;
@@ -189,7 +197,8 @@ namespace Game.Pokemon
         {
             var map = terrain.Map;
             int level = map.Get(x, z);
-            // Margen extra mantiene despejadas las orillas y evita bordes y pendientes.
+            // La raíz y su entorno deben ser planos; la copa no es una huella sólida.
+            // Clearance (copa incluida) se aplica aparte a rutas y separación entre plantas.
             int cells = Mathf.CeilToInt((profile.Footprint + 2f) / terrain.BlockSize);
             for (int dz = -cells; dz <= cells; dz++)
                 for (int dx = -cells; dx <= cells; dx++)
@@ -198,18 +207,7 @@ namespace Game.Pokemon
                     if (!map.Contains(sx, sz) || map.Get(sx, sz) != level ||
                         terrain.IsLakeAtWorld(terrain.BlockTopCenter(sx, sz))) return false;
                 }
-            if (profile.Kind != Kind.Shore) return true;
-            // Barcos varados en tierra cerca de agua, sin ocupar el acceso ni el agua.
-            int outer = cells + Mathf.CeilToInt(5f / terrain.BlockSize);
-            for (int dz = -outer; dz <= outer; dz++)
-                for (int dx = -outer; dx <= outer; dx++)
-                {
-                    if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz)) <= cells) continue;
-                    int sx = x + dx, sz = z + dz;
-                    if (map.Contains(sx, sz) && terrain.IsLakeAtWorld(terrain.BlockTopCenter(sx, sz)))
-                        return true;
-                }
-            return false;
+            return true;
         }
     }
 }
