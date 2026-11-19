@@ -209,6 +209,13 @@ namespace Game.UI
             if (_drinkButton == null) return;
             _drinkButton.gameObject.SetActive(_nearbyDrink >= 0);
             if (_nearbyDrink < 0) return;
+            if (!stations.IsBuilt(_nearbyDrink))
+            {
+                _drinkLabel.text = "CONSTRUIR MÁQUINA " + DrinkStations.Names[_nearbyDrink] +
+                    " · " + DrinkStations.BuildPrices[_nearbyDrink] + " PUNTOS";
+                _drinkButton.interactable = round.Points >= DrinkStations.BuildPrices[_nearbyDrink];
+                return;
+            }
             _drinkLabel.text = stations.Has((DrinkType)_nearbyDrink) ?
                 "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · ADQUIRIDA" :
                 "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · " + DrinkStations.Prices[_nearbyDrink] + " PUNTOS";
@@ -218,7 +225,10 @@ namespace Game.UI
 
         void BuyDrink()
         {
-            RoundManager.Instance?.Drinks?.Buy(_nearbyDrink);
+            var stations = RoundManager.Instance?.Drinks;
+            if (stations == null) return;
+            if (stations.IsBuilt(_nearbyDrink)) stations.Buy(_nearbyDrink);
+            else stations.Build(_nearbyDrink);
         }
 
         void BuildShotShop(Transform parent)
@@ -236,7 +246,7 @@ namespace Game.UI
 
             // Separate vertical slot above the drink offer (35..135), never over it.
             _shotButton = UIFactory.CreateButton(parent, "BuyShot", "", UIFactory.CardViolet,
-                new Vector2(650f, 110f), () => RoundManager.Instance?.BuyShot(_nearbyShot), 28);
+                new Vector2(650f, 110f), BuyShot, 28);
             UIFactory.Place((RectTransform)_shotButton.transform, new Vector2(.5f, 0f), new Vector2(.5f, 0f),
                 new Vector2(0f, 155f), new Vector2(650f, 110f));
             _shotLabel = _shotButton.GetComponentInChildren<TMPro.TMP_Text>();
@@ -258,11 +268,25 @@ namespace Game.UI
                 stations != null ? stations.NearbyOffer(player.transform.position) : -1;
             _shotButton.gameObject.SetActive(_nearbyShot >= 0);
             if (_nearbyShot < 0) return;
-            var type = (ShotType)(_nearbyShot + 1);
-            var equipped = round.Shots.Equipped;
+            var type = ShotStations.OfferType(_nearbyShot);
+            if (!stations.IsBuilt(_nearbyShot))
+            {
+                _shotLabel.text = "CONSTRUIR ARSENAL " + ShotDefinitions.Name(type) + "\n" +
+                    ShotStations.BuildPrice(_nearbyShot) + " PUNTOS";
+                _shotButton.interactable = round.Points >= ShotStations.BuildPrice(_nearbyShot);
+                return;
+            }
             _shotLabel.text = "DISPARO " + ShotDefinitions.Name(type) + "\n" +
                 "COMPRAR Y REEMPLAZAR · " + ShotDefinitions.Price(type) + " PUNTOS";
             _shotButton.interactable = round.Points >= ShotDefinitions.Price(type);
+        }
+
+        void BuyShot()
+        {
+            var round = RoundManager.Instance;
+            if (round == null || round.ShotStations == null) return;
+            if (round.ShotStations.IsBuilt(_nearbyShot)) round.BuyShot(_nearbyShot);
+            else round.ShotStations.Build(_nearbyShot);
         }
 
         void BuildBanner(Transform parent)

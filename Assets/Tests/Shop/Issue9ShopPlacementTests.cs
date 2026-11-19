@@ -17,6 +17,44 @@ namespace Game.Rounds.Shop.Tests
             Assert.Throws<System.ArgumentException>(() =>
                 WorldShopPlacement.FindPositions(null, 5, 123));
         }
+
+        [Test]
+        public void MachineArtIsAPlayerLoadableSprite()
+        {
+            var art = Resources.Load<TycoonMachineArt>("TycoonMachine");
+            Assert.IsNotNull(art);
+            Assert.IsNotNull(art.machine, "maquina.png must be imported as a sprite and included in builds");
+        }
+
+        [Test]
+        public void TycoonConstructionIsAtomicAndResettable()
+        {
+            var state = new TycoonUnlocks(9);
+            int points = 100, charges = 0;
+            System.Func<int, bool> spend = price =>
+            {
+                charges++;
+                if (price > points) return false;
+                points -= price;
+                return true;
+            };
+            Assert.IsFalse(state.TryBuild(-1, 40, spend));
+            Assert.IsFalse(state.TryBuild(9, 40, spend));
+            Assert.IsFalse(state.TryBuild(0, 0, spend));
+            Assert.IsFalse(state.TryBuild(0, 40, null));
+            Assert.AreEqual(0, charges);
+            Assert.IsFalse(state.TryBuild(0, 101, spend));
+            Assert.AreEqual(100, points);
+            Assert.IsFalse(state.IsBuilt(0));
+            Assert.IsTrue(state.TryBuild(0, 40, spend));
+            Assert.IsFalse(state.TryBuild(0, 40, spend));
+            Assert.AreEqual(60, points);
+            Assert.AreEqual(2, charges);
+            state.ResetRun();
+            Assert.IsFalse(state.IsBuilt(0));
+            Assert.IsTrue(state.TryBuild(0, 40, spend));
+            Assert.AreEqual(20, points);
+        }
     }
 
     /// <summary>Prueba Buy sin despertar managers ni tocar el mundo abierto del Editor.</summary>
@@ -82,10 +120,13 @@ namespace Game.Rounds.Shop.Tests
                 _drinks.ResetRun();
                 SetAutoProperty(_round, "Points", StartingPoints);
                 _stands[i] = _standObject.transform;
+                Assert.IsFalse(_drinks.Buy(i), "No product before construction");
+                Assert.IsTrue(_drinks.Build(i));
+                int afterBuild = _round.Points;
 
                 int price = DrinkStations.Prices[i];
                 Assert.IsTrue(_drinks.Buy(i), "Debe poder comprar " + DrinkStations.Names[i]);
-                Assert.AreEqual(StartingPoints - price, _round.Points,
+                Assert.AreEqual(afterBuild - price, _round.Points,
                     "El cobro debe coincidir con el precio anunciado de " + DrinkStations.Names[i]);
                 Assert.IsTrue(_drinks.Has((DrinkType)i));
                 _stands[i] = null;
@@ -95,6 +136,7 @@ namespace Game.Rounds.Shop.Tests
         [Test]
         public void Buy_InsufficientBalanceDoesNotChargeOrMarkPurchased()
         {
+            Assert.IsTrue(_drinks.Build(0));
             int before = DrinkStations.Prices[0] - 1;
             SetAutoProperty(_round, "Points", before);
 
@@ -106,6 +148,7 @@ namespace Game.Rounds.Shop.Tests
         [Test]
         public void Buy_RepurchaseDoesNotChargeAgain()
         {
+            Assert.IsTrue(_drinks.Build(0));
             Assert.IsTrue(_drinks.Buy(0));
             int afterFirstPurchase = _round.Points;
 
@@ -121,6 +164,22 @@ namespace Game.Rounds.Shop.Tests
             Assert.IsFalse(_drinks.Buy(0));
             Assert.AreEqual(StartingPoints, _round.Points);
             Assert.IsFalse(_drinks.Has(DrinkType.Power));
+        }
+
+        [Test]
+        public void ConstructionAndPurchaseAreSeparateAndResetIsRunOnly()
+        {
+            Assert.IsFalse(_drinks.Buy(0));
+            Assert.AreEqual(StartingPoints, _round.Points);
+            Assert.IsTrue(_drinks.Build(0));
+            Assert.IsFalse(_drinks.Has(DrinkType.Power));
+            Assert.IsFalse(_drinks.Build(0));
+            Assert.AreEqual(StartingPoints - DrinkStations.BuildPrices[0], _round.Points);
+            Assert.IsTrue(_drinks.Buy(0));
+            _drinks.ResetRun();
+            Assert.IsFalse(_drinks.IsBuilt(0));
+            Assert.IsFalse(_drinks.Has(DrinkType.Power));
+            Assert.IsFalse(_drinks.Buy(0));
         }
 
         T AddInactive<T>(string name) where T : Component
@@ -180,6 +239,36 @@ namespace Game.Rounds.Shop.Tests
             foreach (Object item in _created)
                 if (item != null) Object.DestroyImmediate(item);
             _created.Clear();
+        }
+
+        [Test]
+        public void AllNinePlatformsShareACompactReachableSpawnHub()
+        {
+            var settings = ScriptableObject.CreateInstance<TerrainSettings>();
+            _created.Add(settings);
+            var go = new GameObject("TycoonPlacement");
+            go.SetActive(false);
+            _created.Add(go);
+            var terrain = go.AddComponent<WorldTerrain>();
+            SetField(terrain, "settings", settings);
+            var map = new HeightMap(41, 41);
+            for (int z = 0; z < 41; z++)
+            for (int x = 0; x < 41; x++) map.Set(x, z, 1);
+            SetField(terrain, "_map", map);
+            var drinks = WorldShopPlacement.FindPositions(terrain, 5, 0);
+            var shots = WorldShopPlacement.FindPositions(terrain, 4, 1, drinks);
+            var all = new List<Vector3>(drinks);
+            all.AddRange(shots);
+            Assert.AreEqual(9, all.Count);
+            bool[,] reachable = FindReachable(terrain, 20, 20);
+            for (int i = 0; i < all.Count; i++)
+            {
+                Vector3 delta = all[i] - terrain.SpawnPosition;
+                delta.y = 0;
+                Assert.Less(delta.magnitude, WorldShopPlacement.TycoonReservationRadius);
+                Assert.IsTrue(reachable[Mathf.FloorToInt(all[i].x), Mathf.FloorToInt(all[i].z)]);
+                for (int j = 0; j < i; j++) Assert.GreaterOrEqual(Vector3.Distance(all[i], all[j]), 4.5f);
+            }
         }
 
         [Test]

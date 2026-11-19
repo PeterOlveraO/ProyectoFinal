@@ -42,6 +42,14 @@ namespace Game.ShotShop.Tests
             Set(_round, "_phase", RoundManager.RoundPhase.Preparing);
             Set(_round, "<Points>k__BackingField", 300);
             Set(_round.ShotStations, "_positions", System.Array.AsReadOnly(new[] { Vector3.zero, Vector3.right * 10, Vector3.right * 20 }));
+            // Other tests exercise construction separately; combat fixtures start with vendors built.
+            for (int i = 0; i < 3; i++)
+            {
+                _player.transform.position = Vector3.right * (10 * i);
+                Assert.IsTrue(_round.ShotStations.Build(i));
+            }
+            _player.transform.position = Vector3.zero;
+            Set(_round, "<Points>k__BackingField", 1000);
             GameFlow.Blocked = false;
             GameFlow.Over = false;
             _attack.ResetRun();
@@ -105,6 +113,22 @@ namespace Game.ShotShop.Tests
             Assert.IsFalse(_round.BuyShot(0));
             Assert.IsFalse(_round.EquipShot(ShotType.Basic));
             Assert.AreEqual(points - 120, _round.Points);
+        }
+
+        [Test]
+        public void ShotConstructionAndPurchaseAreSeparateAndNeverUnlockAcrossRuns()
+        {
+            _round.ShotStations.ResetRun();
+            int points = _round.Points;
+            Assert.IsFalse(_round.BuyShot(0));
+            Assert.AreEqual(points, _round.Points);
+            Assert.IsTrue(_round.ShotStations.Build(0));
+            Assert.AreEqual(ShotType.Basic, _round.Shots.Equipped);
+            Assert.IsFalse(_round.ShotStations.Build(0));
+            Assert.IsTrue(_round.BuyShot(0));
+            Assert.AreEqual(points - ShotStations.BuildPrice(0) - ShotDefinitions.Price(ShotType.Burst), _round.Points);
+            _round.ShotStations.ResetRun();
+            Assert.IsFalse(_round.BuyShot(0));
         }
 
         [Test]
@@ -215,7 +239,7 @@ namespace Game.ShotShop.Tests
             Assert.AreEqual(-1, _round.ShotStations.NearbyOffer(Vector3.up * 3f));
             Assert.AreEqual(-1, _round.ShotStations.NearbyOffer(Vector3.forward * 4f));
             Assert.IsFalse(_round.BuyShot(-1));
-            Assert.IsFalse(_round.BuyShot(3));
+            Assert.IsFalse(_round.BuyShot(4));
         }
 
         [Test]
@@ -274,6 +298,7 @@ namespace Game.ShotShop.Tests
             Tick(0f, true, Vector3.forward);
             Call(_round, "ResetTemporaryStats");
             Assert.AreEqual(ShotType.Basic, _round.Shots.Equipped);
+            Assert.IsFalse(_round.ShotStations.IsBuilt(0));
             Assert.IsFalse(_round.Shots.Has(ShotType.Burst));
             Assert.AreEqual(0, Get<int>(_attack, "_burstRemaining"));
             Assert.AreEqual(0, Object.FindObjectsByType<AttackProjectile>().Length);

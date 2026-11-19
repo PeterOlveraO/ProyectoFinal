@@ -122,8 +122,8 @@ namespace Game.Rounds
         {
             if (!CanUseShotShop() || _shotStations == null ||
                 _shotStations.NearbyOffer(PlayerSphereController.Instance.transform.position) != offer ||
-                offer < 0 || offer >= 3) return false;
-            if (!_shots.TryBuyAndEquip((ShotType)(offer + 1), SpendPoints)) return false;
+                offer < 0 || offer >= Game.Rounds.ShotStations.OfferCount || !_shotStations.IsBuilt(offer)) return false;
+            if (!_shots.TryBuyAndEquip(Game.Rounds.ShotStations.OfferType(offer), SpendPoints)) return false;
             PlayerSphereController.Instance.GetComponent<PlayerAttack>()?.CancelPendingShots();
             Changed?.Invoke();
             return true;
@@ -265,6 +265,7 @@ namespace Game.Rounds
             }
             ClearEnemies();
             _drinks?.ResetRun();
+            _shotStations?.ResetRun();
             _shots.ResetRun();
             ClearPlayerShots();
 
@@ -380,6 +381,7 @@ namespace Game.Rounds
         {
             Array.Clear(_evLevels, 0, _evLevels.Length);
             _drinks?.ResetRun();
+            _shotStations?.ResetRun();
             _shots.ResetRun();
             ClearPlayerShots();
             RebuildRunStats();
