@@ -95,4 +95,4 @@ Son las especies seleccionadas para los encuentros especiales con jefes: siete l
 - Los duplicados son instancias independientes; no hay mejoras por duplicados. Los IV son 0/15/31 por rareza F/A/S y la naturaleza se sortea entre 25 opciones.
 - El saldo y el inventario se guardan juntos de forma atómica. Una tirada rechazada por saldo insuficiente o inventario lleno no debe cobrar.
 - Las estadísticas combinan especie, IV y naturaleza. Al iniciar una partida se captura el Pokémon equipado; los EV comprados con puntos son temporales y se reinician al terminar o abandonar.
-- Los controles existentes de movimiento, ataque, poder especial y pausa se conservan; el árbol EV se abre desde la partida o pausa.
+- Controles: WASD/flechas o joystick izquierdo para moverse, joystick derecho (o mantener clic izquierdo hacia el cursor) para atacar, R para reaparecer y pausa desde el menú. El árbol EV se abre desde la partida o pausa. No hay poder especial ni acción asignada a Espacio; se conserva la protección temporal tras reaparecer.
