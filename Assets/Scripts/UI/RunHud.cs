@@ -30,16 +30,10 @@ namespace Game.UI
         Button _drinkButton;
         TMPro.TMP_Text _drinkLabel;
         int _nearbyDrink = -1;
-        readonly Button[] _shotChoices = new Button[ShotDefinitions.Count];
-        readonly TMPro.TMP_Text[] _shotChoiceLabels = new TMPro.TMP_Text[ShotDefinitions.Count];
         TMPro.TMP_Text _equippedShotLabel;
         Button _shotButton;
         TMPro.TMP_Text _shotLabel;
         int _nearbyShot = -1;
-        int _displayedShotOffer = -2;
-        int _displayedShotPoints = -1;
-        bool _displayedShotOwned;
-        ShotType _displayedShotEquipped = (ShotType)(-1);
 
         CanvasGroup _banner;
         TMPro.TMP_Text _bannerTitle;
@@ -215,6 +209,13 @@ namespace Game.UI
             if (_drinkButton == null) return;
             _drinkButton.gameObject.SetActive(_nearbyDrink >= 0);
             if (_nearbyDrink < 0) return;
+            if (!stations.IsBuilt(_nearbyDrink))
+            {
+                _drinkLabel.text = "CONSTRUIR MÁQUINA " + DrinkStations.Names[_nearbyDrink] +
+                    " · " + DrinkStations.BuildPrices[_nearbyDrink] + " PUNTOS";
+                _drinkButton.interactable = round.Points >= DrinkStations.BuildPrices[_nearbyDrink];
+                return;
+            }
             _drinkLabel.text = stations.Has((DrinkType)_nearbyDrink) ?
                 "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · ADQUIRIDA" :
                 "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · " + DrinkStations.Prices[_nearbyDrink] + " PUNTOS";
@@ -224,7 +225,10 @@ namespace Game.UI
 
         void BuyDrink()
         {
-            RoundManager.Instance?.Drinks?.Buy(_nearbyDrink);
+            var stations = RoundManager.Instance?.Drinks;
+            if (stations == null) return;
+            if (stations.IsBuilt(_nearbyDrink)) stations.Buy(_nearbyDrink);
+            else stations.Build(_nearbyDrink);
         }
 
         void BuildShotShop(Transform parent)
@@ -232,35 +236,17 @@ namespace Game.UI
             // Top-center loadout, away from the top-left status and bottom-corner sticks.
             var panel = UIFactory.CreateRect("ShotLoadout", parent);
             UIFactory.Place(panel, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -24f), new Vector2(650f, 148f));
+                new Vector2(0f, -24f), new Vector2(650f, 54f));
             var background = UIFactory.CreateImage("Background", panel, ProceduralSprites.RoundedRect,
                 UIFactory.DeepViolet, false, true);
             UIFactory.Stretch(background.rectTransform);
             _equippedShotLabel = UIFactory.CreateText("EquippedShot", panel, "DISPARO · BÁSICO", 26, UIFactory.Sun);
             UIFactory.Place(_equippedShotLabel.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
                 new Vector2(0f, -8f), new Vector2(630f, 38f));
-            for (int i = 0; i < _shotChoices.Length; i++)
-            {
-                var type = (ShotType)i;
-                var button = UIFactory.CreateButton(panel, "Equip" + type, "", UIFactory.CardViolet,
-                    new Vector2(150f, 82f), () => RoundManager.Instance?.EquipShot(type), 22);
-                UIFactory.Place((RectTransform)button.transform, new Vector2(0f, 0f), Vector2.zero,
-                    new Vector2(10f + i * 160f, 10f), new Vector2(150f, 82f));
-                _shotChoices[i] = button;
-                _shotChoiceLabels[i] = button.GetComponentInChildren<TMPro.TMP_Text>();
-                // More room for the longest name without shrinking the mobile touch target.
-                _shotChoiceLabels[i].rectTransform.offsetMin = new Vector2(4f, 4f);
-                _shotChoiceLabels[i].rectTransform.offsetMax = new Vector2(-4f, -4f);
-                _shotChoiceLabels[i].fontStyle = TMPro.FontStyles.Normal;
-                _shotChoiceLabels[i].enableAutoSizing = true;
-                _shotChoiceLabels[i].fontSizeMin = 18f;
-                _shotChoiceLabels[i].fontSizeMax = 22f;
-                _shotChoiceLabels[i].textWrappingMode = TMPro.TextWrappingModes.NoWrap;
-            }
 
             // Separate vertical slot above the drink offer (35..135), never over it.
             _shotButton = UIFactory.CreateButton(parent, "BuyShot", "", UIFactory.CardViolet,
-                new Vector2(650f, 110f), () => RoundManager.Instance?.BuyShot(_nearbyShot), 28);
+                new Vector2(650f, 110f), BuyShot, 28);
             UIFactory.Place((RectTransform)_shotButton.transform, new Vector2(.5f, 0f), new Vector2(.5f, 0f),
                 new Vector2(0f, 155f), new Vector2(650f, 110f));
             _shotLabel = _shotButton.GetComponentInChildren<TMPro.TMP_Text>();
@@ -272,15 +258,6 @@ namespace Game.UI
             if (_equippedShotLabel == null) return;
             var equipped = round != null ? round.Shots.Equipped : ShotType.Basic;
             _equippedShotLabel.text = "DISPARO EQUIPADO · " + ShotDefinitions.Name(equipped);
-            for (int i = 0; i < _shotChoices.Length; i++)
-            {
-                var type = (ShotType)i;
-                bool owned = type == ShotType.Basic || (round != null && round.Shots.Has(type));
-                bool selected = type == equipped;
-                _shotChoiceLabels[i].text = ShotDefinitions.Name(type) + "\n" +
-                    (selected ? "EQUIPADO" : owned ? "EQUIPAR\nGRATIS" : ShotDefinitions.Price(type) + " PT");
-                _shotChoices[i].interactable = round != null && round.IsRunActive && owned && !selected;
-            }
         }
 
         void UpdateShotOffer(RoundManager round, PlayerSphereController player, bool playing)
@@ -291,19 +268,25 @@ namespace Game.UI
                 stations != null ? stations.NearbyOffer(player.transform.position) : -1;
             _shotButton.gameObject.SetActive(_nearbyShot >= 0);
             if (_nearbyShot < 0) return;
-            var type = (ShotType)(_nearbyShot + 1);
-            bool owned = round.Shots.Has(type);
-            var equipped = round.Shots.Equipped;
-            if (_displayedShotOffer == _nearbyShot && _displayedShotPoints == round.Points &&
-                _displayedShotOwned == owned && _displayedShotEquipped == equipped) return;
-            _displayedShotOffer = _nearbyShot;
-            _displayedShotPoints = round.Points;
-            _displayedShotOwned = owned;
-            _displayedShotEquipped = equipped;
+            var type = ShotStations.OfferType(_nearbyShot);
+            if (!stations.IsBuilt(_nearbyShot))
+            {
+                _shotLabel.text = "CONSTRUIR ARSENAL " + ShotDefinitions.Name(type) + "\n" +
+                    ShotStations.BuildPrice(_nearbyShot) + " PUNTOS";
+                _shotButton.interactable = round.Points >= ShotStations.BuildPrice(_nearbyShot);
+                return;
+            }
             _shotLabel.text = "DISPARO " + ShotDefinitions.Name(type) + "\n" +
-                (equipped == type ? "EQUIPADO · ADQUIRIDO" : owned ? "EQUIPAR · SIN COSTE" :
-                    "COMPRAR Y EQUIPAR · " + ShotDefinitions.Price(type) + " PUNTOS");
-            _shotButton.interactable = equipped != type && (owned || round.Points >= ShotDefinitions.Price(type));
+                "COMPRAR Y REEMPLAZAR · " + ShotDefinitions.Price(type) + " PUNTOS";
+            _shotButton.interactable = round.Points >= ShotDefinitions.Price(type);
+        }
+
+        void BuyShot()
+        {
+            var round = RoundManager.Instance;
+            if (round == null || round.ShotStations == null) return;
+            if (round.ShotStations.IsBuilt(_nearbyShot)) round.BuyShot(_nearbyShot);
+            else round.ShotStations.Build(_nearbyShot);
         }
 
         void BuildBanner(Transform parent)
@@ -370,7 +353,7 @@ namespace Game.UI
                 return;
             }
 
-            _roundLabel.text = "RONDA " + round.Round;
+            _roundLabel.text = (round.IsBossRound ? "JEFE · " : "RONDA ") + round.Round;
             _enemiesLabel.text = round.EnemiesDefeatedThisRound + " / " + round.EnemiesThisRound;
             _pointsLabel.text = "PUNTOS " + round.Points;
             _coinsLabel.text = "PREMIO +" + round.CoinsEarned;
@@ -397,13 +380,14 @@ namespace Game.UI
                 switch (phase)
                 {
                     case RoundManager.RoundPhase.Preparing:
-                        SetBanner("RONDA " + round.Round,
+                        SetBanner(round.IsBossRound ? "JEFE · " + round.BossName : "RONDA " + round.Round,
                                   "Prepárate… " + Mathf.CeilToInt(round.PreparationRemaining));
                         _bannerTimer = 999f;
                         break;
 
                     case RoundManager.RoundPhase.Fighting:
-                        SetBanner("RONDA " + round.Round,
+                        SetBanner(round.IsBossRound ? "JEFE · " + round.BossName : "RONDA " + round.Round,
+                                  round.IsBossRound ? "Un único rival · Sin refuerzos" :
                                   "Elimina a " + round.EnemiesThisRound + " enemigos");
                         _bannerTimer = 2.2f;
                         break;

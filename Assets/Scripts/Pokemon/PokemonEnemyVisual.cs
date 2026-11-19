@@ -37,6 +37,12 @@ namespace Game.Pokemon
 
         void Build(Sprite sprite)
         {
+            // Reattachment/reuse must replace the old billboard, not stack boss and normal art.
+            if (_visual != null)
+            {
+                _visual.gameObject.SetActive(false);
+                Destroy(_visual.gameObject);
+            }
             _renderer = PokemonVisuals.CreateBillboard(transform, "Pokemon " + sprite.name,
                                                        sprite, height, true);
             _visual = _renderer.transform;

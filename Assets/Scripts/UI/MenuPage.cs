@@ -11,11 +11,41 @@ namespace Game.UI
         public RectTransform Footer { get; }
         public TMPro.TMP_Text Status { get; }
         public TMPro.TMP_Text Wallet { get; }
+        readonly bool _compact;
 
-        public MenuPage(Transform canvas, string name, string title, string subtitle)
+        public MenuPage(Transform canvas, string name, string title, string subtitle,
+            CompactMenuKind? compact = null)
         {
             Root = UIFactory.CreateRect(name, canvas);
             UIFactory.Stretch(Root);
+            _compact = compact.HasValue;
+            if (_compact)
+            {
+                // Transparent input shield prevents clicks reaching the run HUD while paused.
+                var shield = UIFactory.CreateImage("InputShield", Root, null, Color.clear, true);
+                UIFactory.Stretch(shield.rectTransform);
+                var safeRoot = UIFactory.SafeRoot(Root);
+                bool main = compact.Value == CompactMenuKind.Main;
+                var panel = main ? UIFactory.CreateRect("Controls", safeRoot)
+                    : UIFactory.Surface("CompactPanel", safeRoot, CompactMenuArt.Backing);
+                var header = main ? UIFactory.Surface("Header", safeRoot, CompactMenuArt.Backing)
+                    : UIFactory.CreateRect("Header", panel);
+                var headingText = UIFactory.CreateText("Title", header, title, 38, UIFactory.Cream);
+                UIFactory.Region(headingText.rectTransform, .02f, .48f, .98f, .98f);
+                Status = UIFactory.CreateText("Subtitle", header, subtitle, 28, UIFactory.Cream);
+                UIFactory.Region(Status.rectTransform, .02f, .02f, .98f, .48f);
+                Wallet = UIFactory.CreateText("Wallet", header, "", 28, UIFactory.Sun);
+                Wallet.gameObject.SetActive(false);
+                Body = UIFactory.CreateRect("Body", panel);
+                Footer = UIFactory.CreateRect("Footer", panel);
+                UIFactory.Row(Footer);
+                Footer.gameObject.SetActive(compact.Value == CompactMenuKind.Skills);
+                Root.gameObject.AddComponent<CompactMenuLayout>().Configure(
+                    safeRoot, panel, header, Body, Footer, compact.Value);
+                Root.gameObject.AddComponent<MenuPageFade>();
+                Root.gameObject.SetActive(false);
+                return;
+            }
             var background = UIFactory.CreateImage("Background", Root,
                 Game.Rendering.ProceduralSprites.VerticalGradient(UIFactory.DeepViolet, UIFactory.Ink),
                 Color.white, true);
@@ -58,6 +88,8 @@ namespace Game.UI
         public UnityEngine.UI.Button Action(string name, string label, Color color,
             UnityEngine.Events.UnityAction callback)
         {
+            if (_compact)
+                return CompactMenuArt.Button(Footer, name, label, "Green", callback);
             return UIFactory.CreateButton(Footer, name, label, color, new Vector2(320, 76), callback, 28);
         }
 

@@ -11,9 +11,10 @@ namespace Game.Enemies
     /// <summary>
     /// Enemigo Pokémon. Persigue al jugador por el terreno respetando las reglas del mundo
     /// (no escala desniveles de más de un bloque) y, mientras lo toque, le resta
-    /// <see cref="ContactDamagePerSecond"/> de vida por segundo.
-    /// Tiene vida (10 en la zona 1 y +20 % por zona) y una barra que aparece al recibir daño.
-    /// Mientras el jugador es invencible, el enemigo muere al tocarlo.
+    /// <see cref="ContactDamage"/> de vida por segundo.
+    /// Vida/daño/velocidad se configuran por ronda (o por zona en el spawner antiguo).
+    /// La barra de vida aparece al recibir daño.
+    /// Mientras el jugador es invencible, solo los normales mueren al tocarlo.
     /// El visual es un sprite 2D: no tiene geometría 3D.
     /// </summary>
     [DisallowMultipleComponent]
@@ -60,11 +61,15 @@ namespace Game.Enemies
         bool _dead;
 
         float _speed = 2.5f;
+        float _contactDamage = ContactDamagePerSecond;
         int _wallSide;
 
         public int Zone { get; private set; }
         public int MaxHealth => maxHealth;
         public int Health => _health;
+        public float Speed => _speed;
+        public float ContactDamage => _contactDamage;
+        public bool IsBoss { get; private set; }
         public bool IsDead => _dead || _health <= 0;
         public Renderer VisualRenderer => _visualRenderer;
 
@@ -86,18 +91,38 @@ namespace Game.Enemies
 
         public void Initialize(ZoneSpawnManager manager, int zone, float speed)
         {
-            _manager = manager;
             Initialize(zone, speed);
+            _manager = manager;
         }
 
-        /// <summary>Configuración usada por el sistema de rondas.</summary>
+        /// <summary>Configuración normal del spawner antiguo de zonas.</summary>
         public void Initialize(int zone, float speed)
         {
+            _manager = null;
             Zone = zone;
             _speed = Mathf.Max(0.05f, speed);
 
             // Zona 1: 10 de vida. Zona 2: 12. Zona 3: 14 (redondeado).
             maxHealth = Mathf.Max(1, Mathf.RoundToInt(BaseHealth * Mathf.Pow(1f + HealthPerZone, zone - 1)));
+            ResetCombatState(false, ContactDamagePerSecond);
+        }
+
+        /// <summary>Aplica todos los stats de la ronda, sin heredar estado del enemigo anterior.</summary>
+        public void InitializeRound(int zone, EnemyRoundStats stats, bool boss)
+        {
+            _manager = null;
+            Zone = zone;
+            _speed = Mathf.Max(.05f, stats.speed);
+            maxHealth = Mathf.Max(1, stats.health);
+            ResetCombatState(boss, stats.contactDamage);
+        }
+
+        void ResetCombatState(bool boss, float damage)
+        {
+            IsBoss = boss;
+            _contactDamage = Mathf.Max(0f, damage);
+            _flashUntil = 0f;
+            if (_spriteVisual != null) _spriteVisual.color = _baseVisualColor;
             _health = maxHealth;
             _dead = false;
             UpdateHealthBar();
@@ -165,14 +190,7 @@ namespace Game.Enemies
 
             if (distance <= TouchRadius && heightDifference <= MaxTouchHeight)
             {
-                if (_player.IsInvincible)
-                {
-                    Kill();
-                    return;
-                }
-
-                // Daño continuo: 10 de vida por segundo entero de contacto.
-                _player.TakeDamage(ContactDamagePerSecond * Time.deltaTime);
+                ApplyContact(_player);
                 return;
             }
 
@@ -183,7 +201,34 @@ namespace Game.Enemies
             Move(direction, _speed * Time.deltaTime);
         }
 
-        /// <summary>Mata a todos los enemigos vivos (habilidad de invencibilidad).</summary>
+        // Called only after Update's distance/height checks. The special's boss damage
+        // belongs to activation, never to this per-frame contact path.
+        void ApplyContact(PlayerSphereController player)
+        {
+            if (player.IsInvincible)
+            {
+                if (!IsBoss) Kill();
+                return;
+            }
+            player.TakeDamage(_contactDamage * Time.deltaTime);
+        }
+
+        /// <summary>
+        /// Una activación del poder: elimina normales y resta 25% de vida máxima a jefes.
+        /// Redondea hacia arriba a HP entero; puede rematar. No se llama por contacto.
+        /// </summary>
+        public static void ApplySpecialPowerToAll()
+        {
+            var snapshot = Active.ToArray();
+            foreach (var enemy in snapshot)
+            {
+                if (enemy == null || enemy.IsDead) continue;
+                if (enemy.IsBoss) enemy.TakeDamage(Mathf.CeilToInt(enemy.MaxHealth * .25f));
+                else enemy.Kill();
+            }
+        }
+
+        /// <summary>Mata a todos los enemigos vivos sin distinguir jefes; no es el poder especial.</summary>
         public static void KillAll()
         {
             if (Active.Count == 0) return;

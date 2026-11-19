@@ -14,13 +14,18 @@ namespace Game.Enemies
     {
         public static GameObject Create(int zone)
         {
+            return Create(zone, PokemonSpriteLibrary.NextForEnemy());
+        }
+
+        public static GameObject Create(int zone, Sprite sprite)
+        {
             var go = new GameObject("Enemy_Z" + zone);
 
             go.AddComponent<EnemyTriangle>();
             go.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
 
             // El sprite es el único visual del enemigo.
-            PokemonEnemyVisual.Attach(go, PokemonSpriteLibrary.NextForEnemy());
+            PokemonEnemyVisual.Attach(go, sprite);
 
             return go;
         }

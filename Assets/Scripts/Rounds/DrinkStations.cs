@@ -10,14 +10,15 @@ namespace Game.Rounds
 {
     public enum DrinkType { Power, Vitality, Sprint, Armor, RapidFire }
 
-    /// <summary>Cinco puestos de bebidas provisionales en el mapa. Una compra por tipo y partida.</summary>
+    /// <summary>Five buildable perk machines in the tycoon hub. One perk per type/run.</summary>
     [DefaultExecutionOrder(0)]
     [DisallowMultipleComponent]
     public sealed class DrinkStations : MonoBehaviour
     {
         public static readonly string[] Names = { "FUERZA", "VITALIDAD", "SPRINT", "ESCUDO", "RÁFAGA" };
         // Coste por partida (no se guarda como moneda persistente).
-        public static readonly int[] Prices = { 30, 45, 35, 45, 60 };
+        public static readonly int[] Prices = { 100, 140, 90, 160, 180 };
+        public static readonly int[] BuildPrices = { 100, 120, 100, 140, 160 };
         static readonly Color[] Colors =
         {
             new Color(1f, .28f, .22f), new Color(.35f, 1f, .45f),
@@ -26,6 +27,8 @@ namespace Game.Rounds
 
         readonly Transform[] _stands = new Transform[5];
         readonly bool[] _purchased = new bool[5];
+        readonly TycoonUnlocks _construction = new TycoonUnlocks(5);
+        readonly TycoonPlatform[] _platforms = new TycoonPlatform[5];
         IReadOnlyList<Vector3> _positions = Array.AsReadOnly(new Vector3[0]);
         WorldTerrain _terrain;
 
@@ -47,7 +50,7 @@ namespace Game.Rounds
             Vector3[] positions;
             try
             {
-                // seedOffset separa determinísticamente este grupo de otros grupos del mismo mapa.
+                // First five sectors in the shared spawn hub; arsenals reserve these afterwards.
                 positions = WorldShopPlacement.FindPositions(_terrain, _stands.Length, 0x51A7);
             }
             catch (InvalidOperationException exception)
@@ -63,37 +66,50 @@ namespace Game.Rounds
 
         void CreateStand(int index, Vector3 ground)
         {
-            var root = new GameObject("Bebida_" + Names[index]);
-            root.transform.SetParent(transform, true);
-            root.transform.position = ground + Vector3.up * .85f;
-            _stands[index] = root.transform;
+            var platform = new TycoonPlatform(transform, ground, "MÁQUINA " + Names[index],
+                BuildPrices[index], Prices[index], Colors[index]);
+            _platforms[index] = platform;
+            _stands[index] = platform.Vendor;
 
-            var bottle = new GameObject("Botella");
-            bottle.transform.SetParent(root.transform, false);
+            var bottle = new GameObject("MaquinaPerk");
+            bottle.transform.SetParent(platform.Vendor, false);
             var renderer = bottle.AddComponent<SpriteRenderer>();
-            renderer.sprite = ProceduralSprites.RoundedRect;
-            renderer.drawMode = SpriteDrawMode.Sliced;
-            renderer.size = new Vector2(.7f, 1.4f);
-            renderer.color = Colors[index];
+            var art = Resources.Load<TycoonMachineArt>("TycoonMachine");
+            renderer.sprite = art != null ? art.machine : null;
+            if (renderer.sprite == null)
+                Debug.LogError("[DrinkStations] Falta Resources/TycoonMachine con maquina.png.", this);
+            else
+                bottle.transform.localScale = Vector3.one * (2.5f / renderer.sprite.bounds.size.y);
+            renderer.color = Color.white;
             renderer.sortingOrder = 12;
             bottle.AddComponent<BillboardSprite>().SetContinuous(true);
-
-            var cap = new GameObject("Tapón");
-            cap.transform.SetParent(bottle.transform, false);
-            cap.transform.localPosition = new Vector3(0f, .78f, 0f);
-            var capRenderer = cap.AddComponent<SpriteRenderer>();
-            capRenderer.sprite = ProceduralSprites.RoundedRect;
-            capRenderer.drawMode = SpriteDrawMode.Sliced;
-            capRenderer.size = new Vector2(.42f, .22f);
-            capRenderer.color = Color.white;
-            capRenderer.sortingOrder = 13;
         }
 
-        public bool Has(DrinkType type) => _purchased[(int)type];
+        public bool Has(DrinkType type) => (int)type >= 0 && (int)type < _purchased.Length && _purchased[(int)type];
+        public bool IsBuilt(int index) => _construction.IsBuilt(index);
+
+        public bool Build(int index)
+        {
+            if (!CanInteract(index)) return false;
+            if (!_construction.TryBuild(index, BuildPrices[index], RoundManager.Instance.SpendPoints)) return false;
+            _platforms[index]?.SetBuilt(true);
+            return true;
+        }
+
+        bool CanInteract(int index)
+        {
+            if (!GameFlow.Playing || index < 0 || index >= _stands.Length) return false;
+            var player = PlayerSphereController.Instance;
+            var round = RoundManager.Instance;
+            return player != null && player.IsAlive && round != null && round.IsRunActive &&
+                NearbyOffer(player.transform.position) == index;
+        }
 
         public void ResetRun()
         {
             for (int i = 0; i < _purchased.Length; i++) _purchased[i] = false;
+            _construction.ResetRun();
+            foreach (var platform in _platforms) platform?.SetBuilt(false);
         }
 
         public int NearbyOffer(Vector3 position)
@@ -103,7 +119,9 @@ namespace Game.Rounds
             for (int i = 0; i < _stands.Length; i++)
             {
                 if (_stands[i] == null) continue;
-                Vector3 delta = _stands[i].position - position;
+                Vector3 ground = i < _positions.Count ? _positions[i] : _stands[i].position;
+                Vector3 delta = ground - position;
+                if (Mathf.Abs(delta.y) > 1.9f) continue;
                 delta.y = 0;
                 if (delta.sqrMagnitude >= best) continue;
                 best = delta.sqrMagnitude;
@@ -114,7 +132,7 @@ namespace Game.Rounds
 
         public bool Buy(int index)
         {
-            if (!GameFlow.Playing || index < 0 || index >= _stands.Length || _purchased[index]) return false;
+            if (!CanInteract(index) || !IsBuilt(index) || _purchased[index]) return false;
             var player = PlayerSphereController.Instance;
             var round = RoundManager.Instance;
             if (player == null || !player.IsAlive || round == null || NearbyOffer(player.transform.position) != index) return false;

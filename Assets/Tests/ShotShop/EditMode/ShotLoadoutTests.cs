@@ -7,7 +7,7 @@ namespace Game.ShotShop.Tests
     public sealed class ShotLoadoutTests
     {
         [Test]
-        public void BasicIsFreeAndTheOnlyInitialOwnedShot()
+        public void StartsWithBasicButRepurchasingItIsNeverFree()
         {
             var shots = new ShotLoadout();
             Assert.AreEqual(ShotType.Basic, shots.Equipped);
@@ -15,12 +15,13 @@ namespace Game.ShotShop.Tests
             Assert.IsFalse(shots.Has(ShotType.Burst));
             Assert.IsFalse(shots.Has(ShotType.Fan));
             Assert.IsFalse(shots.Has(ShotType.Piercing));
-            Assert.IsTrue(shots.TryBuyAndEquip(ShotType.Basic, _ => { Assert.Fail("Basic must not charge"); return false; }));
+            Assert.IsFalse(shots.TryBuyAndEquip(ShotType.Basic, _ => false));
         }
 
-        [TestCase(ShotType.Burst, 60)]
-        [TestCase(ShotType.Fan, 90)]
-        [TestCase(ShotType.Piercing, 120)]
+        [TestCase(ShotType.Basic, 80)]
+        [TestCase(ShotType.Burst, 140)]
+        [TestCase(ShotType.Fan, 200)]
+        [TestCase(ShotType.Piercing, 280)]
         public void PurchaseSpendsExactRunPointsAndEquips(ShotType type, int expectedPrice)
         {
             var shots = new ShotLoadout();
@@ -44,19 +45,21 @@ namespace Game.ShotShop.Tests
         }
 
         [Test]
-        public void AcquiredShotsSwitchFreelyButResetRemovesThem()
+        public void EveryReplacementChargesAndNoInventorySurvives()
         {
             var shots = new ShotLoadout();
             int charges = 0;
             Assert.IsTrue(shots.TryBuyAndEquip(ShotType.Burst, _ => { charges++; return true; }));
-            Assert.IsTrue(shots.TryEquip(ShotType.Basic));
+            Assert.IsFalse(shots.TryEquip(ShotType.Basic));
+            Assert.IsTrue(shots.TryBuyAndEquip(ShotType.Fan, _ => { charges++; return true; }));
+            Assert.IsFalse(shots.Has(ShotType.Burst));
             Assert.IsTrue(shots.TryBuyAndEquip(ShotType.Burst, _ => { charges++; return true; }));
-            Assert.AreEqual(1, charges);
+            Assert.AreEqual(3, charges);
             shots.ResetRun();
             Assert.AreEqual(ShotType.Basic, shots.Equipped);
             Assert.IsFalse(shots.TryEquip(ShotType.Burst));
             Assert.IsTrue(shots.TryBuyAndEquip(ShotType.Burst, _ => { charges++; return true; }));
-            Assert.AreEqual(2, charges);
+            Assert.AreEqual(4, charges);
         }
 
         [TestCase(0f)]

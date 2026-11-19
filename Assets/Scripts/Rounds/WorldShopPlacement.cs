@@ -7,13 +7,15 @@ using UnityEngine;
 namespace Game.Rounds
 {
     /// <summary>
-    /// Planificador determinista para puestos temporales del mundo. Los puntos se distribuyen
-    /// por las tres zonas, solo en bloques llanos conectados al spawn y libres de agua/colisiones.
-    /// También puede usarse para puestos de armas u otros servicios de la partida.
+    /// Compact run-only tycoon hub in the flora-free spawn clearing. All pads must be
+    /// dry, flat, collision-free and connected to spawn; failure never scatters vendors.
     /// </summary>
     public static class WorldShopPlacement
     {
-        const float SpawnClearance = 7f;
+        // Reserved for tycoon inside the flora-free spawn clearing (15 world units).
+        public const float TycoonReservationRadius = 15f;
+        public const int TycoonSlots = 9;
+        const float SpawnClearance = 5f;
         const float CollisionRadius = 0.48f;
         const float CollisionHeight = 0.72f;
         static readonly Collider[] OverlapBuffer = new Collider[32];
@@ -46,26 +48,40 @@ namespace Game.Rounds
                 Vector3 delta = point - spawn;
                 delta.y = 0f;
                 if (delta.sqrMagnitude < SpawnClearance * SpawnClearance ||
+                    delta.sqrMagnitude > 12f * 12f ||
                     !IsDryAndInsideClearance(terrain, point))
                     continue;
 
                 if (IsReserved(point, reserved) || HasBlockingCollider(terrain, point))
                     continue;
 
-                candidates.Add(new Candidate(x, z, map.GetZone(x, z),
+                candidates.Add(new Candidate(x, z,
                     Hash(x, z, terrain.Settings.seed + seedOffset)));
             }
 
             candidates.Sort((a, b) => a.Order.CompareTo(b.Order));
             var positions = new List<Vector3>(count);
-            // Reparto objetivo: dos en zona 1, dos en zona 2 y uno en zona 3.
-            int[] quota = BuildQuotas(count);
-            for (int zone = 1; zone <= 3; zone++)
-                SelectFromZone(terrain, candidates, zone, quota[zone - 1], reserved, positions);
-
-            // Si una zona no ofrece suficientes superficies accesibles, usar otros claros del mapa.
-            if (positions.Count < count)
-                SelectFromAnyZone(terrain, candidates, count, reserved, positions);
+            // Nine sectors around the spawn: one compact hub, never scattered over zones.
+            // Both groups traverse the same order; reserved pads consume their sectors.
+            for (int slot = 0; slot < TycoonSlots && positions.Count < count; slot++)
+            {
+                float angle = slot * Mathf.PI * 2f / TycoonSlots;
+                Vector3 target = spawn + new Vector3(Mathf.Sin(angle), 0, Mathf.Cos(angle)) * 9f;
+                Candidate best = default;
+                float score = float.PositiveInfinity;
+                bool found = false;
+                foreach (Candidate candidate in candidates)
+                {
+                    Vector3 point = terrain.BlockTopCenter(candidate.X, candidate.Z);
+                    if (IsSelected(candidate, positions, terrain) || IsReserved(point, reserved)) continue;
+                    float distance = HorizontalDistanceSquared(point, target);
+                    if (distance > 3f * 3f || distance >= score) continue;
+                    best = candidate;
+                    score = distance;
+                    found = true;
+                }
+                if (found) positions.Add(terrain.BlockTopCenter(best.X, best.Z));
+            }
 
             if (positions.Count != count)
             {
@@ -76,64 +92,6 @@ namespace Game.Rounds
             return positions.ToArray();
         }
 
-        static int[] BuildQuotas(int count)
-        {
-            int[] quota = { count / 3, count / 3, count / 3 };
-            for (int i = 0; i < count % 3; i++) quota[i]++;
-            return quota;
-        }
-
-        static void SelectFromZone(WorldTerrain terrain, List<Candidate> candidates, int zone, int quota,
-            IReadOnlyList<Vector3> reserved, List<Vector3> selected)
-        {
-            for (int i = 0; i < quota; i++)
-            {
-                Candidate best = default;
-                float bestScore = float.NegativeInfinity;
-                bool found = false;
-                foreach (Candidate candidate in candidates)
-                {
-                    if (candidate.Zone != zone || IsSelected(candidate, selected, terrain)) continue;
-                    Vector3 point = terrain.BlockTopCenter(candidate.X, candidate.Z);
-                    float score = Dispersion(point, selected, reserved);
-                    // Hash estable desempata; prioriza separación y ligeramente el orden semialeatorio.
-                    score += (candidate.Order & 0xffff) / 65535f;
-                    if (score <= bestScore) continue;
-                    bestScore = score;
-                    best = candidate;
-                    found = true;
-                }
-
-                if (!found) return;
-                selected.Add(terrain.BlockTopCenter(best.X, best.Z));
-            }
-        }
-
-        static void SelectFromAnyZone(WorldTerrain terrain, List<Candidate> candidates, int count,
-            IReadOnlyList<Vector3> reserved, List<Vector3> selected)
-        {
-            while (selected.Count < count)
-            {
-                Candidate best = default;
-                float bestScore = float.NegativeInfinity;
-                bool found = false;
-                foreach (Candidate candidate in candidates)
-                {
-                    if (IsSelected(candidate, selected, terrain)) continue;
-                    Vector3 point = terrain.BlockTopCenter(candidate.X, candidate.Z);
-                    float score = Dispersion(point, selected, reserved) +
-                                  (candidate.Order & 0xffff) / 65535f;
-                    if (score <= bestScore) continue;
-                    bestScore = score;
-                    best = candidate;
-                    found = true;
-                }
-
-                if (!found) return;
-                selected.Add(terrain.BlockTopCenter(best.X, best.Z));
-            }
-        }
-
         static bool IsSelected(Candidate candidate, List<Vector3> selected, WorldTerrain terrain)
         {
             Vector3 point = terrain.BlockTopCenter(candidate.X, candidate.Z);
@@ -141,24 +99,9 @@ namespace Game.Rounds
             {
                 Vector3 delta = point - other;
                 delta.y = 0f;
-                if (delta.sqrMagnitude < 10f * 10f) return true;
+                if (delta.sqrMagnitude < 4.5f * 4.5f) return true;
             }
             return false;
-        }
-
-        static float Dispersion(Vector3 point, List<Vector3> selected, IReadOnlyList<Vector3> reserved)
-        {
-            float nearest = float.PositiveInfinity;
-            if (selected.Count == 0 && (reserved == null || reserved.Count == 0))
-                return point.x * 0.0137f + point.z * 0.0211f;
-
-            if (selected != null)
-                foreach (Vector3 other in selected)
-                    nearest = Mathf.Min(nearest, HorizontalDistanceSquared(point, other));
-            if (reserved != null)
-                foreach (Vector3 other in reserved)
-                    nearest = Mathf.Min(nearest, HorizontalDistanceSquared(point, other));
-            return nearest;
         }
 
         static float HorizontalDistanceSquared(Vector3 a, Vector3 b)
@@ -172,7 +115,7 @@ namespace Game.Rounds
         {
             if (reserved == null) return false;
             foreach (Vector3 other in reserved)
-                if (HorizontalDistanceSquared(point, other) < 10f * 10f) return true;
+                if (HorizontalDistanceSquared(point, other) < 4.5f * 4.5f) return true;
             return false;
         }
 
@@ -290,14 +233,12 @@ namespace Game.Rounds
         {
             public readonly int X;
             public readonly int Z;
-            public readonly int Zone;
             public readonly int Order;
 
-            public Candidate(int x, int z, int zone, int order)
+            public Candidate(int x, int z, int order)
             {
                 X = x;
                 Z = z;
-                Zone = zone;
                 Order = order;
             }
         }

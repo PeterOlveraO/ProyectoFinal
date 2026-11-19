@@ -2,34 +2,26 @@ using System;
 
 namespace Game.Combat
 {
-    /// <summary>Run-only ownership. The caller authorizes gameplay/proximity and spends run points.</summary>
+    /// <summary>One active shot, never an inventory. Every replacement is a new purchase.</summary>
     public sealed class ShotLoadout
     {
-        int _owned = 1 << (int)ShotType.Basic;
         public ShotType Equipped { get; private set; } = ShotType.Basic;
 
-        public bool Has(ShotType type) => ShotDefinitions.IsValid(type) && (_owned & (1 << (int)type)) != 0;
+        public bool Has(ShotType type) => ShotDefinitions.IsValid(type) && Equipped == type;
 
-        public bool TryEquip(ShotType type)
-        {
-            if (!Has(type)) return false;
-            Equipped = type;
-            return true;
-        }
+        // Kept as a rejecting compatibility API: there is no free equip path.
+        public bool TryEquip(ShotType type) => false;
 
         public bool TryBuyAndEquip(ShotType type, Func<int, bool> spendPoints)
         {
             if (!ShotDefinitions.IsValid(type)) return false;
-            if (Has(type)) return TryEquip(type);
             if (spendPoints == null || !spendPoints(ShotDefinitions.Price(type))) return false;
-            _owned |= 1 << (int)type;
             Equipped = type;
             return true;
         }
 
         public void ResetRun()
         {
-            _owned = 1 << (int)ShotType.Basic;
             Equipped = ShotType.Basic;
         }
     }
