@@ -14,7 +14,7 @@ namespace Game.Enemies
     /// <see cref="ContactDamage"/> de vida por segundo.
     /// Vida/daño/velocidad se configuran por ronda (o por zona en el spawner antiguo).
     /// La barra de vida aparece al recibir daño.
-    /// Mientras el jugador es invencible, el enemigo muere al tocarlo.
+    /// Mientras el jugador es invencible, solo los normales mueren al tocarlo.
     /// El visual es un sprite 2D: no tiene geometría 3D.
     /// </summary>
     [DisallowMultipleComponent]
@@ -190,13 +190,7 @@ namespace Game.Enemies
 
             if (distance <= TouchRadius && heightDifference <= MaxTouchHeight)
             {
-                if (_player.IsInvincible)
-                {
-                    Kill();
-                    return;
-                }
-
-                _player.TakeDamage(_contactDamage * Time.deltaTime);
+                ApplyContact(_player);
                 return;
             }
 
@@ -207,7 +201,34 @@ namespace Game.Enemies
             Move(direction, _speed * Time.deltaTime);
         }
 
-        /// <summary>Mata a todos los enemigos vivos (habilidad de invencibilidad).</summary>
+        // Called only after Update's distance/height checks. The special's boss damage
+        // belongs to activation, never to this per-frame contact path.
+        void ApplyContact(PlayerSphereController player)
+        {
+            if (player.IsInvincible)
+            {
+                if (!IsBoss) Kill();
+                return;
+            }
+            player.TakeDamage(_contactDamage * Time.deltaTime);
+        }
+
+        /// <summary>
+        /// Una activación del poder: elimina normales y resta 25% de vida máxima a jefes.
+        /// Redondea hacia arriba a HP entero; puede rematar. No se llama por contacto.
+        /// </summary>
+        public static void ApplySpecialPowerToAll()
+        {
+            var snapshot = Active.ToArray();
+            foreach (var enemy in snapshot)
+            {
+                if (enemy == null || enemy.IsDead) continue;
+                if (enemy.IsBoss) enemy.TakeDamage(Mathf.CeilToInt(enemy.MaxHealth * .25f));
+                else enemy.Kill();
+            }
+        }
+
+        /// <summary>Mata a todos los enemigos vivos sin distinguir jefes; no es el poder especial.</summary>
         public static void KillAll()
         {
             if (Active.Count == 0) return;

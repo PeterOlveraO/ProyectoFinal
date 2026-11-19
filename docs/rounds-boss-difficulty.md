@@ -62,26 +62,71 @@ esto evita que World.unity conserve 2.2 pese a cambiar el valor por defecto.
   el valor esperado de los drops normales, con mayor varianza. `BonusDrops`
   cuenta un solo evento real; `BonusPointsPerDrop` conserva su semántica base.
 - Las estadísticas de enemigos derrotados cuentan **una baja**, no 14.
-  Los bonos de ronda y contadores de rondas no cambian. La muerte por poder
-  especial conserva su comportamiento existente (puede matar al jefe).
+  Los bonos de ronda y contadores de rondas no cambian.
+- Corrección de integración: `PlayerSphereController.ActivateInvincibility()`
+  llama a `EnemyTriangle.ApplySpecialPowerToAll()`: mata normales y hace
+  `ceil(MaxHealth * 0.25)` de daño a cada jefe una vez por activación aceptada.
+  El HP de los jefes de ronda es múltiplo de 4, por lo que el 25% es exacto.
+  Puede rematar un jefe con 25% de HP o menos; uno sano necesita cuatro usos
+  separados por la recarga (10 s actual). El contacto durante invencibilidad
+  no daña ni mata jefes ni al jugador; los normales sí mueren al tocarlo.
+  `KillAll()` sigue siendo eliminación incondicional y ya no representa el
+  poder especial. No se cambian StopRun, cleanup, cadencia ni tecla R.
 - No se modifican RunHud, precios/EV, APIs de disparos ni init/reset de tiendas.
+
+## Revisión económica de integración (sin cambiar precios en esta rama)
+
+Con los precios nuevos comunicados por coordinación:
+
+- Disparo Ráfaga: estructura 110 + producto 140 = **250**.
+- Fuerza: estructura 100 + producto 100 = **200**.
+- Dos EV por atributo: 80 + 120 = 200; cuatro atributos = **800**.
+- Ráfaga + Fuerza sin EV = **450**; combo con dos EV en los cuatro stats = **1250**.
+- Puntos acumulados garantizados, sin compras ni drops, tras completar rondas
+  1–7: **110, 250, 420, 620, 850, 1110, 1400**. Ronda 5 conserva el
+  presupuesto de sus 14 bajas normales reemplazadas.
+- El combo sin EV es asequible durante ronda 4; el completo durante ronda 7
+  (desde 1110, tras 14 bajas normales de esa ronda). Ya no es correcto asumir
+  el combo completo antes de ronda 4 o del primer jefe.
+- Modelo de jefe sin poder: F neutral, 100% impactos, apuntado sostenido,
+  intervalo 1 s; tiempos desde la primera bala, sin viaje ni obstáculos:
+
+| Ronda | Ráfaga + Fuerza, sin EV (Jolteon / Charizard / Blastoise) | Más 2 EV por stat |
+| --- | --- | --- |
+| 5 | 14.12 / 11.24 / 11.24 s | 10 / 8.24 / 8.24 s (contrafactual: aún no asequible sin drops) |
+| 10 | 22.12 / 18.12 / 18.12 s | 15.24 / 13.24 / 13.24 s |
+| 20 | 38.12 / 31.24 / 31.24 s | 27.12 / 23.24 / 23.24 s |
+
+El especial reduce esos tiempos si se combina con disparos; usado solo, puede
+derrotar un jefe sano en cuatro activaciones (mínimo ~30 s desde la primera).
+Es cálculo de modelo, no playtesting ni ejecución del loop Unity.
 
 ## Validación
 
 - Nuevas assemblies: `Game.Rounds.EditMode.Tests` (14 casos) y
-  `Game.Rounds.PlayMode.Tests` (3 casos).
+  `Game.Rounds.PlayMode.Tests` (4 casos: conserva los 3 originales y añade 1).
 - EditMode: frecuencia, crecimiento temprano, límites extremos, multiplicadores
   de jefe, selección real del catálogo y disponibilidad de sprites.
 - PlayMode: aparición única/no refuerzos, daño letal y crédito único, compensación
   económica, transición a ronda normal, limpieza Stop y reinicio de presupuesto,
-  reinicialización de stats y sustitución de visual en objeto reutilizado.
+   reinicialización de stats y sustitución de visual en objeto reutilizado;
+   regresión Player.ActivateInvincibility → jefe 75% / normales muertos,
+   contacto invencible seguro, rechazo de cooldown, remate y reset limpio.
+   El test adelanta el timestamp de recarga para no esperar 30 s de reloj real.
 - Los fixtures requieren escena vacía, restauran Random/GameFlow y los contadores
   PlayerPrefs que usan; no crean/modifican el save de progresión.
 - No se ejecutó Unity, ni se abrió/mutó el Editor compartido. El coordinador debe
   ejecutar ambas assemblies y suites existentes en Unity/CI.
+- Corrección de especial: compilación externa ejecutada con
+  `python3 /tmp/opencode/compile-proyectofinal.py --project /tmp/opencode/proyectofinal-rounds --all-tests`:
+  Game.Runtime y las 13 assemblies de tests compilan sin errores (warnings
+  anteriores de campos sin asignar y APIs obsoletas). Usa Roslyn y DLLs del Editor
+  instalado/cacheadas: no ejecuta NUnit, no valida importación ni escena, ni
+  sustituye Unity CI. La consola del Editor original se leyó sin mutaciones y
+  devolvió 0 errores antes/después; no es prueba de compilación del worktree.
 - Comprobaciones estáticas ejecutadas: `git diff --check`; parseo JSON de todos
   los asmdef; presencia de metas nuevos y GUIDs únicos; catálogo actual Mew y
-  archivo de sprite existente; recuento de 14 + 3 casos declarados.
+  archivo de sprite existente; recuento actualizado de 14 + 4 casos declarados.
 - No se realizaron pruebas de juego: comprobar ritmo real inicial (1–4), jefe 5,
   rondas 10/20 y tope avanzado antes de cerrar el criterio de ajuste de #29.
   Estos valores son una propuesta comprobable, no un balance validado jugando.

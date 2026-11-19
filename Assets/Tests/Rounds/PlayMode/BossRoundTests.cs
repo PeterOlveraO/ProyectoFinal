@@ -148,6 +148,55 @@ namespace Game.Tests.Rounds
         }
 
         [UnityTest]
+        public IEnumerator SpecialDamagesBossOncePerActivationButKeepsNormalKillsAndResetsCleanly()
+        {
+            var boss = BeginBoss();
+            var normal = Create("SpecialNormal").AddComponent<EnemyTriangle>();
+            normal.InitializeRound(1, RoundDifficulty.Stats(1), false);
+            int quarter = boss.MaxHealth / 4;
+            int playerHealth = _player.Health;
+            Assert.IsTrue(_player.ActivateInvincibility());
+            Assert.AreEqual(quarter * 3, boss.Health);
+            Assert.IsTrue(normal.IsDead);
+            Assert.IsTrue(_player.IsInvincible);
+            Assert.IsFalse(_player.ActivateInvincibility(), "cooldown rejects duplicate activation");
+            Assert.AreEqual(quarter * 3, boss.Health);
+            for (int frame = 0; frame < 10; frame++)
+                Call(boss, "ApplyContact", _player);
+            Assert.AreEqual(quarter * 3, boss.Health, "invincible contact must not damage/kill the boss");
+            Assert.AreEqual(playerHealth, _player.Health);
+            var contactNormal = Create("ContactNormal").AddComponent<EnemyTriangle>();
+            contactNormal.Initialize(1, 2.8f);
+            Call(contactNormal, "ApplyContact", _player);
+            Assert.IsTrue(contactNormal.IsDead, "normal enemies still die on invincible contact");
+            yield return null;
+            Assert.IsTrue(normal == null);
+            Assert.IsTrue(contactNormal == null);
+            Assert.IsFalse(boss.IsDead);
+
+            // Advance only the cooldown timestamp, without a 30-second wall-clock test.
+            // Each call still goes through the real Player activation guard and damage API.
+            for (int remainingQuarters = 2; remainingQuarters >= 0; remainingQuarters--)
+            {
+                Set(_player, "_powerReadyAt", Time.time - 1f);
+                Assert.IsTrue(_player.ActivateInvincibility());
+                Assert.AreEqual(quarter * remainingQuarters, boss.Health);
+            }
+            Assert.IsTrue(boss.IsDead, "four separated activations can finish a full-health boss");
+            Assert.AreEqual(1, _round.EnemiesDefeatedThisRound);
+            yield return null;
+            Assert.AreEqual(0, EnemyTriangle.All.Count);
+            _player.Revive();
+            Assert.IsTrue(_player.IsPowerReady);
+            Assert.IsFalse(_player.IsInvincible);
+            boss = Create("ReusedBoss").AddComponent<EnemyTriangle>();
+            boss.InitializeRound(2, RoundDifficulty.Stats(5, true), true);
+            Assert.AreEqual(216, boss.Health, "new initialization has no retained special damage");
+            Assert.IsTrue(_player.ActivateInvincibility());
+            Assert.AreEqual(162, boss.Health);
+        }
+
+        [UnityTest]
         public IEnumerator ReinitializedEnemyResetsBossDamageHealthFlashAndReplacesVisual()
         {
             var go = Create("ReusableEnemy");
