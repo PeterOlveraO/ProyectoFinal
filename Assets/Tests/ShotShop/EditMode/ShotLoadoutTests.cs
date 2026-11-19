@@ -7,7 +7,7 @@ namespace Game.ShotShop.Tests
     public sealed class ShotLoadoutTests
     {
         [Test]
-        public void BasicIsFreeAndTheOnlyInitialOwnedShot()
+        public void StartsWithBasicButRepurchasingItIsNeverFree()
         {
             var shots = new ShotLoadout();
             Assert.AreEqual(ShotType.Basic, shots.Equipped);
@@ -18,9 +18,10 @@ namespace Game.ShotShop.Tests
             Assert.IsFalse(shots.TryBuyAndEquip(ShotType.Basic, _ => false));
         }
 
-        [TestCase(ShotType.Burst, 60)]
-        [TestCase(ShotType.Fan, 90)]
-        [TestCase(ShotType.Piercing, 120)]
+        [TestCase(ShotType.Basic, 80)]
+        [TestCase(ShotType.Burst, 140)]
+        [TestCase(ShotType.Fan, 200)]
+        [TestCase(ShotType.Piercing, 280)]
         public void PurchaseSpendsExactRunPointsAndEquips(ShotType type, int expectedPrice)
         {
             var shots = new ShotLoadout();

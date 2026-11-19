@@ -167,6 +167,34 @@ namespace Game.Rounds.Shop.Tests
         }
 
         [Test]
+        public void Build_InsufficientFundsIsAtomic()
+        {
+            int points = DrinkStations.BuildPrices[0] - 1;
+            SetAutoProperty(_round, "Points", points);
+            Assert.IsFalse(_drinks.Build(0));
+            Assert.IsFalse(_drinks.IsBuilt(0));
+            Assert.AreEqual(points, _round.Points);
+        }
+
+        [TestCase("remote")]
+        [TestCase("paused")]
+        [TestCase("dead")]
+        [TestCase("over")]
+        public void Build_RejectsUnauthorizedInteractionWithoutCharging(string reason)
+        {
+            switch (reason)
+            {
+                case "remote": _player.transform.position = Vector3.right * 4; break;
+                case "paused": GameFlow.Blocked = true; break;
+                case "dead": SetField(_player, "_alive", false); break;
+                case "over": SetField(_round, "_phase", RoundManager.RoundPhase.GameOver); break;
+            }
+            Assert.IsFalse(_drinks.Build(0));
+            Assert.AreEqual(StartingPoints, _round.Points);
+            Assert.IsFalse(_drinks.IsBuilt(0));
+        }
+
+        [Test]
         public void ConstructionAndPurchaseAreSeparateAndResetIsRunOnly()
         {
             Assert.IsFalse(_drinks.Buy(0));

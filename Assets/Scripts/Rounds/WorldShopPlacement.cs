@@ -55,7 +55,7 @@ namespace Game.Rounds
                 if (IsReserved(point, reserved) || HasBlockingCollider(terrain, point))
                     continue;
 
-                candidates.Add(new Candidate(x, z, map.GetZone(x, z),
+                candidates.Add(new Candidate(x, z,
                     Hash(x, z, terrain.Settings.seed + seedOffset)));
             }
 
@@ -92,64 +92,6 @@ namespace Game.Rounds
             return positions.ToArray();
         }
 
-        static int[] BuildQuotas(int count)
-        {
-            int[] quota = { count / 3, count / 3, count / 3 };
-            for (int i = 0; i < count % 3; i++) quota[i]++;
-            return quota;
-        }
-
-        static void SelectFromZone(WorldTerrain terrain, List<Candidate> candidates, int zone, int quota,
-            IReadOnlyList<Vector3> reserved, List<Vector3> selected)
-        {
-            for (int i = 0; i < quota; i++)
-            {
-                Candidate best = default;
-                float bestScore = float.NegativeInfinity;
-                bool found = false;
-                foreach (Candidate candidate in candidates)
-                {
-                    if (candidate.Zone != zone || IsSelected(candidate, selected, terrain)) continue;
-                    Vector3 point = terrain.BlockTopCenter(candidate.X, candidate.Z);
-                    float score = Dispersion(point, selected, reserved);
-                    // Hash estable desempata; prioriza separación y ligeramente el orden semialeatorio.
-                    score += (candidate.Order & 0xffff) / 65535f;
-                    if (score <= bestScore) continue;
-                    bestScore = score;
-                    best = candidate;
-                    found = true;
-                }
-
-                if (!found) return;
-                selected.Add(terrain.BlockTopCenter(best.X, best.Z));
-            }
-        }
-
-        static void SelectFromAnyZone(WorldTerrain terrain, List<Candidate> candidates, int count,
-            IReadOnlyList<Vector3> reserved, List<Vector3> selected)
-        {
-            while (selected.Count < count)
-            {
-                Candidate best = default;
-                float bestScore = float.NegativeInfinity;
-                bool found = false;
-                foreach (Candidate candidate in candidates)
-                {
-                    if (IsSelected(candidate, selected, terrain)) continue;
-                    Vector3 point = terrain.BlockTopCenter(candidate.X, candidate.Z);
-                    float score = Dispersion(point, selected, reserved) +
-                                  (candidate.Order & 0xffff) / 65535f;
-                    if (score <= bestScore) continue;
-                    bestScore = score;
-                    best = candidate;
-                    found = true;
-                }
-
-                if (!found) return;
-                selected.Add(terrain.BlockTopCenter(best.X, best.Z));
-            }
-        }
-
         static bool IsSelected(Candidate candidate, List<Vector3> selected, WorldTerrain terrain)
         {
             Vector3 point = terrain.BlockTopCenter(candidate.X, candidate.Z);
@@ -160,21 +102,6 @@ namespace Game.Rounds
                 if (delta.sqrMagnitude < 4.5f * 4.5f) return true;
             }
             return false;
-        }
-
-        static float Dispersion(Vector3 point, List<Vector3> selected, IReadOnlyList<Vector3> reserved)
-        {
-            float nearest = float.PositiveInfinity;
-            if (selected.Count == 0 && (reserved == null || reserved.Count == 0))
-                return point.x * 0.0137f + point.z * 0.0211f;
-
-            if (selected != null)
-                foreach (Vector3 other in selected)
-                    nearest = Mathf.Min(nearest, HorizontalDistanceSquared(point, other));
-            if (reserved != null)
-                foreach (Vector3 other in reserved)
-                    nearest = Mathf.Min(nearest, HorizontalDistanceSquared(point, other));
-            return nearest;
         }
 
         static float HorizontalDistanceSquared(Vector3 a, Vector3 b)
@@ -306,14 +233,12 @@ namespace Game.Rounds
         {
             public readonly int X;
             public readonly int Z;
-            public readonly int Zone;
             public readonly int Order;
 
-            public Candidate(int x, int z, int zone, int order)
+            public Candidate(int x, int z, int order)
             {
                 X = x;
                 Z = z;
-                Zone = zone;
                 Order = order;
             }
         }

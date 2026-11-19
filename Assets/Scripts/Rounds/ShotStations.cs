@@ -19,7 +19,17 @@ namespace Game.Rounds
         public IReadOnlyList<Vector3> Positions => _positions;
         public const int OfferCount = 4;
         public static ShotType OfferType(int offer) => offer == 3 ? ShotType.Basic : (ShotType)(offer + 1);
-        public static int BuildPrice(int offer) => 50 + offer * 10;
+        public static int BuildPrice(int offer)
+        {
+            switch (offer)
+            {
+                case 0: return 110;
+                case 1: return 150;
+                case 2: return 200;
+                case 3: return 80;
+                default: return 0;
+            }
+        }
         readonly TycoonUnlocks _construction = new TycoonUnlocks(OfferCount);
         readonly TycoonPlatform[] _platforms = new TycoonPlatform[OfferCount];
 

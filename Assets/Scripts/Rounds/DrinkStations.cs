@@ -17,8 +17,8 @@ namespace Game.Rounds
     {
         public static readonly string[] Names = { "FUERZA", "VITALIDAD", "SPRINT", "ESCUDO", "RÁFAGA" };
         // Coste por partida (no se guarda como moneda persistente).
-        public static readonly int[] Prices = { 30, 45, 35, 45, 60 };
-        public static readonly int[] BuildPrices = { 40, 50, 40, 50, 60 };
+        public static readonly int[] Prices = { 100, 140, 90, 160, 180 };
+        public static readonly int[] BuildPrices = { 100, 120, 100, 140, 160 };
         static readonly Color[] Colors =
         {
             new Color(1f, .28f, .22f), new Color(.35f, 1f, .45f),
@@ -50,7 +50,7 @@ namespace Game.Rounds
             Vector3[] positions;
             try
             {
-                // seedOffset separa determinísticamente este grupo de otros grupos del mismo mapa.
+                // First five sectors in the shared spawn hub; arsenals reserve these afterwards.
                 positions = WorldShopPlacement.FindPositions(_terrain, _stands.Length, 0x51A7);
             }
             catch (InvalidOperationException exception)

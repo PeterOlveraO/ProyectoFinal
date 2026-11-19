@@ -168,7 +168,7 @@ namespace Game.Rounds
 
         public bool IsRunActive => _phase != RoundPhase.Idle && _phase != RoundPhase.GameOver;
         public int EVLevel(int stat) => stat >= 0 && stat < _evLevels.Length ? _evLevels[stat] : 0;
-        public int EVCost(int stat) => 20 + EVLevel(stat) * 10;
+        public int EVCost(int stat) => RunEconomy.EVPrice(EVLevel(stat));
         public bool CanBuyEV(int stat) => IsRunActive && stat >= 0 && stat < _evLevels.Length &&
                                           _evLevels[stat] < 10 && Points >= EVCost(stat);
 
