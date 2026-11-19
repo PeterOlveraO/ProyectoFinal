@@ -15,8 +15,8 @@ namespace Game.Player
     ///   - Gravedad. stepOffset 0.55 sube un nivel (0.5) pero no dos (1.0).
     ///   - R, o caer por debajo de respawnHeight, lo devuelve al bloque central.
     ///   - Vida: 100. Cada enemigo que lo toca le resta 10 de vida por segundo.
-    ///   - Poder especial (Espacio o botón del HUD): invencibilidad temporal y elimina a
-    ///     todos los enemigos vivos, con 10 s de recarga.
+    ///   - Poder especial (Espacio o botón del HUD): invencibilidad temporal, elimina
+    ///     normales y quita 25% de vida máxima a jefes, con 10 s de recarga.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     [DisallowMultipleComponent]
@@ -210,7 +210,7 @@ namespace Game.Player
 
         /// <summary>
         /// Poder especial (botón sobre el joystick de ataque o tecla Espacio):
-        /// invencibilidad temporal y elimina a todos los enemigos de la zona.
+        /// invencibilidad temporal, elimina normales y daña jefes una vez por activación.
         /// Devuelve false si todavía está en recarga.
         /// </summary>
         public bool ActivateInvincibility()
@@ -219,7 +219,7 @@ namespace Game.Player
 
             _invincibleUntil = Time.time + invincibleDuration;
             _powerReadyAt = Time.time + powerCooldown;
-            EnemyTriangle.KillAll();
+            EnemyTriangle.ApplySpecialPowerToAll();
             return true;
         }
 
