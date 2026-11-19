@@ -40,10 +40,19 @@ namespace Game.ShotShop.Tests
             _attack = _player.gameObject.AddComponent<PlayerAttack>();
             _attack.enabled = false;
             Set(_round, "_phase", RoundManager.RoundPhase.Preparing);
-            Set(_round, "<Points>k__BackingField", 300);
-            Set(_round.ShotStations, "_positions", System.Array.AsReadOnly(new[] { Vector3.zero, Vector3.right * 10, Vector3.right * 20 }));
+            Set(_round, "<Points>k__BackingField", 1000);
             GameFlow.Blocked = false;
             GameFlow.Over = false;
+            Set(_round.ShotStations, "_positions", System.Array.AsReadOnly(new[]
+                { Vector3.zero, Vector3.right * 10, Vector3.right * 20, Vector3.right * 30 }));
+            // Other tests exercise construction separately; combat fixtures start with vendors built.
+            for (int i = 0; i < ShotStations.OfferCount; i++)
+            {
+                _player.transform.position = Vector3.right * (10 * i);
+                Assert.IsTrue(_round.ShotStations.Build(i));
+            }
+            _player.transform.position = Vector3.zero;
+            Set(_round, "<Points>k__BackingField", 1000);
             _attack.ResetRun();
         }
 
@@ -77,7 +86,7 @@ namespace Game.ShotShop.Tests
         void Tick(float delta, bool aiming, Vector3 axis) => Call(_attack, "TickAttack", delta, aiming, axis);
 
         [Test]
-        public void ShopUsesRunPointsOnceAndRejectsRemotePausedDeadAndFinishedPurchases()
+        public void ShopChargesEveryPurchaseAndRejectsRemotePausedDeadAndFinishedPurchases()
         {
             int points = _round.Points;
             Assert.IsFalse(_round.BuyShot(1), "cannot buy a remote offer");
@@ -87,24 +96,76 @@ namespace Game.ShotShop.Tests
             Set(_player, "_alive", false);
             Assert.IsFalse(_round.BuyShot(0));
             Set(_player, "_alive", true);
-            Set(_round, "<Points>k__BackingField", 59);
+            Set(_round, "<Points>k__BackingField", ShotDefinitions.Price(ShotType.Burst) - 1);
             Assert.IsFalse(_round.BuyShot(0));
             Set(_round, "<Points>k__BackingField", points);
             Assert.IsTrue(_round.BuyShot(0));
-            Assert.AreEqual(points - 60, _round.Points);
+            Assert.AreEqual(points - ShotDefinitions.Price(ShotType.Burst), _round.Points);
             Assert.AreEqual(0, _round.CoinsEarned);
             Assert.AreEqual(0, _round.TotalPointsEarned, "spending is not earning");
             Assert.AreEqual(ShotType.Burst, _round.Shots.Equipped);
-            Assert.IsTrue(_round.EquipShot(ShotType.Basic));
+            Assert.IsFalse(_round.EquipShot(ShotType.Basic));
             Assert.IsTrue(_round.BuyShot(0));
-            Assert.AreEqual(points - 60, _round.Points);
+            Assert.AreEqual(points - 2 * ShotDefinitions.Price(ShotType.Burst), _round.Points);
             _player.transform.position = Vector3.one * 100;
-            Assert.IsTrue(_round.EquipShot(ShotType.Basic));
-            Assert.IsTrue(_round.EquipShot(ShotType.Burst), "owned shots can be equipped anywhere");
+            Assert.IsFalse(_round.EquipShot(ShotType.Basic));
+            Assert.IsFalse(_round.EquipShot(ShotType.Burst), "there is no free equip API");
             Set(_round, "_phase", RoundManager.RoundPhase.GameOver);
             Assert.IsFalse(_round.BuyShot(0));
             Assert.IsFalse(_round.EquipShot(ShotType.Basic));
-            Assert.AreEqual(points - 60, _round.Points);
+            Assert.AreEqual(points - 2 * ShotDefinitions.Price(ShotType.Burst), _round.Points);
+        }
+
+        [Test]
+        public void ReturningToBasicRequiresItsBuiltArsenalAndFullProductPayment()
+        {
+            int before = _round.Points;
+            Assert.IsTrue(_round.BuyShot(0));
+            Assert.IsFalse(_round.EquipShot(ShotType.Basic));
+            Assert.IsFalse(_round.BuyShot(3), "Basic is not remotely purchasable");
+            _player.transform.position = Vector3.right * 30;
+            Assert.IsTrue(_round.BuyShot(3));
+            Assert.AreEqual(ShotType.Basic, _round.Shots.Equipped);
+            Assert.AreEqual(before - ShotDefinitions.Price(ShotType.Burst) - ShotDefinitions.Price(ShotType.Basic), _round.Points);
+        }
+
+        [TestCase("remote")]
+        [TestCase("paused")]
+        [TestCase("dead")]
+        [TestCase("over")]
+        [TestCase("poor")]
+        public void ShotConstructionRejectsUnauthorizedOrUnaffordableInteraction(string reason)
+        {
+            _round.ShotStations.ResetRun();
+            switch (reason)
+            {
+                case "remote": _player.transform.position = Vector3.one * 100; break;
+                case "paused": GameFlow.Blocked = true; break;
+                case "dead": Set(_player, "_alive", false); break;
+                case "over": Set(_round, "_phase", RoundManager.RoundPhase.GameOver); break;
+                case "poor": Set(_round, "<Points>k__BackingField", ShotStations.BuildPrice(0) - 1); break;
+            }
+            int before = _round.Points;
+            Assert.IsFalse(_round.ShotStations.Build(0));
+            Assert.IsFalse(_round.ShotStations.IsBuilt(0));
+            Assert.AreEqual(before, _round.Points);
+            Assert.AreEqual(ShotType.Basic, _round.Shots.Equipped);
+        }
+
+        [Test]
+        public void ShotConstructionAndPurchaseAreSeparateAndNeverUnlockAcrossRuns()
+        {
+            _round.ShotStations.ResetRun();
+            int points = _round.Points;
+            Assert.IsFalse(_round.BuyShot(0));
+            Assert.AreEqual(points, _round.Points);
+            Assert.IsTrue(_round.ShotStations.Build(0));
+            Assert.AreEqual(ShotType.Basic, _round.Shots.Equipped);
+            Assert.IsFalse(_round.ShotStations.Build(0));
+            Assert.IsTrue(_round.BuyShot(0));
+            Assert.AreEqual(points - ShotStations.BuildPrice(0) - ShotDefinitions.Price(ShotType.Burst), _round.Points);
+            _round.ShotStations.ResetRun();
+            Assert.IsFalse(_round.BuyShot(0));
         }
 
         [Test]
@@ -146,7 +207,7 @@ namespace Game.ShotShop.Tests
                 case "release": Tick(.1f, false, Vector3.zero); break;
                 case "pause": GameFlow.Blocked = true; Tick(.2f, true, Vector3.right); break;
                 case "over": GameFlow.Over = true; Tick(.2f, true, Vector3.right); break;
-                case "switch": Assert.IsTrue(_round.EquipShot(ShotType.Basic)); break;
+                case "switch": Assert.IsTrue(_round.BuyShot(0)); break;
                 case "reset": _attack.ResetRun(); break;
                 case "disable": Call(_attack, "OnDisable"); break;
                 case "dead": Set(_player, "_alive", false); Tick(.2f, true, Vector3.right); break;
@@ -215,7 +276,7 @@ namespace Game.ShotShop.Tests
             Assert.AreEqual(-1, _round.ShotStations.NearbyOffer(Vector3.up * 3f));
             Assert.AreEqual(-1, _round.ShotStations.NearbyOffer(Vector3.forward * 4f));
             Assert.IsFalse(_round.BuyShot(-1));
-            Assert.IsFalse(_round.BuyShot(3));
+            Assert.IsFalse(_round.BuyShot(4));
         }
 
         [Test]
@@ -274,6 +335,7 @@ namespace Game.ShotShop.Tests
             Tick(0f, true, Vector3.forward);
             Call(_round, "ResetTemporaryStats");
             Assert.AreEqual(ShotType.Basic, _round.Shots.Equipped);
+            Assert.IsFalse(_round.ShotStations.IsBuilt(0));
             Assert.IsFalse(_round.Shots.Has(ShotType.Burst));
             Assert.AreEqual(0, Get<int>(_attack, "_burstRemaining"));
             Assert.AreEqual(0, Object.FindObjectsByType<AttackProjectile>().Length);
