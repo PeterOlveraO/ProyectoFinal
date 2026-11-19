@@ -5,6 +5,7 @@ using Game.Player;
 using Game.Rounds;
 using Game.Terrain;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 namespace Game.Rounds.Shop.Tests
@@ -24,6 +25,15 @@ namespace Game.Rounds.Shop.Tests
             var art = Resources.Load<TycoonMachineArt>("TycoonMachine");
             Assert.IsNotNull(art);
             Assert.IsNotNull(art.machine, "maquina.png must be imported as a sprite and included in builds");
+            const string path = "Assets/Imagenes/maquina.png";
+            Assert.AreEqual(path, AssetDatabase.GetAssetPath(art.machine));
+            Assert.AreEqual("e39b40ddb18a28a8388b8d83de3c2ede", AssetDatabase.AssetPathToGUID(path));
+            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+            Assert.IsNotNull(importer);
+            Assert.AreEqual(TextureImporterType.Sprite, importer.textureType);
+            Assert.AreEqual(SpriteImportMode.Single, importer.spriteImportMode);
+            Assert.AreEqual(FilterMode.Point, importer.filterMode);
+            Assert.IsFalse(importer.mipmapEnabled);
         }
 
         [Test]
@@ -267,6 +277,39 @@ namespace Game.Rounds.Shop.Tests
             foreach (Object item in _created)
                 if (item != null) Object.DestroyImmediate(item);
             _created.Clear();
+        }
+
+        [Test]
+        public void RealTerrainSettingsProduceNineCompactDryConnectedPlatforms()
+        {
+            var settings = AssetDatabase.LoadAssetAtPath<TerrainSettings>("Assets/Settings/TerrainSettings.asset");
+            Assert.IsNotNull(settings);
+            var go = new GameObject("RealSettingsTycoonPlacement");
+            go.SetActive(false);
+            _created.Add(go);
+            var terrain = go.AddComponent<WorldTerrain>();
+            SetField(terrain, "settings", settings);
+            var map = HeightMapGenerator.Generate(settings);
+            SetField(terrain, "_map", map);
+            var drinks = WorldShopPlacement.FindPositions(terrain, 5, 0x51A7);
+            var shots = WorldShopPlacement.FindPositions(terrain, 4, 104729, drinks);
+            var all = new List<Vector3>(drinks);
+            all.AddRange(shots);
+            Assert.AreEqual(9, all.Count);
+            bool[,] reachable = FindReachable(terrain, map.Width / 2, map.Depth / 2);
+            foreach (Vector3 point in all)
+            {
+                Vector3 local = point - terrain.transform.position;
+                int x = Mathf.FloorToInt(local.x / terrain.BlockSize);
+                int z = Mathf.FloorToInt(local.z / terrain.BlockSize);
+                Assert.IsTrue(reachable[x, z]);
+                Assert.IsFalse(terrain.IsLakeAtWorld(point));
+                Assert.Less(Vector3.Distance(point, terrain.SpawnPosition), 12.01f);
+                Assert.AreEqual(settings.flatLevel * settings.stepHeight, point.y);
+            }
+            for (int i = 0; i < all.Count; i++)
+            for (int j = 0; j < i; j++)
+                Assert.GreaterOrEqual(Vector3.Distance(all[i], all[j]), 4.5f);
         }
 
         [Test]

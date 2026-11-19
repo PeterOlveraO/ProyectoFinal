@@ -44,8 +44,8 @@ Tests: `Game.Rounds.Shop.Tests` (placement, construction, machine resource, perk
 transactions); `Game.ShotShop.EditMode.Tests` (single active shot, charges, atomic
 failures, patterns); `Game.ShotShop.PlayMode.Tests` (runtime authorization,
 construction gating, repeated charges, burst cancellation and projectile effects).
-See `Documentation/TycoonEconomy.md` for balance calculations.
+See `docs/tycoon-economy.md` for balance calculations.
 
-CI gate counts after these issues: `Game.Rounds.Shop.Tests` **35**,
+CI gate counts after these issues: `Game.Rounds.Shop.Tests` **36**,
 `Game.ShotShop.EditMode.Tests` **11**, `Game.ShotShop.PlayMode.Tests` **24**:
-**70 total / 37 added** over the base branch. Counts include parameterized cases.
+**71 total / 38 added** over the base branch. Counts include parameterized cases.
