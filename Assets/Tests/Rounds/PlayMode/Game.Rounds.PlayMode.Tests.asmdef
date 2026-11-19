@@ -1,0 +1,9 @@
+{
+    "name": "Game.Rounds.PlayMode.Tests",
+    "references": ["Game.Runtime", "Pokemon.Progression", "Pokemon.Combat", "UnityEngine.TestRunner"],
+    "includePlatforms": [],
+    "overrideReferences": true,
+    "precompiledReferences": ["nunit.framework.dll"],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}
