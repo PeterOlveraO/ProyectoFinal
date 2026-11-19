@@ -15,9 +15,8 @@ namespace Game.Rounds
     /// <summary>
     /// Sistema de rondas con economía.
     ///
-    /// Cada ronda pide eliminar un número de enemigos que crece con la ronda. Los enemigos
-    /// aparecen por oleadas alrededor del jugador (nunca encima) y se vuelven algo más
-    /// rápidos y resistentes; cada 4 rondas suben un "nivel de zona" (+20 % de vida).
+    /// Oleadas normales con dificultad acotada por ronda; cada quinta ronda contiene
+    /// un único jefe mítico/legendario del catálogo, sin refuerzos.
     ///
     /// Economía:
     ///   · Puntos (interna de la partida): +10 por enemigo y +50 por ronda superada
@@ -76,15 +75,13 @@ namespace Game.Rounds
         [SerializeField, Min(0.05f)] float minSpawnInterval = 0.35f;
 
         [Header("Dificultad")]
-        [Tooltip("Rondas por cada nivel de zona (+20 % de vida del enemigo).")]
+        [Tooltip("Rondas por cada nivel de zona (metadatos; stats en RoundDifficulty).")]
         [SerializeField, Min(1)] int roundsPerTier = 4;
 
-        [Tooltip("Nivel de zona máximo (tope de vida).")]
+        [Tooltip("Nivel de zona máximo; no modifica los stats de RoundDifficulty.")]
         [SerializeField, Min(1)] int maxTier = 8;
 
-        [SerializeField, Min(0.1f)] float baseEnemySpeed = 2.2f;
-        [SerializeField, Min(0f)] float speedPerRound = 0.09f;
-        [SerializeField, Min(0.1f)] float maxEnemySpeed = 4.6f;
+        // RoundDifficulty owns speed/health/damage, including scenes serialized before #29.
 
         [Header("Recompensas")]
         [SerializeField, Min(0)] int pointsPerKill = 10;
@@ -109,6 +106,8 @@ namespace Game.Rounds
         PokemonInstance _runPokemon;
         SpeciesDefinition _runSpecies;
         StatBlock _runStats;
+        SpeciesDefinition _bossSpecies;
+        EnemyTriangle _bossEnemy;
         CombatStatBlock _combatStats;
         readonly System.Collections.Generic.HashSet<EnemyTriangle> _creditedEnemies = new System.Collections.Generic.HashSet<EnemyTriangle>();
 
@@ -152,6 +151,8 @@ namespace Game.Rounds
 
         public RoundPhase Phase => _phase;
         public int Round { get; private set; }
+        public bool IsBossRound => IsRunActive && RoundDifficulty.IsBoss(Round);
+        public string BossName => IsBossRound ? _bossSpecies?.name : null;
         public int EnemiesThisRound { get; private set; }
         public int EnemiesDefeatedThisRound => _defeatedThisRound;
         public int AliveCount { get; private set; }
@@ -428,8 +429,12 @@ namespace Game.Rounds
         void StartRound(int round)
         {
             Round = Mathf.Max(1, round);
-            EnemiesThisRound = Mathf.Min(maxEnemiesPerRound,
-                                          baseEnemies + enemiesPerRound * (Round - 1));
+            _bossSpecies = RoundDifficulty.IsBoss(Round)
+                ? RoundDifficulty.BossSpecies(Round, JsonUtility.FromJson<SpeciesCatalog>(
+                    Resources.Load<TextAsset>("PokemonProgression/catalog").text).species) : null;
+            _bossEnemy = null;
+            EnemiesThisRound = RoundDifficulty.IsBoss(Round) ? 1 : NormalEnemyCount();
+            _creditedEnemies.Clear();
 
             _defeatedThisRound = 0;
             _spawnedThisRound = 0;
@@ -497,17 +502,20 @@ namespace Game.Rounds
         public void NotifyEnemyKilled(EnemyTriangle enemy)
         {
             if (_phase != RoundPhase.Fighting || enemy == null || GameFlow.Over) return;
+            if (IsBossRound && enemy != _bossEnemy) return;
             if (!_creditedEnemies.Add(enemy)) return;
             _defeatedThisRound++;
 
             EnemiesDefeated++;
-            AddPoints(pointsPerKill);
-            CoinsEarned += coinsPerKill;
+            // Compensate skipped normal kills without inflating defeat/achievement counters.
+            int rewardKills = IsBossRound ? NormalEnemyCount() : 1;
+            AddPoints(pointsPerKill * rewardKills);
+            CoinsEarned += coinsPerKill * rewardKills;
 
             if (UnityEngine.Random.value < 0.30f)
             {
                 BonusDrops++;
-                AddPoints(pointsPerKill);
+                AddPoints(pointsPerKill * rewardKills);
                 HitBurst.Spawn(enemy.transform.position + Vector3.up, new Color(.4f, .8f, 1f), 8, .8f);
             }
 
@@ -521,12 +529,20 @@ namespace Game.Rounds
             int tier = TierForRound(Round);
             Vector3 position = PickSpawnPosition(player.transform.position);
 
-            var go = EnemyTriangleFactory.Create(tier);
+            var go = IsBossRound
+                ? EnemyTriangleFactory.Create(tier,
+                    Resources.Load<Sprite>("PokemonPortraits/" + _bossSpecies.spriteName) ??
+                    Resources.Load<Sprite>("PokemonSprites/" + _bossSpecies.spriteName))
+                : EnemyTriangleFactory.Create(tier);
             go.transform.SetParent(transform, true);
             go.transform.position = position;
 
             var enemy = go.GetComponent<EnemyTriangle>();
-            if (enemy != null) enemy.Initialize(tier, CurrentEnemySpeed());
+            if (enemy != null)
+            {
+                enemy.InitializeRound(tier, RoundDifficulty.Stats(Round, IsBossRound), IsBossRound);
+                if (IsBossRound) _bossEnemy = enemy;
+            }
 
             _spawnedThisRound++;
             AliveCount++;
@@ -606,6 +622,7 @@ namespace Game.Rounds
 
         int MaxAliveForRound()
         {
+            if (IsBossRound) return 1;
             int bonus = (Round - 1) / Mathf.Max(1, maxAliveGrowthEvery);
             return Mathf.Clamp(baseMaxAlive + bonus, 1, maxAliveCap);
         }
@@ -615,9 +632,10 @@ namespace Game.Rounds
             return Mathf.Clamp(1 + (round - 1) / Mathf.Max(1, roundsPerTier), 1, maxTier);
         }
 
-        float CurrentEnemySpeed()
+        int NormalEnemyCount()
         {
-            return Mathf.Min(maxEnemySpeed, baseEnemySpeed + speedPerRound * (Round - 1));
+            return (int)Math.Max(1d, Math.Min(maxEnemiesPerRound,
+                (double)baseEnemies + (double)enemiesPerRound * (Round - 1)));
         }
 
         float CurrentSpawnInterval()
