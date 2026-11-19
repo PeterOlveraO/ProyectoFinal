@@ -223,7 +223,7 @@ class CheckoutAwareGateTests(unittest.TestCase):
     def test_independent_feature_branch_does_not_require_other_feature_suites(self):
         self.add_asmdef("Game.WorldProps.Tests")
         expected = validate_test_results.required_for_checkout(self.project)
-        self.assertEqual(expected["editmode"]["Game.WorldProps.Tests"], 5)
+        self.assertEqual(expected["editmode"]["Game.WorldProps.Tests"], 9)
         self.assertNotIn("Game.DirectionalSprites.Tests", expected["editmode"])
         self.assertNotIn("Game.ShotShop.PlayMode.Tests", expected["playmode"])
         self.write_results(expected)
@@ -248,19 +248,19 @@ class CheckoutAwareGateTests(unittest.TestCase):
         self.write_results(expected)
         self.assertEqual(self.run_gate()[0], 0)
         # Read the declared name, not the filename, platform list, or directory.
-        self.assertEqual(expected["editmode"]["Game.ShotShop.EditMode.Tests"], 10)
-        self.assertEqual(expected["playmode"]["Game.ShotShop.PlayMode.Tests"], 17)
+        self.assertEqual(expected["editmode"]["Game.ShotShop.EditMode.Tests"], 11)
+        self.assertEqual(expected["playmode"]["Game.ShotShop.PlayMode.Tests"], 24)
 
     def test_shotshop_editmode_results_cannot_substitute_for_playmode(self):
         self.add_asmdef("Game.ShotShop.EditMode.Tests", "ShotShop/EditMode/Test.asmdef")
         self.add_asmdef("Game.ShotShop.PlayMode.Tests", "ShotShop/PlayMode/Test.asmdef")
         wrong_mode = validate_test_results.required_for_checkout(self.project)
         del wrong_mode["playmode"]["Game.ShotShop.PlayMode.Tests"]
-        wrong_mode["editmode"]["Game.ShotShop.PlayMode.Tests"] = 17
+        wrong_mode["editmode"]["Game.ShotShop.PlayMode.Tests"] = 24
         self.write_results(wrong_mode)
         code, summary = self.run_gate()
         self.assertEqual(code, 1)
-        self.assertIn("Game.ShotShop.PlayMode.Tests: expected >= 17, found 0", summary)
+        self.assertIn("Game.ShotShop.PlayMode.Tests: expected >= 24, found 0", summary)
 
     def test_directory_or_meta_without_asmdef_does_not_require_future_suite(self):
         path = self.tests / "DirectionalSprites"

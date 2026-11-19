@@ -353,7 +353,7 @@ namespace Game.UI
                 return;
             }
 
-            _roundLabel.text = "RONDA " + round.Round;
+            _roundLabel.text = (round.IsBossRound ? "JEFE · " : "RONDA ") + round.Round;
             _enemiesLabel.text = round.EnemiesDefeatedThisRound + " / " + round.EnemiesThisRound;
             _pointsLabel.text = "PUNTOS " + round.Points;
             _coinsLabel.text = "PREMIO +" + round.CoinsEarned;
@@ -380,13 +380,14 @@ namespace Game.UI
                 switch (phase)
                 {
                     case RoundManager.RoundPhase.Preparing:
-                        SetBanner("RONDA " + round.Round,
+                        SetBanner(round.IsBossRound ? "JEFE · " + round.BossName : "RONDA " + round.Round,
                                   "Prepárate… " + Mathf.CeilToInt(round.PreparationRemaining));
                         _bannerTimer = 999f;
                         break;
 
                     case RoundManager.RoundPhase.Fighting:
-                        SetBanner("RONDA " + round.Round,
+                        SetBanner(round.IsBossRound ? "JEFE · " + round.BossName : "RONDA " + round.Round,
+                                  round.IsBossRound ? "Un único rival · Sin refuerzos" :
                                   "Elimina a " + round.EnemiesThisRound + " enemigos");
                         _bannerTimer = 2.2f;
                         break;

@@ -23,12 +23,15 @@ REQUIRED = {
 # Counts include individual NUnit TestCase instances, not just test methods.
 CONDITIONAL = {
     "Game.PlayerAim.Tests": ("editmode", 15),
-    "Game.WorldProps.Tests": ("editmode", 5),
-    "Game.Rounds.Shop.Tests": ("editmode", 6),
+    "Game.WorldProps.Tests": ("editmode", 9),
+    "Game.Rounds.Shop.Tests": ("editmode", 36),
     "Game.Terrain.PlayMode.Tests": ("playmode", 2),
-    "Game.ShotShop.EditMode.Tests": ("editmode", 10),
-    "Game.ShotShop.PlayMode.Tests": ("playmode", 17),
+    "Game.ShotShop.EditMode.Tests": ("editmode", 11),
+    "Game.ShotShop.PlayMode.Tests": ("playmode", 24),
     "Game.DirectionalSprites.Tests": ("editmode", 10),
+    "Game.Rounds.EditMode.Tests": ("editmode", 14),
+    "Game.Rounds.PlayMode.Tests": ("playmode", 4),
+    "Game.CompactMenus.Tests": ("playmode", 10),
 }
 
 
