@@ -38,8 +38,7 @@ namespace Game.UI
         float _volume;
         int _quality;
         UnityEngine.UI.Slider _volumeSlider;
-        TMPro.TMP_Text _volumeValue, _qualityValue, _starterInfo, _releaseInfo, _heroName, _heroInfo;
-        UnityEngine.UI.Image _hero;
+        TMPro.TMP_Text _volumeValue, _qualityValue, _starterInfo, _releaseInfo;
         UnityEngine.UI.Button _starterConfirm;
         UnityEngine.UI.Button[] _starterButtons, _skillButtons;
         GameObject _pauseButton, _skillsButton;
@@ -91,9 +90,9 @@ namespace Game.UI
             }
         }
 
-        MenuPage Add(ScreenId id, string name, string title, string subtitle)
+        MenuPage Add(ScreenId id, string name, string title, string subtitle, CompactMenuKind? compact = null)
         {
-            var page = new MenuPage(_canvas, name, title, subtitle);
+            var page = new MenuPage(_canvas, name, title, subtitle, compact);
             _pages.Add(id, page);
             return page;
         }
@@ -334,16 +333,11 @@ namespace Game.UI
         {
             _canvas = UIFactory.CreateCanvas("UI_Menus", 100);
             var controls = UIFactory.SafeRoot(_canvas, "RunControls");
-            var pause = UIFactory.CreateButton(controls, "PauseButton", "PAUSA", UIFactory.CardViolet,
-                new Vector2(140, 76), Pause, 25);
-            UIFactory.Place((RectTransform)pause.transform, Vector2.one, Vector2.one,
-                new Vector2(-28, -28), new Vector2(140, 76));
+            var pause = CompactMenuArt.Button(controls, "PauseButton", "PAUSA", "Amber", Pause);
             _pauseButton = pause.gameObject;
-            var skills = UIFactory.CreateButton(controls, "RunSkillsButton", "EV", UIFactory.Sun,
-                new Vector2(90, 76), OpenSkills, 27);
-            UIFactory.Place((RectTransform)skills.transform, Vector2.one, Vector2.one,
-                new Vector2(-184, -28), new Vector2(90, 76));
+            var skills = CompactMenuArt.Button(controls, "RunSkillsButton", "EV", "Blue", OpenSkills);
             _skillsButton = skills.gameObject;
+            controls.gameObject.AddComponent<RunMenuControlsLayout>().Configure(pause, skills);
             BuildMain();
             BuildPause();
             BuildSettings();
@@ -367,51 +361,27 @@ namespace Game.UI
 
         void BuildMain()
         {
-            var page = Add(ScreenId.Main, "MainMenu", "Tu próxima aventura", "Entrena, supera rondas y amplía tu colección.");
-            var left = UIFactory.CreateRect("Welcome", page.Body);
-            UIFactory.Region(left, 0, 0, .49f, 1, 12);
-            UIFactory.Stack(left, 16, 22);
-            UIFactory.Label(left, "Logo", "PKETER", 112, UIFactory.Sun, 150);
-            UIFactory.Label(left, "Tagline", "Un compañero.\nInfinitas rondas.", 56, UIFactory.Cream, 150);
-            UIFactory.Label(left, "Description", "Mejora tus EV durante la partida.\nGana monedas y descubre nuevos Pokémon.", 27, UIFactory.Muted, 90);
-            var play = UIFactory.CreateButton(left, "PlayButton", "JUGAR", UIFactory.Sun, new Vector2(500, 94), StartGame, 36);
-            UIFactory.Layout(play.transform, 94);
-            var showcase = UIFactory.Surface("EquippedPokemon", page.Body);
-            UIFactory.Region(showcase, .53f, 0, 1, 1);
-            var glow = UIFactory.CreateImage("Glow", showcase, Game.Rendering.ProceduralSprites.Glow, new Color(1, .87f, .25f, .18f));
-            UIFactory.Region(glow.rectTransform, 0, .12f, 1, 1);
-            var caption = UIFactory.CreateText("Caption", showcase, "TU COMPAÑERO", 23, UIFactory.Muted);
-            UIFactory.Region(caption.rectTransform, 0, .86f, 1, .96f);
-            _hero = UIFactory.CreateImage("Pokemon", showcase, null, Color.white);
-            _hero.preserveAspect = true;
-            UIFactory.Region(_hero.rectTransform, .15f, .28f, .85f, .83f);
-            _heroName = UIFactory.CreateText("Name", showcase, "", 44, UIFactory.Cream);
-            UIFactory.Region(_heroName.rectTransform, .06f, .13f, .94f, .26f);
-            _heroInfo = UIFactory.CreateText("Info", showcase, "", 24, UIFactory.Muted);
-            UIFactory.Region(_heroInfo.rectTransform, .06f, .04f, .94f, .13f);
-            page.Action("Collection", "Colección", UIFactory.CardViolet, OpenCollection);
-            page.Action("Gacha", "Gacha", UIFactory.CardViolet, OpenGacha);
-            page.Action("Settings", "Ajustes", UIFactory.CardViolet, OpenSettings);
-            page.Action("Credits", "Créditos", UIFactory.CardViolet, () => Show(ScreenId.Credits));
-            page.Action("Quit", "Salir", UIFactory.CardViolet, QuitGame);
+            var page = Add(ScreenId.Main, "MainMenu", "PKETER", "", CompactMenuKind.Main);
+            CompactMenuArt.Button(page.Body, "PlayButton", "JUGAR", "Green", StartGame);
+            CompactMenuArt.Button(page.Body, "Collection", "Colección", "Blue", OpenCollection);
+            CompactMenuArt.Button(page.Body, "Gacha", "Gacha", "Blue", OpenGacha);
+            CompactMenuArt.Button(page.Body, "Settings", "Ajustes", "Amber", OpenSettings);
+            CompactMenuArt.Button(page.Body, "Credits", "Créditos", "Amber", () => Show(ScreenId.Credits));
+            CompactMenuArt.Button(page.Body, "Quit", "Salir", "Red", QuitGame);
         }
         void RefreshHero()
         {
-            if (_hero == null) return;
-            _hero.sprite = PokemonCollection.GetSprite(_equipped);
-            _hero.enabled = _hero.sprite != null;
-            _heroName.text = _equipped == null ? "Elige tu inicial" : Species(_equipped.speciesId)?.name;
-            _heroInfo.text = _equipped == null ? "" : $"Rareza {_equipped.rarity} · {PokemonUi.NatureName(_equipped.nature)}";
+            if (!_pages.TryGetValue(ScreenId.Main, out var page)) return;
+            page.Status.text = _equipped == null ? "Elige tu inicial" :
+                $"{Species(_equipped.speciesId)?.name} · Rareza {_equipped.rarity} · {PokemonUi.NatureName(_equipped.nature)}";
         }
         void BuildPause()
         {
-            var page = Add(ScreenId.Pause, "PauseMenu", "Tómate un respiro", "La partida está en pausa.");
-            var stack = CenterStack(page);
-            UIFactory.Label(stack, "Title", "PAUSA", 76, UIFactory.Sun, 130, TextAnchor.MiddleCenter);
-            StackButton(stack, "Resume", "CONTINUAR", UIFactory.Sun, Resume);
-            StackButton(stack, "Skills", "Mejoras EV", UIFactory.CardViolet, OpenSkills);
-            StackButton(stack, "Settings", "Ajustes", UIFactory.CardViolet, OpenSettings);
-            page.Action("Abandon", "Salir de la partida", UIFactory.CardViolet, AbandonRun);
+            var page = Add(ScreenId.Pause, "PauseMenu", "PAUSA", "Partida detenida", CompactMenuKind.Pause);
+            CompactMenuArt.Button(page.Body, "Resume", "CONTINUAR", "Green", Resume);
+            CompactMenuArt.Button(page.Body, "Skills", "Mejoras EV", "Blue", OpenSkills);
+            CompactMenuArt.Button(page.Body, "Settings", "Ajustes", "Amber", OpenSettings);
+            CompactMenuArt.Button(page.Body, "Abandon", "Salir de la partida", "Red", AbandonRun);
         }
         void BuildStarter()
         {
@@ -476,29 +446,28 @@ namespace Game.UI
         }
         void BuildSkills()
         {
-            var page = Add(ScreenId.Skills, "SkillsMenu", "Haz crecer tu potencial", "Los EV duran esta partida y se reinician al terminar.");
-            var stack = CenterStack(page);
+            var page = Add(ScreenId.Skills, "SkillsMenu", "MEJORAS EV", "", CompactMenuKind.Skills);
             string[] names = { "SALUD", "ATAQUE", "DEFENSA", "VELOCIDAD" };
             _skillButtons = new UnityEngine.UI.Button[names.Length];
             for (int i = 0; i < names.Length; i++)
             {
                 int stat = i;
-                _skillButtons[i] = StackButton(stack, "EV_" + names[i], "", UIFactory.CardViolet,
+                _skillButtons[i] = CompactMenuArt.Button(page.Body, "EV_" + names[i], "", "Blue",
                     () => { RoundManager.Instance?.BuyEV(stat); RefreshSkills(); });
             }
-            page.Action("Back", "Volver a la partida", UIFactory.Sun, CloseSkills);
+            page.Action("Back", "Volver", UIFactory.Sun, CloseSkills);
         }
         void RefreshSkills()
         {
             var round = RoundManager.Instance;
             if (round == null) return;
-            _pages[ScreenId.Skills].Status.text = $"{round.Points} puntos disponibles · Mejoras temporales para esta partida";
+            _pages[ScreenId.Skills].Status.text = $"{round.Points} PT · Solo esta partida";
             string[] names = { "SALUD", "ATAQUE", "DEFENSA", "VELOCIDAD" };
             for (int i = 0; i < 4; i++)
             {
                 int level = round.EVLevel(i);
-                _skillButtons[i].GetComponentInChildren<TMPro.TMP_Text>().text = $"{names[i]}   {level}/10  ·  " +
-                    (level >= 10 ? "MÁXIMO" : $"{round.EVCost(i)} PT");
+                _skillButtons[i].GetComponentInChildren<TMPro.TMP_Text>().text = $"{names[i]}\n{level}/10 · " +
+                    (level >= 10 ? "MÁX." : $"{round.EVCost(i)} PT");
                 _skillButtons[i].interactable = round.CanBuyEV(i);
             }
         }
