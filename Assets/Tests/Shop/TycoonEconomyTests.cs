@@ -7,15 +7,15 @@ namespace Game.Rounds.Shop.Tests
 {
     public sealed class TycoonEconomyTests
     {
-        [TestCase(1, 110, 110)]
-        [TestCase(2, 140, 250)]
-        [TestCase(3, 170, 420)]
-        [TestCase(4, 200, 620)]
-        [TestCase(5, 230, 850)]
-        [TestCase(10, 380, 2450)]
-        [TestCase(15, 530, 4800)]
-        [TestCase(20, 680, 7900)]
-        [TestCase(25, 770, 11630)]
+        [TestCase(1, 170, 170)]
+        [TestCase(2, 220, 390)]
+        [TestCase(3, 270, 660)]
+        [TestCase(4, 320, 980)]
+        [TestCase(5, 370, 1350)]
+        [TestCase(10, 620, 3950)]
+        [TestCase(15, 870, 7800)]
+        [TestCase(20, 1120, 12900)]
+        [TestCase(25, 1250, 19010)]
         public void IncomeIncludesRoundClearAndBossEquivalentKills(int round, int income, int cumulative)
         {
             Assert.AreEqual(income, RunEconomy.DefaultRoundIncome(round));
@@ -23,10 +23,10 @@ namespace Game.Rounds.Shop.Tests
         }
 
         [TestCase(0, 200, 2)]
-        [TestCase(1, 260, 3)]
+        [TestCase(1, 260, 2)]
         [TestCase(2, 190, 2)]
-        [TestCase(3, 300, 3)]
-        [TestCase(4, 340, 3)]
+        [TestCase(3, 300, 2)]
+        [TestCase(4, 340, 2)]
         public void PerksBudgetBothStructureAndProduct(int index, int combined, int round)
         {
             Assert.AreEqual(combined, DrinkStations.BuildPrices[index] + DrinkStations.Prices[index]);
@@ -36,9 +36,9 @@ namespace Game.Rounds.Shop.Tests
         }
 
         [TestCase(0, 250, 2)]
-        [TestCase(1, 350, 3)]
-        [TestCase(2, 480, 4)]
-        [TestCase(3, 160, 2)]
+        [TestCase(1, 350, 2)]
+        [TestCase(2, 480, 3)]
+        [TestCase(3, 160, 1)]
         public void ShotsBudgetBothStructureAndProduct(int offer, int combined, int round)
         {
             Assert.AreEqual(combined, ShotStations.BuildPrice(offer) + ShotDefinitions.Price(ShotStations.OfferType(offer)));
@@ -50,11 +50,11 @@ namespace Game.Rounds.Shop.Tests
         {
             int points = RunEconomy.DefaultRoundIncome(1);
             points -= ShotStations.BuildPrice(0);
-            Assert.AreEqual(0, points, "First round builds Burst but does not silently grant it");
+            Assert.AreEqual(60, points, "First round builds Burst but does not silently grant it");
             Assert.Less(points, ShotDefinitions.Price(ShotType.Burst));
             points += RunEconomy.DefaultRoundIncome(2);
             points -= ShotDefinitions.Price(ShotType.Burst);
-            Assert.AreEqual(0, points, "Burst available after two normal-equivalent rounds");
+            Assert.AreEqual(140, points, "Burst available after two normal-equivalent rounds");
         }
 
         [Test]
@@ -64,7 +64,7 @@ namespace Game.Rounds.Shop.Tests
             for (int i = 0; i < 5; i++) total += DrinkStations.BuildPrices[i] + DrinkStations.Prices[i];
             for (int i = 0; i < 4; i++) total += ShotStations.BuildPrice(i) + ShotDefinitions.Price(ShotStations.OfferType(i));
             Assert.AreEqual(2530, total);
-            Assert.AreEqual(11, RunEconomy.RoundsToAfford(total));
+            Assert.AreEqual(8, RunEconomy.RoundsToAfford(total));
             int evTotal = 0;
             for (int level = 0; level < 10; level++)
             {
@@ -72,7 +72,7 @@ namespace Game.Rounds.Shop.Tests
                 evTotal += RunEconomy.EVPrice(level);
             }
             Assert.AreEqual(2600, evTotal);
-            Assert.AreEqual(16, RunEconomy.RoundsToAfford(total + evTotal));
+            Assert.AreEqual(12, RunEconomy.RoundsToAfford(total + evTotal));
             int points = RunEconomy.DefaultCumulativeIncome(10);
             var shots = new ShotLoadout();
             System.Func<int, bool> spend = price =>
@@ -84,7 +84,7 @@ namespace Game.Rounds.Shop.Tests
             Assert.IsTrue(shots.TryBuyAndEquip(ShotType.Piercing, spend));
             Assert.IsTrue(shots.TryBuyAndEquip(ShotType.Burst, spend));
             Assert.IsTrue(shots.TryBuyAndEquip(ShotType.Piercing, spend));
-            Assert.AreEqual(2450 - 280 - 140 - 280, points);
+            Assert.AreEqual(3950 - 280 - 140 - 280, points);
             int before = points;
             Assert.IsFalse(shots.TryBuyAndEquip(ShotType.Fan, _ => false));
             Assert.AreEqual(before, points);

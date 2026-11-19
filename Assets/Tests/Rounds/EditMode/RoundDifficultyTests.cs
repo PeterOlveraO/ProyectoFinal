@@ -18,7 +18,7 @@ namespace Game.Tests.Rounds
         public void BossCadence(int round, bool boss) => Assert.AreEqual(boss, RoundDifficulty.IsBoss(round));
 
         [Test]
-        public void FirstRoundIsPerceptiblyFasterAndEveryEarlyRoundScalesAllStats()
+        public void EarlyRoundsScaleStatsUntilTheirCaps()
         {
             Assert.GreaterOrEqual(RoundDifficulty.Stats(1).speed, 2.2f * 1.25f);
             for (int round = 2; round <= 20; round++)
@@ -26,7 +26,8 @@ namespace Game.Tests.Rounds
                 var before = RoundDifficulty.Stats(round - 1);
                 var after = RoundDifficulty.Stats(round);
                 Assert.Greater(after.health, before.health);
-                Assert.Greater(after.speed, before.speed);
+                if (before.speed < 4.6f) Assert.Greater(after.speed, before.speed);
+                else Assert.AreEqual(4.6f, after.speed);
                 Assert.Greater(after.contactDamage, before.contactDamage);
             }
         }
@@ -42,16 +43,28 @@ namespace Game.Tests.Rounds
             Assert.AreEqual(35f, stats.contactDamage);
         }
 
-        [TestCase(5)]
-        [TestCase(25)]
-        [TestCase(1000)]
-        public void BossIsSubstantiallyStrongerThanComparableNormal(int round)
+        [TestCase(1, 14, 14f, 3.92f)]
+        [TestCase(6, 24, 17.75f, 4.32f)]
+        [TestCase(9, 30, 20f, 4.56f)]
+        [TestCase(10, 32, 20.75f, 4.6f)]
+        public void NormalStatsIncreaseOnlyTheStartingValues(int round, int health, float damage, float speed)
         {
             var normal = RoundDifficulty.Stats(round);
+            Assert.AreEqual(health, normal.health);
+            Assert.AreEqual(damage, normal.contactDamage, .0001f);
+            Assert.AreEqual(speed, normal.speed, .0001f);
+        }
+
+        [TestCase(5, 216, 39f, 3.12f)]
+        [TestCase(10, 336, 50.25f, 3.52f)]
+        [TestCase(25, 696, 84f, 4.6f)]
+        [TestCase(1000, 2400, 105f, 4.6f)]
+        public void BossStatsKeepTheirOriginalCurve(int round, int health, float damage, float speed)
+        {
             var boss = RoundDifficulty.Stats(round, true);
-            Assert.AreEqual(normal.health * 12, boss.health);
-            Assert.AreEqual(normal.contactDamage * 3, boss.contactDamage);
-            Assert.AreEqual(normal.speed, boss.speed, "boss must remain kiteable");
+            Assert.AreEqual(health, boss.health);
+            Assert.AreEqual(damage, boss.contactDamage, .0001f);
+            Assert.AreEqual(speed, boss.speed, .0001f);
         }
 
         [Test]

@@ -93,6 +93,7 @@ namespace Game.Tests.Rounds
             Assert.IsTrue(boss.IsBoss);
             Assert.AreEqual(216, boss.MaxHealth);
             Assert.AreEqual(39f, boss.ContactDamage);
+            Assert.AreEqual(3.12f, boss.Speed, .0001f);
             Assert.AreEqual("species_mew", boss.GetComponentInChildren<SpriteRenderer>().sprite.name);
             for (int i = 0; i < 10; i++)
             {
@@ -105,8 +106,8 @@ namespace Game.Tests.Rounds
             _round.NotifyEnemyKilled(boss);
             Assert.AreEqual(earned, _round.Points, "duplicate death must not pay twice");
             Assert.AreEqual(1, _round.EnemiesDefeatedThisRound);
-            Assert.That(earned, Is.EqualTo(140).Or.EqualTo(280), "14 replaced kills, optional equivalent bonus");
-            Assert.AreEqual(14, _round.CoinsEarned);
+            Assert.That(earned, Is.EqualTo(280).Or.EqualTo(560), "28 replaced kills, optional equivalent bonus");
+            Assert.AreEqual(28, _round.CoinsEarned);
             Call(_round, "Update");
             Assert.AreEqual(RoundManager.RoundPhase.Clearing, _round.Phase);
             Assert.AreEqual(1, _round.RoundsPassed);
@@ -117,12 +118,14 @@ namespace Game.Tests.Rounds
             Assert.AreEqual(6, _round.Round);
             Assert.IsFalse(_round.IsBossRound);
             Assert.IsNull(_round.BossName);
+            Assert.AreEqual(32, _round.EnemiesThisRound);
             Call(_round, "BeginFighting");
             Call(_round, "Update");
             Assert.AreEqual(1, EnemyTriangle.All.Count);
             Assert.IsFalse(EnemyTriangle.All[0].IsBoss);
-            Assert.AreEqual(20, EnemyTriangle.All[0].Health);
-            Assert.AreEqual(13.75f, EnemyTriangle.All[0].ContactDamage);
+            Assert.AreEqual(24, EnemyTriangle.All[0].Health);
+            Assert.AreEqual(17.75f, EnemyTriangle.All[0].ContactDamage);
+            Assert.AreEqual(4.32f, EnemyTriangle.All[0].Speed, .0001f);
         }
 
         [UnityTest]
@@ -137,13 +140,13 @@ namespace Game.Tests.Rounds
             Assert.IsFalse(_round.IsBossRound);
             Assert.IsNull(_round.BossName);
             Call(_round, "StartRound", 1);
-            Assert.AreEqual(6, _round.EnemiesThisRound);
+            Assert.AreEqual(12, _round.EnemiesThisRound);
             GameFlow.Blocked = false;
             Call(_round, "BeginFighting");
             Call(_round, "Update");
             Assert.AreEqual(1, EnemyTriangle.All.Count);
-            Assert.AreEqual(10, EnemyTriangle.All[0].Health);
-            Assert.AreEqual(2.8f, EnemyTriangle.All[0].Speed);
+            Assert.AreEqual(14, EnemyTriangle.All[0].Health);
+            Assert.AreEqual(3.92f, EnemyTriangle.All[0].Speed, .0001f);
             Assert.IsFalse(EnemyTriangle.All[0].IsBoss);
         }
 
@@ -194,8 +197,8 @@ namespace Game.Tests.Rounds
             PokemonEnemyVisual.Attach(go, Resources.Load<Sprite>("PokemonSprites/species_charizard"));
             go.SetActive(true);
             Assert.IsFalse(enemy.IsBoss);
-            Assert.AreEqual(10, enemy.Health);
-            Assert.AreEqual(10f, enemy.ContactDamage);
+            Assert.AreEqual(14, enemy.Health);
+            Assert.AreEqual(14f, enemy.ContactDamage);
             Assert.AreEqual(Color.white, ((SpriteRenderer)enemy.VisualRenderer).color);
             yield return null;
             Assert.AreEqual(1, go.GetComponentsInChildren<PokemonEnemyVisual>().Length);
@@ -205,6 +208,51 @@ namespace Game.Tests.Rounds
             enemy.Initialize(1, 2.5f);
             Assert.IsFalse(enemy.IsBoss);
             Assert.AreEqual(EnemyTriangle.ContactDamagePerSecond, enemy.ContactDamage);
+        }
+
+        [TestCase(1, 12, 8)]
+        [TestCase(2, 16, 8)]
+        [TestCase(3, 20, 10)]
+        [TestCase(5, 1, 1)]
+        [TestCase(6, 32, 12)]
+        [TestCase(10, 1, 1)]
+        [TestCase(21, 92, 28)]
+        [TestCase(22, 96, 28)]
+        [TestCase(int.MaxValue, 96, 28)]
+        public void RoundBudgetsDoubleNormalsAndKeepOneBoss(int round, int total, int alive)
+        {
+            Call(_round, "StartRound", round);
+            Assert.AreEqual(total, _round.EnemiesThisRound);
+            Assert.AreEqual(alive, Call(_round, "MaxAliveForRound"));
+        }
+
+        [UnityTest]
+        public IEnumerator NormalWaveReplenishesLiveSlotsWithoutExceedingTotalBudget()
+        {
+            Call(_round, "StartRound", 1);
+            Call(_round, "BeginFighting");
+            for (int i = 0; i < 20; i++)
+            {
+                Set(_round, "_spawnTimer", 100f);
+                Call(_round, "Update");
+            }
+            Assert.AreEqual(8, EnemyTriangle.All.Count);
+            var firstBatch = new List<EnemyTriangle>(EnemyTriangle.All);
+            for (int i = 0; i < 4; i++) firstBatch[i].TakeDamage(firstBatch[i].MaxHealth);
+            yield return null;
+            for (int i = 0; i < 20; i++)
+            {
+                Set(_round, "_spawnTimer", 100f);
+                Call(_round, "Update");
+            }
+            Assert.AreEqual(8, EnemyTriangle.All.Count);
+            Assert.AreEqual(4, _round.EnemiesDefeatedThisRound);
+            foreach (var enemy in new List<EnemyTriangle>(EnemyTriangle.All)) enemy.TakeDamage(enemy.MaxHealth);
+            yield return null;
+            Call(_round, "Update");
+            Assert.AreEqual(12, _round.EnemiesDefeatedThisRound);
+            Assert.AreEqual(0, EnemyTriangle.All.Count);
+            Assert.AreEqual(RoundManager.RoundPhase.Clearing, _round.Phase);
         }
     }
 }

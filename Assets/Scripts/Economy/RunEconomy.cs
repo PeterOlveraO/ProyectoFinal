@@ -14,7 +14,7 @@ namespace Game.Economy
         public static int DefaultRoundIncome(int round)
         {
             if (round < 1) throw new ArgumentOutOfRangeException(nameof(round));
-            int normalEquivalent = Math.Min(48, 6 + 2 * (round - 1));
+            int normalEquivalent = (int)Math.Min(96d, 12d + 4d * (round - 1));
             return normalEquivalent * 10 + 50 + 10 * (round - 1);
         }
 

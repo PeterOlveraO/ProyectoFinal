@@ -16,11 +16,12 @@ namespace Game.Rounds
         public static EnemyRoundStats Stats(int round, bool boss = false)
         {
             double step = Math.Max(0d, (double)round - 1d);
+            // +40% to normal starting stats only; bosses retain their original curve.
             return new EnemyRoundStats
             {
-                health = (int)Math.Min(200d, 10d + 2d * step) * (boss ? BossHealthMultiplier : 1),
-                speed = (float)Math.Min(4.6d, 2.8d + .08d * step),
-                contactDamage = (float)Math.Min(35d, 10d + .75d * step) * (boss ? BossDamageMultiplier : 1f)
+                health = (int)Math.Min(200d, (boss ? 10d : 14d) + 2d * step) * (boss ? BossHealthMultiplier : 1),
+                speed = (float)Math.Min(4.6d, (boss ? 2.8d : 3.92d) + .08d * step),
+                contactDamage = (float)Math.Min(35d, (boss ? 10d : 14d) + .75d * step) * (boss ? BossDamageMultiplier : 1f)
             };
         }
 

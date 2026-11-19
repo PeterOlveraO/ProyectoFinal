@@ -1160,12 +1160,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 18ad923c1bf12762d9f48faedbe1b892, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Game.Rounds.RoundManager
-  baseEnemies: 6
-  enemiesPerRound: 2
-  maxEnemiesPerRound: 48
-  baseMaxAlive: 4
+  baseEnemies: 12
+  enemiesPerRound: 4
+  maxEnemiesPerRound: 96
+  baseMaxAlive: 8
   maxAliveGrowthEvery: 2
-  maxAliveCap: 14
+  maxAliveGrowth: 2
+  maxAliveCap: 28
   preparationDuration: 4
   clearingDuration: 2.5
   spawnRadiusMin: 10

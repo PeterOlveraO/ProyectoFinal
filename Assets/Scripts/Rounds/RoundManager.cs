@@ -35,22 +35,25 @@ namespace Game.Rounds
 
         [Header("Rondas")]
         [Tooltip("Enemigos que hay que eliminar en la ronda 1.")]
-        [SerializeField, Min(1)] int baseEnemies = 6;
+        [SerializeField, Min(1)] int baseEnemies = 12;
 
         [Tooltip("Enemigos que se suman en cada ronda.")]
-        [SerializeField, Min(0)] int enemiesPerRound = 2;
+        [SerializeField, Min(0)] int enemiesPerRound = 4;
 
         [Tooltip("Tope de enemigos por ronda para que las rondas no se hagan eternas.")]
-        [SerializeField, Min(1)] int maxEnemiesPerRound = 48;
+        [SerializeField, Min(1)] int maxEnemiesPerRound = 96;
 
         [Tooltip("Enemigos vivos a la vez en la ronda 1.")]
-        [SerializeField, Min(1)] int baseMaxAlive = 4;
+        [SerializeField, Min(1)] int baseMaxAlive = 8;
 
-        [Tooltip("Cada cuántas rondas se suma un enemigo vivo más.")]
+        [Tooltip("Cada cuántas rondas aumenta el límite de enemigos vivos.")]
         [SerializeField, Min(1)] int maxAliveGrowthEvery = 2;
 
+        [Tooltip("Cuántos enemigos vivos se suman en cada incremento.")]
+        [SerializeField, Min(0)] int maxAliveGrowth = 2;
+
         [Tooltip("Tope de enemigos vivos simultáneos.")]
-        [SerializeField, Min(1)] int maxAliveCap = 14;
+        [SerializeField, Min(1)] int maxAliveCap = 28;
 
         [Tooltip("Segundos de preparación antes de cada ronda.")]
         [SerializeField, Min(0.5f)] float preparationDuration = 4f;
@@ -619,8 +622,8 @@ namespace Game.Rounds
         int MaxAliveForRound()
         {
             if (IsBossRound) return 1;
-            int bonus = (Round - 1) / Mathf.Max(1, maxAliveGrowthEvery);
-            return Mathf.Clamp(baseMaxAlive + bonus, 1, maxAliveCap);
+            double bonus = ((Round - 1) / Mathf.Max(1, maxAliveGrowthEvery)) * (double)maxAliveGrowth;
+            return (int)Math.Max(1d, Math.Min(maxAliveCap, baseMaxAlive + bonus));
         }
 
         int TierForRound(int round)
