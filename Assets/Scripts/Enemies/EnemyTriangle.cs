@@ -11,8 +11,9 @@ namespace Game.Enemies
     /// <summary>
     /// Enemigo Pokémon. Persigue al jugador por el terreno respetando las reglas del mundo
     /// (no escala desniveles de más de un bloque) y, mientras lo toque, le resta
-    /// <see cref="ContactDamagePerSecond"/> de vida por segundo.
-    /// Tiene vida (10 en la zona 1 y +20 % por zona) y una barra que aparece al recibir daño.
+    /// <see cref="ContactDamage"/> de vida por segundo.
+    /// Vida/daño/velocidad se configuran por ronda (o por zona en el spawner antiguo).
+    /// La barra de vida aparece al recibir daño.
     /// Mientras el jugador es invencible, el enemigo muere al tocarlo.
     /// El visual es un sprite 2D: no tiene geometría 3D.
     /// </summary>
@@ -60,11 +61,15 @@ namespace Game.Enemies
         bool _dead;
 
         float _speed = 2.5f;
+        float _contactDamage = ContactDamagePerSecond;
         int _wallSide;
 
         public int Zone { get; private set; }
         public int MaxHealth => maxHealth;
         public int Health => _health;
+        public float Speed => _speed;
+        public float ContactDamage => _contactDamage;
+        public bool IsBoss { get; private set; }
         public bool IsDead => _dead || _health <= 0;
         public Renderer VisualRenderer => _visualRenderer;
 
@@ -86,18 +91,38 @@ namespace Game.Enemies
 
         public void Initialize(ZoneSpawnManager manager, int zone, float speed)
         {
-            _manager = manager;
             Initialize(zone, speed);
+            _manager = manager;
         }
 
-        /// <summary>Configuración usada por el sistema de rondas.</summary>
+        /// <summary>Configuración normal del spawner antiguo de zonas.</summary>
         public void Initialize(int zone, float speed)
         {
+            _manager = null;
             Zone = zone;
             _speed = Mathf.Max(0.05f, speed);
 
             // Zona 1: 10 de vida. Zona 2: 12. Zona 3: 14 (redondeado).
             maxHealth = Mathf.Max(1, Mathf.RoundToInt(BaseHealth * Mathf.Pow(1f + HealthPerZone, zone - 1)));
+            ResetCombatState(false, ContactDamagePerSecond);
+        }
+
+        /// <summary>Aplica todos los stats de la ronda, sin heredar estado del enemigo anterior.</summary>
+        public void InitializeRound(int zone, EnemyRoundStats stats, bool boss)
+        {
+            _manager = null;
+            Zone = zone;
+            _speed = Mathf.Max(.05f, stats.speed);
+            maxHealth = Mathf.Max(1, stats.health);
+            ResetCombatState(boss, stats.contactDamage);
+        }
+
+        void ResetCombatState(bool boss, float damage)
+        {
+            IsBoss = boss;
+            _contactDamage = Mathf.Max(0f, damage);
+            _flashUntil = 0f;
+            if (_spriteVisual != null) _spriteVisual.color = _baseVisualColor;
             _health = maxHealth;
             _dead = false;
             UpdateHealthBar();
@@ -171,8 +196,7 @@ namespace Game.Enemies
                     return;
                 }
 
-                // Daño continuo: 10 de vida por segundo entero de contacto.
-                _player.TakeDamage(ContactDamagePerSecond * Time.deltaTime);
+                _player.TakeDamage(_contactDamage * Time.deltaTime);
                 return;
             }
 
