@@ -95,16 +95,16 @@ namespace Game.ShotShop.Tests
             Assert.AreEqual(0, _round.CoinsEarned);
             Assert.AreEqual(0, _round.TotalPointsEarned, "spending is not earning");
             Assert.AreEqual(ShotType.Burst, _round.Shots.Equipped);
-            Assert.IsTrue(_round.EquipShot(ShotType.Basic));
+            Assert.IsFalse(_round.EquipShot(ShotType.Basic));
             Assert.IsTrue(_round.BuyShot(0));
-            Assert.AreEqual(points - 60, _round.Points);
+            Assert.AreEqual(points - 120, _round.Points);
             _player.transform.position = Vector3.one * 100;
-            Assert.IsTrue(_round.EquipShot(ShotType.Basic));
-            Assert.IsTrue(_round.EquipShot(ShotType.Burst), "owned shots can be equipped anywhere");
+            Assert.IsFalse(_round.EquipShot(ShotType.Basic));
+            Assert.IsFalse(_round.EquipShot(ShotType.Burst), "there is no free equip API");
             Set(_round, "_phase", RoundManager.RoundPhase.GameOver);
             Assert.IsFalse(_round.BuyShot(0));
             Assert.IsFalse(_round.EquipShot(ShotType.Basic));
-            Assert.AreEqual(points - 60, _round.Points);
+            Assert.AreEqual(points - 120, _round.Points);
         }
 
         [Test]
@@ -146,7 +146,7 @@ namespace Game.ShotShop.Tests
                 case "release": Tick(.1f, false, Vector3.zero); break;
                 case "pause": GameFlow.Blocked = true; Tick(.2f, true, Vector3.right); break;
                 case "over": GameFlow.Over = true; Tick(.2f, true, Vector3.right); break;
-                case "switch": Assert.IsTrue(_round.EquipShot(ShotType.Basic)); break;
+                case "switch": Assert.IsTrue(_round.BuyShot(0)); break;
                 case "reset": _attack.ResetRun(); break;
                 case "disable": Call(_attack, "OnDisable"); break;
                 case "dead": Set(_player, "_alive", false); Tick(.2f, true, Vector3.right); break;

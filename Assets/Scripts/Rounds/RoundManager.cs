@@ -116,13 +116,7 @@ namespace Game.Rounds
         public ShotStations ShotStations => _shotStations;
         public ShotLoadout Shots => _shots;
 
-        public bool EquipShot(ShotType type)
-        {
-            if (!CanUseShotShop() || !_shots.TryEquip(type)) return false;
-            PlayerSphereController.Instance.GetComponent<PlayerAttack>()?.CancelPendingShots();
-            Changed?.Invoke();
-            return true;
-        }
+        public bool EquipShot(ShotType type) => false; // No inventory/free switching.
 
         public bool BuyShot(int offer)
         {

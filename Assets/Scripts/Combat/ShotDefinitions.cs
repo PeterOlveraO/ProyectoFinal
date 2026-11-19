@@ -30,6 +30,7 @@ namespace Game.Combat
         {
             switch (type)
             {
+                case ShotType.Basic: return 40;
                 case ShotType.Burst: return 60;
                 case ShotType.Fan: return 90;
                 case ShotType.Piercing: return 120;
