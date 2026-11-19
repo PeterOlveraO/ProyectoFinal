@@ -300,7 +300,6 @@ GameObject:
   - component: {fileID: 228998475}
   - component: {fileID: 228998474}
   - component: {fileID: 228998478}
-  - component: {fileID: 228998477}
   - component: {fileID: 228998479}
   m_Layer: 0
   m_Name: HUD
@@ -394,18 +393,6 @@ Canvas:
   m_SortingLayerID: 0
   m_SortingOrder: 10
   m_TargetDisplay: 0
---- !u!114 &228998477
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 228998472}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2fdea43d94a1afaa187b8ea35d4c0c4c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Game.UI.SpecialPowerButton
 --- !u!114 &228998478
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -535,8 +522,6 @@ MonoBehaviour:
   gravity: 20
   respawnHeight: -10
   maxHealth: 100
-  invincibleDuration: 5
-  powerCooldown: 10
   respawnProtection: 1.5
   joystick: {fileID: 498238684}
 --- !u!143 &544105699

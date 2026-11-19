@@ -50,7 +50,7 @@ CI uses its own working directory by default.
 
 The PlayMode suite exercises real components across frames: projectile
 pause/resume, single-target impact, enemy destruction/registry cleanup, projectile
-range expiry, health/death/revive, special power/menu/cooldown, touch pointer
+range expiry, health/death/revive, spawn protection and damage after expiry, touch pointer
 ownership/release and pooled object reuse. It does not load `World`, modify
 PlayerPrefs/progression saves, or synthesize tests for trivial source changes.
 Additional gameplay regressions can be added to the same test assembly.

@@ -1,6 +1,5 @@
 using Game.Combat;
 using Game.Core;
-using Game.Enemies;
 using Game.Terrain;
 using Game.Rounds;
 using Game.Player.ProgressionCombat;
@@ -15,8 +14,6 @@ namespace Game.Player
     ///   - Gravedad. stepOffset 0.55 sube un nivel (0.5) pero no dos (1.0).
     ///   - R, o caer por debajo de respawnHeight, lo devuelve al bloque central.
     ///   - Vida: 100. Cada enemigo que lo toca le resta 10 de vida por segundo.
-    ///   - Poder especial (Espacio o botón del HUD): invencibilidad temporal, elimina
-    ///     normales y quita 25% de vida máxima a jefes, con 10 s de recarga.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     [DisallowMultipleComponent]
@@ -30,12 +27,6 @@ namespace Game.Player
         [Tooltip("Vida máxima del jugador.")]
         [SerializeField, Min(1)] int maxHealth = 100;
 
-        [Tooltip("Duración de la invencibilidad al pulsar Espacio (segundos).")]
-        [SerializeField, Min(0.1f)] float invincibleDuration = 5f;
-
-        [Tooltip("Tiempo de recarga del poder especial (segundos).")]
-        [SerializeField, Min(0f)] float powerCooldown = 10f;
-
         [Tooltip("Tiempo sin recibir daño tras reaparecer, para no quedar atrapado sobre un enemigo.")]
         [SerializeField, Min(0f)] float respawnProtection = 1.5f;
 
@@ -46,9 +37,7 @@ namespace Game.Player
         float _verticalSpeed;
         Vector3 _lastSafePosition;
         bool _hasSafePosition;
-        float _invincibleUntil;
         float _protectedUntil;
-        float _powerReadyAt;
 
         float _health;
         bool _alive = true;
@@ -73,21 +62,8 @@ namespace Game.Player
         public bool IsAlive => _alive;
         public bool IsDamaged => _alive && _health < MaxHealth;
 
-        public bool IsInvincible => Time.time < _invincibleUntil;
-
         /// <summary>Inmune al daño tras reaparecer, pero no mata enemigos al tocarlos.</summary>
         public bool IsProtected => !_alive || Time.time < _protectedUntil;
-
-        /// <summary>Segundos que le quedan al poder especial para volver a estar disponible.</summary>
-        public float PowerCooldownRemaining => Mathf.Max(0f, _powerReadyAt - Time.time);
-
-        /// <summary>Duración total de la recarga (para dibujar la barra circular del botón).</summary>
-        public float PowerCooldownDuration => Mathf.Max(0.01f, powerCooldown);
-
-        /// <summary>Segundos que le quedan de invencibilidad al poder.</summary>
-        public float InvincibilityRemaining => Mathf.Max(0f, _invincibleUntil - Time.time);
-
-        public bool IsPowerReady => PowerCooldownRemaining <= 0f;
 
         void Awake()
         {
@@ -117,8 +93,6 @@ namespace Game.Player
             if (GameFlow.Blocked || GameFlow.Over || !_alive) return;
 
             var keyboard = Keyboard.current;
-
-            if (keyboard != null && keyboard.spaceKey.wasPressedThisFrame) ActivateInvincibility();
 
             if ((keyboard != null && keyboard.rKey.wasPressedThisFrame) || transform.position.y < respawnHeight)
             {
@@ -160,7 +134,7 @@ namespace Game.Player
         public void TakeDamage(float amount)
         {
             if (!_alive || amount <= 0f) return;
-            if (IsInvincible || IsProtected) return;
+            if (IsProtected) return;
 
             _health -= amount * (1f - DamageReduction);
             if (_health <= 0f)
@@ -186,7 +160,6 @@ namespace Game.Player
 
             _alive = false;
             _verticalSpeed = 0f;
-            _invincibleUntil = 0f;
 
             HitBurst.Spawn(transform.position + Vector3.up * 0.6f,
                            new Color(1f, 0.25f, 0.3f, 1f), 18, 1.2f);
@@ -198,29 +171,10 @@ namespace Game.Player
         {
             _health = MaxHealth;
             _alive = true;
-            _invincibleUntil = 0f;
-            _powerReadyAt = 0f;
             _protectedUntil = 0f;
             _verticalSpeed = 0f;
             _hasSafePosition = false;
             Respawn();
-        }
-
-        // ------------------------------------------------------ Poder especial
-
-        /// <summary>
-        /// Poder especial (botón sobre el joystick de ataque o tecla Espacio):
-        /// invencibilidad temporal, elimina normales y daña jefes una vez por activación.
-        /// Devuelve false si todavía está en recarga.
-        /// </summary>
-        public bool ActivateInvincibility()
-        {
-            if (!GameFlow.Playing || !_alive || Time.time < _powerReadyAt) return false;
-
-            _invincibleUntil = Time.time + invincibleDuration;
-            _powerReadyAt = Time.time + powerCooldown;
-            EnemyTriangle.ApplySpecialPowerToAll();
-            return true;
         }
 
         // ------------------------------------------------------------ Respawn

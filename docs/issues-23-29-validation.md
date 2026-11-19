@@ -1,5 +1,10 @@
 # Validación de las issues 23–29
 
+> Registro histórico de aquella integración. Posteriormente se retiró el poder
+> especial del jugador (entrada, botón, invencibilidad y daño global); los
+> resultados de juego siguientes no validan esa retirada. Se conserva únicamente
+> la protección temporal tras reaparecer.
+
 ## Alcance y ramas
 
 Base: `8e8c03d365283f0c227c14e57ca36796e4094772` de `main`.

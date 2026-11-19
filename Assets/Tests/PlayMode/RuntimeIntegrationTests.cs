@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using Game.Combat;
 using Game.Core;
 using Game.Enemies;
@@ -166,26 +167,39 @@ namespace Game.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator SpecialPowerHonorsMenuCooldownAndClearsEnemies()
+        public IEnumerator SpawnProtectionBlocksDamageUntilExpiryWithoutClearingEnemies()
         {
             var player = Player();
-            Enemy(Vector3.zero);
-            Enemy(Vector3.forward * 5f);
-            Assert.IsFalse(player.ActivateInvincibility(), "Menus must block the special power.");
-            Assert.AreEqual(2, EnemyTriangle.All.Count);
+            var first = Enemy(Vector3.zero);
+            var second = Enemy(Vector3.forward * 5f);
             GameFlow.Blocked = false;
-            Assert.IsTrue(player.ActivateInvincibility());
-            Assert.IsTrue(player.IsInvincible);
-            Assert.Greater(player.PowerCooldownRemaining, 0f);
-            Assert.IsFalse(player.ActivateInvincibility(), "Cooldown must reject a second activation.");
+            // No terrain fixture: set the same timestamp Respawn assigns, without a timed wait.
+            var protection = typeof(PlayerSphereController).GetField("_protectedUntil",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(protection);
+            protection.SetValue(player, Time.time + 10f);
+            Assert.IsTrue(player.IsProtected);
             player.TakeDamage(player.MaxHealth * 2);
             Assert.AreEqual(player.MaxHealth, player.Health);
             yield return null;
-            yield return null;
-            Assert.AreEqual(0, EnemyTriangle.All.Count);
+            Assert.AreEqual(2, EnemyTriangle.All.Count);
+            Assert.AreEqual(first.MaxHealth, first.Health);
+            Assert.AreEqual(second.MaxHealth, second.Health);
+
+            protection.SetValue(player, Time.time - 1f);
+            Assert.IsFalse(player.IsProtected);
+            player.TakeDamage(20f);
+            Assert.AreEqual(player.MaxHealth - 20, player.Health, "Damage resumes after spawn protection.");
+            player.TakeDamage(player.MaxHealth * 2);
+            Assert.IsFalse(player.IsAlive);
+            protection.SetValue(player, Time.time + 10f);
             player.Revive();
-            Assert.IsTrue(player.IsPowerReady);
-            Assert.IsFalse(player.IsInvincible, "A new life must not retain the previous power.");
+            Assert.IsTrue(player.IsAlive);
+            Assert.AreEqual(player.MaxHealth, player.Health);
+            player.TakeDamage(10f);
+            Assert.AreEqual(player.MaxHealth - 10, player.Health,
+                "Revive without terrain must not retain an old protection timestamp.");
+            Assert.AreEqual(2, EnemyTriangle.All.Count);
         }
 
         [UnityTest]

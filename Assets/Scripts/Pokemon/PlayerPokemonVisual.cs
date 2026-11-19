@@ -1,4 +1,3 @@
-using Game.Player;
 using Game.Rounds;
 using UnityEngine;
 
@@ -20,14 +19,11 @@ namespace Game.Pokemon
         SpriteRenderer _renderer;
         PokemonVisuals.DirectionalAnimation _animation;
         Sprite _source;
-        PlayerSphereController _controller;
         RoundManager _rounds;
-        Color _baseColor = Color.white;
         Vector3 _lastPosition;
 
         void Start()
         {
-            _controller = GetComponent<PlayerSphereController>();
             _lastPosition = transform.position;
             SubscribeRounds();
             RefreshPokemon();
@@ -65,7 +61,6 @@ namespace Game.Pokemon
             if (_renderer == null)
             {
                 _renderer = PokemonVisuals.CreateBillboard(transform, "Pokemon Visual", sprite, height, false);
-                _baseColor = _renderer.color;
                 _renderer.transform.localPosition = new Vector3(0f, -0.5f + height * 0.5f, 0f);
             }
             if (_source != sprite)
@@ -78,14 +73,6 @@ namespace Game.Pokemon
             }
             _renderer.enabled = true;
             PokemonSpriteLibrary.SetPlayerSprite(sprite);
-        }
-
-        void Update()
-        {
-            if (_renderer == null) return;
-
-            bool invincible = _controller != null && _controller.IsInvincible;
-            _renderer.color = invincible ? new Color(1f, 0.85f, 0.2f, 1f) : _baseColor;
         }
 
         void LateUpdate()

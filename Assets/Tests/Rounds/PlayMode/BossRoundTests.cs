@@ -148,52 +148,37 @@ namespace Game.Tests.Rounds
         }
 
         [UnityTest]
-        public IEnumerator SpecialDamagesBossOncePerActivationButKeepsNormalKillsAndResetsCleanly()
+        public IEnumerator BossAndNormalContactDamagePlayerWithoutHurtingEnemiesAndRespectSpawnProtection()
         {
             var boss = BeginBoss();
-            var normal = Create("SpecialNormal").AddComponent<EnemyTriangle>();
+            var normal = Create("ContactNormal").AddComponent<EnemyTriangle>();
             normal.InitializeRound(1, RoundDifficulty.Stats(1), false);
-            int quarter = boss.MaxHealth / 4;
-            int playerHealth = _player.Health;
-            Assert.IsTrue(_player.ActivateInvincibility());
-            Assert.AreEqual(quarter * 3, boss.Health);
-            Assert.IsTrue(normal.IsDead);
-            Assert.IsTrue(_player.IsInvincible);
-            Assert.IsFalse(_player.ActivateInvincibility(), "cooldown rejects duplicate activation");
-            Assert.AreEqual(quarter * 3, boss.Health);
-            for (int frame = 0; frame < 10; frame++)
-                Call(boss, "ApplyContact", _player);
-            Assert.AreEqual(quarter * 3, boss.Health, "invincible contact must not damage/kill the boss");
-            Assert.AreEqual(playerHealth, _player.Health);
-            var contactNormal = Create("ContactNormal").AddComponent<EnemyTriangle>();
-            contactNormal.Initialize(1, 2.8f);
-            Call(contactNormal, "ApplyContact", _player);
-            Assert.IsTrue(contactNormal.IsDead, "normal enemies still die on invincible contact");
             yield return null;
-            Assert.IsTrue(normal == null);
-            Assert.IsTrue(contactNormal == null);
-            Assert.IsFalse(boss.IsDead);
+            // No terrain in this fixture; drive contact directly instead of Update's movement.
+            Assert.Greater(Time.deltaTime, 0f);
+            float health = _player.Health01 * _player.MaxHealth;
+            Call(boss, "ApplyContact", _player);
+            Assert.AreEqual(health - boss.ContactDamage * Time.deltaTime,
+                _player.Health01 * _player.MaxHealth, .001f);
+            health = _player.Health01 * _player.MaxHealth;
+            Call(normal, "ApplyContact", _player);
+            Assert.AreEqual(health - normal.ContactDamage * Time.deltaTime,
+                _player.Health01 * _player.MaxHealth, .001f);
 
-            // Advance only the cooldown timestamp, without a 30-second wall-clock test.
-            // Each call still goes through the real Player activation guard and damage API.
-            for (int remainingQuarters = 2; remainingQuarters >= 0; remainingQuarters--)
-            {
-                Set(_player, "_powerReadyAt", Time.time - 1f);
-                Assert.IsTrue(_player.ActivateInvincibility());
-                Assert.AreEqual(quarter * remainingQuarters, boss.Health);
-            }
-            Assert.IsTrue(boss.IsDead, "four separated activations can finish a full-health boss");
-            Assert.AreEqual(1, _round.EnemiesDefeatedThisRound);
-            yield return null;
-            Assert.AreEqual(0, EnemyTriangle.All.Count);
-            _player.Revive();
-            Assert.IsTrue(_player.IsPowerReady);
-            Assert.IsFalse(_player.IsInvincible);
-            boss = Create("ReusedBoss").AddComponent<EnemyTriangle>();
-            boss.InitializeRound(2, RoundDifficulty.Stats(5, true), true);
-            Assert.AreEqual(216, boss.Health, "new initialization has no retained special damage");
-            Assert.IsTrue(_player.ActivateInvincibility());
-            Assert.AreEqual(162, boss.Health);
+            // Spawn protection prevents damage but never kills enemies on contact.
+            Set(_player, "_protectedUntil", Time.time + 10f);
+            health = _player.Health01;
+            Call(boss, "ApplyContact", _player);
+            Call(normal, "ApplyContact", _player);
+            Assert.AreEqual(health, _player.Health01);
+            Set(_player, "_protectedUntil", Time.time - 1f);
+            Call(boss, "ApplyContact", _player);
+            Assert.Less(_player.Health01, health, "boss contact resumes after protection expires");
+            Assert.AreEqual(boss.MaxHealth, boss.Health);
+            Assert.AreEqual(normal.MaxHealth, normal.Health);
+            Assert.IsFalse(boss.IsDead);
+            Assert.IsFalse(normal.IsDead);
+            Assert.AreEqual(0, _round.EnemiesDefeatedThisRound, "contact must not grant kill rewards");
         }
 
         [UnityTest]

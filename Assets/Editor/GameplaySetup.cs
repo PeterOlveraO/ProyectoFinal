@@ -15,7 +15,7 @@ namespace Game.EditorTools
     ///   · quita la malla 3D del jugador (solo queda su sprite Pokémon),
     ///   · añade el joystick derecho de ataque (naranja) junto al izquierdo (azul),
     ///   · añade PlayerAttack al jugador,
-    ///   · añade GameMenuController y el botón del poder especial al HUD.
+    ///   · añade GameMenuController y RunHud al HUD.
     ///
     /// Es idempotente: se puede ejecutar varias veces.
     /// </summary>
@@ -55,7 +55,6 @@ namespace Game.EditorTools
             attack.SetJoystick(attackJoystick);
 
             GetOrAdd<GameMenuController>(hud);
-            GetOrAdd<SpecialPowerButton>(hud);
             GetOrAdd<RunHud>(hud);
 
             ConfigureRounds();
@@ -65,7 +64,7 @@ namespace Game.EditorTools
             AssetDatabase.SaveAssets();
 
             Debug.Log("[GameplaySetup] Escena actualizada: jugador con vida, joystick de ataque, " +
-                      "menú principal/pausa, poder especial, HUD de ronda y sistema de rondas.");
+                      "menú principal/pausa, HUD de ronda y sistema de rondas.");
         }
 
         /// <summary>
