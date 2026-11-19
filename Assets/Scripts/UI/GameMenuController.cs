@@ -17,7 +17,7 @@ namespace Game.UI
     {
         const string VolumeKey = "pketer.volumen";
         const string QualityKey = "pketer.calidad";
-        enum ScreenId { None, Main, Pause, Settings, Collection, Skills, Starter, Gacha, Result, Release }
+        enum ScreenId { None, Main, Pause, Settings, Collection, Skills, Starter, Gacha, Result, Release, Credits }
         public static GameMenuController Instance { get; private set; }
         public bool IsPlaying { get; private set; }
         public bool IsPaused => IsPlaying && _screen != ScreenId.None;
@@ -83,6 +83,7 @@ namespace Game.UI
                 case ScreenId.Pause: Resume(); break;
                 case ScreenId.Settings: CloseSettings(); break;
                 case ScreenId.Collection: ShowMainMenu(); break;
+                case ScreenId.Credits: ShowMainMenu(); break;
                 case ScreenId.Gacha: OpenCollection(); break;
                 case ScreenId.Release: CancelRelease(); break;
                 case ScreenId.Result: CloseResult(); break;
@@ -346,6 +347,7 @@ namespace Game.UI
             BuildMain();
             BuildPause();
             BuildSettings();
+            _pages.Add(ScreenId.Credits, new CreditsView(_canvas, ShowMainMenu).Page);
             _collection = new CollectionView(_canvas, SelectPokemon, EquipPokemon, AskRelease, OpenGacha, ShowMainMenu);
             _pages.Add(ScreenId.Collection, _collection.Page);
             _gacha = new GachaView(_canvas, PullPool, OpenCollection);
@@ -390,6 +392,7 @@ namespace Game.UI
             page.Action("Collection", "Colección", UIFactory.CardViolet, OpenCollection);
             page.Action("Gacha", "Gacha", UIFactory.CardViolet, OpenGacha);
             page.Action("Settings", "Ajustes", UIFactory.CardViolet, OpenSettings);
+            page.Action("Credits", "Créditos", UIFactory.CardViolet, () => Show(ScreenId.Credits));
             page.Action("Quit", "Salir", UIFactory.CardViolet, QuitGame);
         }
         void RefreshHero()
