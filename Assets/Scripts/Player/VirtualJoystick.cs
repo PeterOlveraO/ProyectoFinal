@@ -42,6 +42,7 @@ namespace Game.Player
         Vector2 _value;
 
         static Sprite s_Circle;
+        static Sprite s_Ring;
 
         /// <summary>Dirección actual (x = derecha, y = arriba), magnitud ≤ 1.</summary>
         public Vector2 Value => isActiveAndEnabled ? _value : Vector2.zero;
@@ -74,8 +75,13 @@ namespace Game.Player
             catcher.raycastTarget = true;
 
             // El fondo se ancla al pivote de la zona: así anchoredPosition = punto local del toque.
-            _background = CreateCircle("Background", _area, _area.pivot, radius * 2f, backgroundTint);
-            _handle = CreateCircle("Handle", _background, new Vector2(0.5f, 0.5f), radius * 0.9f, handleTint);
+            // Retain blue/warm control identity while matching the handheld HUD palette.
+            var accent = handleTint.r > handleTint.b ? Game.UI.UIFactory.Coral : Game.UI.UIFactory.Sky;
+            var rim = Color.Lerp(Game.UI.UIFactory.Ink, accent, .5f);
+            rim.a = Mathf.Max(.55f, backgroundTint.a);
+            accent.a = Mathf.Max(.8f, handleTint.a);
+            _background = CreateCircle("Background", _area, _area.pivot, radius * 2f, rim);
+            _handle = CreateCircle("Handle", _background, new Vector2(0.5f, 0.5f), radius * 0.9f, accent);
 
             if (pinned)
             {
@@ -183,18 +189,24 @@ namespace Game.Player
             rect.sizeDelta = new Vector2(size, size);
 
             var image = go.GetComponent<Image>();
-            image.sprite = CircleSprite();
+            image.sprite = CircleSprite(name == "Background");
             image.color = color;
             image.raycastTarget = false;
             return rect;
         }
 
-        static Sprite CircleSprite()
+        static Sprite CircleSprite(bool ring)
         {
-            if (s_Circle != null) return s_Circle;
+            var cached = ring ? s_Ring : s_Circle;
+            if (cached != null) return cached;
 
-            const int size = 128;
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = "JoystickCircle" };
+            const int size = 64;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = ring ? "JoystickPixelRing" : "JoystickPixelHandle",
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp
+            };
             var pixels = new Color[size * size];
             float r = size * 0.5f;
 
@@ -203,14 +215,20 @@ namespace Game.Player
                 for (int x = 0; x < size; x++)
                 {
                     float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(r, r));
-                    pixels[y * size + x] = new Color(1f, 1f, 1f, Mathf.Clamp01(r - d));   // borde suavizado 1 px
+                    bool inside = d <= r - 1;
+                    bool edge = d >= r - 3;
+                    float shade = !ring && edge ? .6f : 1f;
+                    pixels[y * size + x] = new Color(shade, shade, shade,
+                        !inside ? 0 : ring && !edge ? .18f : 1);
                 }
             }
 
             texture.SetPixels(pixels);
             texture.Apply(false, true);
-            s_Circle = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f));
-            return s_Circle;
+            var sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f));
+            if (ring) s_Ring = sprite;
+            else s_Circle = sprite;
+            return sprite;
         }
     }
 }

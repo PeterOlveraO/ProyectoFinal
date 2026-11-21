@@ -41,7 +41,7 @@ namespace Game.Tests.PlayMode
         public IEnumerator TearDown()
         {
             // Hit effects are independent roots created by combat, not children of fixtures.
-            foreach (var burst in Object.FindObjectsByType<HitBurst>(FindObjectsSortMode.None))
+            foreach (var burst in Object.FindObjectsByType<HitBurst>(FindObjectsInactive.Include))
                 Object.Destroy(burst.gameObject);
             foreach (var go in _created)
                 if (go != null) Object.Destroy(go);
@@ -82,6 +82,38 @@ namespace Game.Tests.PlayMode
             // Awake still initializes health/controller; no gravity or physical input in fixtures.
             player.enabled = false;
             return player;
+        }
+
+        [UnityTest]
+        public IEnumerator ImpactPoolIsBoundedReusesExpiredEffectsAndSurvivesDestroyedInstances()
+        {
+            GameFlow.Blocked = false;
+            for (int i = 0; i < 100; i++)
+                HitBurst.Spawn(new Vector3(i, 0, 0), Color.yellow);
+            var allocated = Object.FindObjectsByType<HitBurst>(FindObjectsInactive.Include);
+            Assert.LessOrEqual(allocated.Length, 32, "Crowded combat must not allocate unbounded effects.");
+            yield return new WaitForSeconds(.4f);
+            Assert.AreEqual(0, Object.FindObjectsByType<HitBurst>().Length);
+            for (int i = 0; i < 10; i++) HitBurst.Spawn(Vector3.zero, Color.cyan);
+            Assert.AreEqual(allocated.Length, Object.FindObjectsByType<HitBurst>(FindObjectsInactive.Include).Length,
+                "Expired impacts should be reused without allocating new roots.");
+            foreach (var burst in allocated) Object.Destroy(burst.gameObject);
+            yield return null;
+            HitBurst.Spawn(Vector3.one, Color.yellow);
+            Assert.AreEqual(1, Object.FindObjectsByType<HitBurst>().Length,
+                "Reloaded scenes must not retain stale pool references.");
+        }
+
+        [UnityTest]
+        public IEnumerator ImpactFreezesInPauseAndEndsOnDefeat()
+        {
+            HitBurst.Spawn(Vector3.zero, Color.yellow);
+            var burst = Object.FindAnyObjectByType<HitBurst>();
+            yield return new WaitForSeconds(.4f);
+            Assert.IsTrue(burst.gameObject.activeSelf, "An open menu must pause impact lifetime.");
+            GameFlow.Over = true;
+            yield return null;
+            Assert.IsFalse(burst.gameObject.activeSelf, "Defeat must end the visual immediately.");
         }
 
         [UnityTest]

@@ -203,8 +203,10 @@ namespace Game.Tests.Rounds
             yield return null;
             Assert.AreEqual(1, go.GetComponentsInChildren<PokemonEnemyVisual>().Length);
             Assert.AreEqual("Pokemon species_charizard", enemy.VisualRenderer.gameObject.name);
-            // Two healthbar renderers plus exactly one replacement billboard.
-            Assert.AreEqual(3, go.GetComponentsInChildren<SpriteRenderer>(true).Length);
+            // Two healthbar renderers, one replacement billboard and one reused ground shadow.
+            Assert.AreEqual(4, go.GetComponentsInChildren<SpriteRenderer>(true).Length);
+            Assert.AreEqual(1, go.GetComponents<Game.Rendering.GroundContactShadow>().Length,
+                "Reinitializing a pooled actor must not stack contact shadows.");
             enemy.Initialize(1, 2.5f);
             Assert.IsFalse(enemy.IsBoss);
             Assert.AreEqual(EnemyTriangle.ContactDamagePerSecond, enemy.ContactDamage);

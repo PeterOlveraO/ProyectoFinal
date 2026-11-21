@@ -71,7 +71,11 @@ namespace Game.UI
                 var button = UIFactory.CreateButton(_content, "Slot" + index, "", UIFactory.CardViolet,
                     new Vector2(210, 210), () => _select(index), 24);
                 var label = button.GetComponentInChildren<TMPro.TMP_Text>();
+                var namePlate = UIFactory.Surface("NamePlate", button.transform, UIFactory.Ink);
+                UIFactory.Region(namePlate, .03f, .025f, .97f, .25f);
+                namePlate.SetAsFirstSibling();
                 UIFactory.Region(label.rectTransform, 0, 0, 1, .25f, 8);
+                label.fontSize = 23;
                 var portrait = UIFactory.CreateImage("Portrait", button.transform, null, Color.white);
                 portrait.preserveAspect = true;
                 UIFactory.Region(portrait.rectTransform, .15f, .25f, .85f, .84f);
@@ -98,7 +102,7 @@ namespace Game.UI
                 bool isEquipped = pokemon != null && pokemon.instanceId == equipped?.instanceId;
                 slot.button.interactable = exists && !busy;
                 slot.button.image.color = exists && i == selected
-                    ? Color.Lerp(UIFactory.CardViolet, UIFactory.Sky, .32f) : UIFactory.CardViolet;
+                    ? UIFactory.Sky : isEquipped ? Color.Lerp(UIFactory.CardViolet, UIFactory.Lime, .3f) : UIFactory.CardViolet;
                 slot.name.text = exists ? species(pokemon.speciesId)?.name ?? pokemon.speciesId : "Espacio libre";
                 slot.name.color = exists ? UIFactory.Cream : UIFactory.Muted;
                 slot.portrait.sprite = exists ? PokemonCollection.GetSprite(pokemon) : null;

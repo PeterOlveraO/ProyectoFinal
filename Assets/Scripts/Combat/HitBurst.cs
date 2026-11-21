@@ -1,12 +1,11 @@
+using System.Collections.Generic;
+using Game.Core;
 using Game.Rendering;
 using UnityEngine;
 
 namespace Game.Combat
 {
-    /// <summary>
-    /// Destello de impactos: unos círculos de color salen disparados y se apagan.
-    /// Se genera por código (sin partículas ni materiales externos).
-    /// </summary>
+    /// <summary>Scene-local, bounded pool of brief pixel impacts.</summary>
     [DisallowMultipleComponent]
     public sealed class HitBurst : MonoBehaviour
     {
@@ -19,83 +18,120 @@ namespace Game.Combat
             public Color Color;
         }
 
-        const float Life = 0.42f;
+        const float Life = .30f;
+        const float CoreLife = .12f;
+        const int MaxBursts = 32;
+        const int MaxSparks = 6;
+        static readonly List<HitBurst> Pool = new List<HitBurst>(MaxBursts);
 
         Spark[] _sparks;
+        SpriteRenderer _core;
         float _time;
+        int _count;
+        Color _color;
 
         public static void Spawn(Vector3 position, Color color, int count = 9, float spread = 1f)
         {
-            var go = new GameObject("HitBurst");
-            go.transform.position = position;
+            HitBurst burst = null;
+            HitBurst oldest = null;
+            for (int i = Pool.Count - 1; i >= 0; i--)
+            {
+                var candidate = Pool[i];
+                if (candidate == null) { Pool.RemoveAt(i); continue; }
+                if (!candidate.gameObject.activeSelf) { burst = candidate; break; }
+                if (oldest == null || candidate._time > oldest._time) oldest = candidate;
+            }
 
-            var burst = go.AddComponent<HitBurst>();
-            burst.Build(position, color, count, spread);
+            if (burst == null && Pool.Count < MaxBursts)
+            {
+                var go = new GameObject("HitBurst");
+                burst = go.AddComponent<HitBurst>();
+                burst.CreateVisuals();
+                Pool.Add(burst);
+            }
+            else if (burst == null) burst = oldest;
+
+            burst.gameObject.SetActive(true);
+            burst.Play(position, color, count, spread);
         }
 
-        void Build(Vector3 position, Color color, int count, float spread)
+        void CreateVisuals()
         {
-            transform.position = position;
-            count = Mathf.Clamp(count, 1, 40);
-            _sparks = new Spark[count];
+            var core = new GameObject("Core");
+            core.transform.SetParent(transform, false);
+            _core = core.AddComponent<SpriteRenderer>();
+            _core.sprite = PixelCombatSprites.Burst;
+            _core.sortingOrder = 28;
+            core.AddComponent<BillboardSprite>();
 
-            for (int i = 0; i < count; i++)
+            _sparks = new Spark[MaxSparks];
+            for (int i = 0; i < MaxSparks; i++)
             {
                 var go = new GameObject("Spark" + i);
                 go.transform.SetParent(transform, false);
-
                 var renderer = go.AddComponent<SpriteRenderer>();
-                renderer.sprite = ProceduralSprites.Circle;
-                renderer.color = color;
+                renderer.sprite = PixelCombatSprites.Spark;
                 renderer.sortingOrder = 27;
+                go.AddComponent<BillboardSprite>();
+                _sparks[i] = new Spark { Transform = go.transform, Renderer = renderer };
+            }
+        }
 
-                var billboard = go.AddComponent<BillboardSprite>();
-                billboard.SetContinuous(false);
-
+        void Play(Vector3 position, Color color, int count, float spread)
+        {
+            transform.position = position;
+            _time = 0f;
+            _color = color;
+            _count = Mathf.Clamp(count, 1, MaxSparks);
+            _core.enabled = true;
+            _core.color = Color.Lerp(color, new Color(1f, .97f, .78f, color.a), .7f);
+            _core.transform.localScale = Vector3.one * .48f;
+            for (int i = 0; i < MaxSparks; i++)
+            {
+                var spark = _sparks[i];
+                spark.Renderer.enabled = i < _count;
+                if (i >= _count) continue;
+                spark.Transform.localPosition = Vector3.zero;
                 Vector2 direction = Random.insideUnitCircle;
-                if (direction.sqrMagnitude < 0.01f) direction = Vector2.right;
-
-                float size = Random.Range(0.10f, 0.26f);
-                go.transform.localScale = Vector3.one * size;
-
-                _sparks[i] = new Spark
-                {
-                    Transform = go.transform,
-                    Renderer = renderer,
-                    Velocity = new Vector3(direction.x, Random.Range(0.25f, 0.7f), direction.y).normalized *
-                               Random.Range(3.5f, 7.5f) * Mathf.Max(0.1f, spread),
-                    Size = size,
-                    Color = color
-                };
+                if (direction.sqrMagnitude < .01f) direction = Vector2.right;
+                spark.Velocity = new Vector3(direction.x, Random.Range(.25f, .7f), direction.y).normalized *
+                                 Random.Range(1.2f, 2.7f) * Mathf.Max(.1f, spread);
+                spark.Size = Random.Range(.09f, .16f);
+                spark.Transform.localScale = Vector3.one * spark.Size;
+                spark.Color = color;
+                spark.Renderer.color = color;
             }
         }
 
         void Update()
         {
+            if (GameFlow.Over)
+            {
+                gameObject.SetActive(false);
+                return;
+            }
+            if (GameFlow.Blocked) return;
             _time += Time.deltaTime;
             float t = Mathf.Clamp01(_time / Life);
-
-            if (_sparks != null)
+            float coreT = Mathf.Clamp01(_time / CoreLife);
+            _core.enabled = coreT < 1f;
+            _core.transform.localScale = Vector3.one * (.48f * (1f - coreT * .55f));
+            Color coreColor = Color.Lerp(_color, new Color(1f, .97f, .78f, _color.a), .7f);
+            coreColor.a *= 1f - coreT;
+            _core.color = coreColor;
+            for (int i = 0; i < _count; i++)
             {
-                for (int i = 0; i < _sparks.Length; i++)
-                {
-                    var spark = _sparks[i];
-                    if (spark.Transform == null) continue;
-
-                    spark.Velocity += Vector3.down * (16f * Time.deltaTime);
-                    spark.Transform.position += spark.Velocity * Time.deltaTime;
-                    spark.Transform.localScale = Vector3.one * (spark.Size * (1f - t));
-
-                    if (spark.Renderer != null)
-                    {
-                        Color color = spark.Color;
-                        color.a = 1f - t;
-                        spark.Renderer.color = color;
-                    }
-                }
+                var spark = _sparks[i];
+                spark.Velocity += Vector3.down * (5f * Time.deltaTime);
+                spark.Transform.position += spark.Velocity * Time.deltaTime;
+                spark.Transform.localScale = Vector3.one * (spark.Size * (1f - t));
+                Color color = spark.Color;
+                color.a *= 1f - t;
+                spark.Renderer.color = color;
             }
-
-            if (t >= 1f) Destroy(gameObject);
+            if (t >= 1f) gameObject.SetActive(false);
         }
+
+        void OnDestroy() => Pool.Remove(this);
     }
 }

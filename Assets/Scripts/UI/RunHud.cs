@@ -2,7 +2,6 @@ using Game.Combat;
 using Game.Core;
 using Game.Economy;
 using Game.Player;
-using Game.Rendering;
 using Game.Rounds;
 using UnityEngine;
 using UnityEngine.UI;
@@ -116,8 +115,9 @@ namespace Game.UI
             _root = root;
 
             // Flash rojo al recibir daño (detrás del resto del HUD).
-            _damageFlash = UIFactory.CreateImage("DamageFlash", root, null,
-                                                new Color(1f, 0.1f, 0.12f, 0f), false);
+            var flashTint = UIFactory.Coral;
+            flashTint.a = 0f;
+            _damageFlash = UIFactory.CreateImage("DamageFlash", root, null, flashTint, false);
             UIFactory.Stretch(_damageFlash.rectTransform);
 
             BuildStatusPanel(root);
@@ -134,31 +134,31 @@ namespace Game.UI
         {
             _statusPanel = UIFactory.CreateRect("RunStatus", parent);
             UIFactory.Place(_statusPanel, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(24f, -24f), new Vector2(470f, 220f));
+                            new Vector2(20f, -20f), new Vector2(438f, 196f));
 
             var background = UIFactory.CreateImage("Background", _statusPanel,
-                                                   ProceduralSprites.RoundedRect,
+                                                   RetroUiArt.Frame,
                                                    UIFactory.DeepViolet, false, true);
             UIFactory.Stretch(background.rectTransform);
 
             var healthTitle = UIFactory.CreateText("HealthTitle", _statusPanel, "VIDA", 26,
                                                    UIFactory.Sun, TextAnchor.MiddleLeft);
             UIFactory.Place(healthTitle.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(22f, -14f), new Vector2(200f, 30f));
+                            new Vector2(18f, -12f), new Vector2(170f, 30f));
 
             _healthLabel = UIFactory.CreateText("HealthValue", _statusPanel, "100 / 100", 24,
                                                 UIFactory.Cream, TextAnchor.MiddleRight);
             UIFactory.Place(_healthLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(248f, -14f), new Vector2(200f, 30f));
+                            new Vector2(220f, -12f), new Vector2(200f, 30f));
 
             var barBackground = UIFactory.CreateImage("HealthBarBackground", _statusPanel,
-                                                      ProceduralSprites.RoundedRect,
-                                                      new Color(0.10f, 0.05f, 0.20f, 0.95f), false, true);
+                                                      RetroUiArt.Frame,
+                                                      UIFactory.Ink, false, true);
             UIFactory.Place(barBackground.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(22f, -46f), new Vector2(426f, 30f));
+                            new Vector2(18f, -46f), new Vector2(402f, 24f));
 
             _healthFill = UIFactory.CreateImage("HealthBarFill", barBackground.rectTransform,
-                                                ProceduralSprites.RoundedRect, UIFactory.Lime, false, true);
+                                                RetroUiArt.Frame, UIFactory.Lime, false, true);
             UIFactory.Stretch(_healthFill.rectTransform, 4f);
             _healthFill.type = Image.Type.Filled;
             _healthFill.fillMethod = Image.FillMethod.Horizontal;
@@ -168,27 +168,27 @@ namespace Game.UI
             _roundLabel = UIFactory.CreateText("Round", _statusPanel, "RONDA 1", 28,
                                                UIFactory.Sun, TextAnchor.MiddleLeft);
             UIFactory.Place(_roundLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(22f, -86f), new Vector2(260f, 34f));
+                            new Vector2(18f, -78f), new Vector2(230f, 32f));
 
             _enemiesLabel = UIFactory.CreateText("Enemies", _statusPanel, "0 / 6", 24,
                                                  UIFactory.Cream, TextAnchor.MiddleRight);
             UIFactory.Place(_enemiesLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(248f, -86f), new Vector2(200f, 30f));
+                            new Vector2(260f, -78f), new Vector2(160f, 30f));
 
             _pointsLabel = UIFactory.CreateText("Points", _statusPanel, "PUNTOS 0", 24,
                                                 UIFactory.Lime, TextAnchor.MiddleLeft);
             UIFactory.Place(_pointsLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(22f, -130f), new Vector2(260f, 30f));
+                            new Vector2(18f, -118f), new Vector2(220f, 30f));
 
             _coinsLabel = UIFactory.CreateText("Coins", _statusPanel, "MONEDAS 0", 24,
                                                UIFactory.Sun, TextAnchor.MiddleRight);
             UIFactory.Place(_coinsLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(248f, -130f), new Vector2(200f, 30f));
+                            new Vector2(238f, -118f), new Vector2(182f, 30f));
 
-            _bonusLabel = UIFactory.CreateText("RunBonus", _statusPanel, "BONUS DE PUNTOS x0", 22,
+            _bonusLabel = UIFactory.CreateText("RunBonus", _statusPanel, "BONUS DE PUNTOS x0", 20,
                                                UIFactory.Cream, TextAnchor.MiddleLeft);
             UIFactory.Place(_bonusLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                            new Vector2(22f, -172f), new Vector2(430f, 30f));
+                            new Vector2(18f, -156f), new Vector2(402f, 28f));
         }
 
         void BuildDrinkButton(Transform parent)
@@ -214,13 +214,30 @@ namespace Game.UI
                 _drinkLabel.text = "CONSTRUIR MÁQUINA " + DrinkStations.Names[_nearbyDrink] +
                     " · " + DrinkStations.BuildPrices[_nearbyDrink] + " PUNTOS";
                 _drinkButton.interactable = round.Points >= DrinkStations.BuildPrices[_nearbyDrink];
+                StyleShopOffer(_drinkButton, _drinkLabel, UIFactory.Sky);
                 return;
             }
-            _drinkLabel.text = stations.Has((DrinkType)_nearbyDrink) ?
+            bool purchased = stations.Has((DrinkType)_nearbyDrink);
+            _drinkLabel.text = purchased ?
                 "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · ADQUIRIDA" :
                 "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · " + DrinkStations.Prices[_nearbyDrink] + " PUNTOS";
-            _drinkButton.interactable = !stations.Has((DrinkType)_nearbyDrink) &&
+            _drinkButton.interactable = !purchased &&
                                          round.Points >= DrinkStations.Prices[_nearbyDrink];
+            StyleShopOffer(_drinkButton, _drinkLabel, UIFactory.Sky, purchased);
+        }
+
+        static void StyleShopOffer(Button button, TMPro.TMP_Text label, Color available, bool purchased = false)
+        {
+            // Disabled offers remain readable over any terrain; interactivity still owns the state.
+            var colors = button.colors;
+            if (colors.disabledColor != Color.white)
+            {
+                colors.disabledColor = Color.white;
+                button.colors = colors;
+            }
+            button.image.color = button.interactable ? available : UIFactory.DeepViolet;
+            label.color = !button.interactable ? (purchased ? UIFactory.Lime : UIFactory.Cream)
+                : available == UIFactory.Sky ? UIFactory.Ink : UIFactory.Cream;
         }
 
         void BuyDrink()
@@ -236,13 +253,13 @@ namespace Game.UI
             // Top-center loadout, away from the top-left status and bottom-corner sticks.
             var panel = UIFactory.CreateRect("ShotLoadout", parent);
             UIFactory.Place(panel, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -24f), new Vector2(650f, 54f));
-            var background = UIFactory.CreateImage("Background", panel, ProceduralSprites.RoundedRect,
+                new Vector2(0f, -20f), new Vector2(500f, 52f));
+            var background = UIFactory.CreateImage("Background", panel, RetroUiArt.Frame,
                 UIFactory.DeepViolet, false, true);
             UIFactory.Stretch(background.rectTransform);
-            _equippedShotLabel = UIFactory.CreateText("EquippedShot", panel, "DISPARO · BÁSICO", 26, UIFactory.Sun);
+            _equippedShotLabel = UIFactory.CreateText("EquippedShot", panel, "DISPARO · BÁSICO", 22, UIFactory.Cream);
             UIFactory.Place(_equippedShotLabel.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -8f), new Vector2(630f, 38f));
+                new Vector2(0f, -7f), new Vector2(476f, 38f));
 
             // Separate vertical slot above the drink offer (35..135), never over it.
             _shotButton = UIFactory.CreateButton(parent, "BuyShot", "", UIFactory.CardViolet,
@@ -274,11 +291,13 @@ namespace Game.UI
                 _shotLabel.text = "CONSTRUIR ARSENAL " + ShotDefinitions.Name(type) + "\n" +
                     ShotStations.BuildPrice(_nearbyShot) + " PUNTOS";
                 _shotButton.interactable = round.Points >= ShotStations.BuildPrice(_nearbyShot);
+                StyleShopOffer(_shotButton, _shotLabel, UIFactory.CardViolet);
                 return;
             }
             _shotLabel.text = "DISPARO " + ShotDefinitions.Name(type) + "\n" +
                 "COMPRAR Y REEMPLAZAR · " + ShotDefinitions.Price(type) + " PUNTOS";
             _shotButton.interactable = round.Points >= ShotDefinitions.Price(type);
+            StyleShopOffer(_shotButton, _shotLabel, UIFactory.CardViolet);
         }
 
         void BuyShot()
@@ -293,21 +312,23 @@ namespace Game.UI
         {
             var rect = UIFactory.CreateRect("RoundBanner", parent);
             UIFactory.Place(rect, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                            new Vector2(0f, -260f), new Vector2(1000f, 170f));
+                            new Vector2(0f, -156f), new Vector2(720f, 124f));
 
             _banner = rect.gameObject.AddComponent<CanvasGroup>();
             _banner.alpha = 0f;
             _banner.blocksRaycasts = false;
             _banner.interactable = false;
+            var backing = UIFactory.Surface("BannerBacking", rect, UIFactory.DeepViolet);
+            UIFactory.Stretch(backing);
 
-            _bannerTitle = UIFactory.CreateText("Title", rect, "RONDA 1", 78, UIFactory.Sun);
+            _bannerTitle = UIFactory.CreateText("Title", rect, "RONDA 1", 46, UIFactory.Sun);
             UIFactory.Place(_bannerTitle.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                            new Vector2(0f, 0f), new Vector2(1100f, 110f));
+                            new Vector2(0f, -8f), new Vector2(680f, 64f));
             UIFactory.AddOutline(_bannerTitle, UIFactory.Ink, 6f);
 
-            _bannerSubtitle = UIFactory.CreateText("Subtitle", rect, "", 32, UIFactory.Cream);
+            _bannerSubtitle = UIFactory.CreateText("Subtitle", rect, "", 26, UIFactory.Cream);
             UIFactory.Place(_bannerSubtitle.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                            new Vector2(0f, -112f), new Vector2(1100f, 56f));
+                            new Vector2(0f, -76f), new Vector2(680f, 40f));
             UIFactory.AddOutline(_bannerSubtitle, new Color(0f, 0f, 0f, 0.55f), 2f);
         }
 
@@ -317,9 +338,10 @@ namespace Game.UI
             _gameOverRoot = _gameOverPage.Root.gameObject;
             var card = UIFactory.Surface("Summary", _gameOverPage.Body);
             UIFactory.Region(card, .15f, 0, .85f, 1);
-            UIFactory.Stack(card, 40, 24);
-            UIFactory.Label(card, "Title", "PARTIDA TERMINADA", 46, UIFactory.Sun, 80);
-            _gameOverStats = UIFactory.Label(card, "Stats", "", 32, UIFactory.Cream, 360, TextAnchor.UpperLeft);
+            var content = UIFactory.ScrollStack(card, 32, 20);
+            UIFactory.Label(content, "Title", "PARTIDA TERMINADA", 40, UIFactory.Sun, 72);
+            _gameOverStats = UIFactory.Label(content, "Stats", "", 30, UIFactory.Cream, 360, TextAnchor.UpperLeft);
+            UIFactory.LayoutHeight(_gameOverStats, 360);
             _gameOverPage.Action("RetryButton", "VOLVER A INTENTAR", UIFactory.Sun, Retry);
             _gameOverPage.Action("MenuButton", "Volver al menú", UIFactory.CardViolet, BackToMenu);
         }
@@ -333,7 +355,7 @@ namespace Game.UI
 
             float ratio = player.Health01;
             _healthFill.fillAmount = ratio;
-            _healthFill.color = Color.Lerp(UIFactory.Coral, UIFactory.Lime, ratio);
+            _healthFill.color = ratio <= .25f ? UIFactory.Coral : ratio <= .5f ? UIFactory.Sun : UIFactory.Lime;
             _healthLabel.text = player.Health + " / " + player.MaxHealth;
 
             if (_lastHealth >= 0 && player.Health < _lastHealth) _flashAmount = 0.5f;
@@ -429,7 +451,9 @@ namespace Game.UI
             if (_damageFlash == null) return;
 
             _flashAmount = Mathf.Max(0f, _flashAmount - 2.5f * Time.unscaledDeltaTime);
-            _damageFlash.color = new Color(1f, 0.1f, 0.12f, _flashAmount * 0.45f);
+            var tint = UIFactory.Coral;
+            tint.a = _flashAmount * 0.45f;
+            _damageFlash.color = tint;
         }
 
         void UpdateGameOver(RoundManager round, bool gameOver)

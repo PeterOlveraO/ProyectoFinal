@@ -93,25 +93,25 @@ namespace Game.Terrain
                         AddQuad(data, sides,
                                 new Vector3(x0, k * stepHeight, z0), new Vector3(x0, (k + 1) * stepHeight, z0),
                                 new Vector3(x0, (k + 1) * stepHeight, z1), new Vector3(x0, k * stepHeight, z1),
-                                Vector3.left, true);
+                                Vector3.left, true, k == level - 1);
 
                     for (int k = NeighborLevel(map, gx + 1, gz); k < level; k++)
                         AddQuad(data, sides,
                                 new Vector3(x1, k * stepHeight, z1), new Vector3(x1, (k + 1) * stepHeight, z1),
                                 new Vector3(x1, (k + 1) * stepHeight, z0), new Vector3(x1, k * stepHeight, z0),
-                                Vector3.right, true);
+                                Vector3.right, true, k == level - 1);
 
                     for (int k = NeighborLevel(map, gx, gz - 1); k < level; k++)
                         AddQuad(data, sides,
                                 new Vector3(x1, k * stepHeight, z0), new Vector3(x1, (k + 1) * stepHeight, z0),
                                 new Vector3(x0, (k + 1) * stepHeight, z0), new Vector3(x0, k * stepHeight, z0),
-                                Vector3.back, true);
+                                Vector3.back, true, k == level - 1);
 
                     for (int k = NeighborLevel(map, gx, gz + 1); k < level; k++)
                         AddQuad(data, sides,
                                 new Vector3(x0, k * stepHeight, z1), new Vector3(x0, (k + 1) * stepHeight, z1),
                                 new Vector3(x1, (k + 1) * stepHeight, z1), new Vector3(x1, k * stepHeight, z1),
-                                Vector3.forward, true);
+                                Vector3.forward, true, k == level - 1);
                 }
             }
         }
@@ -159,7 +159,8 @@ namespace Game.Terrain
         /// <paramref name="normal"/> en el winding de Unity.
         /// </summary>
         static void AddQuad(ChunkMeshData data, List<int> triangles,
-                            Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, Vector3 normal, bool side)
+                            Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, Vector3 normal,
+                            bool side, bool grassRim = false)
         {
             int b = data.Vertices.Count;
 
@@ -175,9 +176,11 @@ namespace Game.Terrain
 
             if (side)
             {
+                // Only the uppermost face carries turf; lower levels remain earth.
+                float top = grassRim ? .25f : 13f / 64f;
                 data.UVs.Add(new Vector2(0f, 0f));
-                data.UVs.Add(new Vector2(0f, 1f / TerrainMaterials.GrassTilesPerAxis));
-                data.UVs.Add(new Vector2(1f / TerrainMaterials.GrassTilesPerAxis, 1f / TerrainMaterials.GrassTilesPerAxis));
+                data.UVs.Add(new Vector2(0f, top));
+                data.UVs.Add(new Vector2(1f / TerrainMaterials.GrassTilesPerAxis, top));
                 data.UVs.Add(new Vector2(1f / TerrainMaterials.GrassTilesPerAxis, 0f));
             }
             else

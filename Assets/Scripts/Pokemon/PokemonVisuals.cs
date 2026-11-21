@@ -104,6 +104,7 @@ namespace Game.Pokemon
 
             var billboard = go.AddComponent<BillboardSprite>();
             billboard.SetContinuous(continuous);
+            GroundContactShadow.Attach(parent, height * .65f);
             return renderer;
         }
     }

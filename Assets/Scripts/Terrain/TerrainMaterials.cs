@@ -24,6 +24,7 @@ namespace Game.Terrain
         public static Material[] Create(TerrainSettings settings)
         {
             var texture = CreateGrassTexture();
+            var sideTexture = CreateSideTexture();
 
             var zoneColors = new[]
             {
@@ -36,10 +37,10 @@ namespace Game.Terrain
             for (int zone = 1; zone <= 3; zone++)
             {
                 Color top = zoneColors[zone - 1];
-                Color side = Color.Lerp(top, Color.black, 0.45f);
+                Color side = Color.Lerp(top, new Color(.78f, .68f, .49f), 0.35f);
 
                 materials[zone - 1] = CreateMaterial(settings, texture, top, "Terrain_Zone" + zone + "_Top");
-                materials[3 + zone - 1] = CreateMaterial(settings, texture, side, "Terrain_Zone" + zone + "_Side");
+                materials[3 + zone - 1] = CreateMaterial(settings, sideTexture, side, "Terrain_Zone" + zone + "_Side");
             }
 
             return materials;
@@ -50,11 +51,11 @@ namespace Game.Terrain
         {
             var water = NewMaterial(settings);
             water.name = "Water";
-            water.mainTexture = null;
-            water.color = new Color(0.10f, 0.42f, 0.72f, 1f);
-            if (water.HasProperty("_Smoothness")) water.SetFloat("_Smoothness", 0.75f);
-            if (water.HasProperty("_Glossiness")) water.SetFloat("_Glossiness", 0.75f);
-            if (water.HasProperty("_Metallic")) water.SetFloat("_Metallic", 0.1f);
+            water.mainTexture = CreateWaterTexture();
+            water.color = new Color(.33f, .62f, .69f, 1f);
+            if (water.HasProperty("_Smoothness")) water.SetFloat("_Smoothness", 0.2f);
+            if (water.HasProperty("_Glossiness")) water.SetFloat("_Glossiness", 0.2f);
+            if (water.HasProperty("_Metallic")) water.SetFloat("_Metallic", 0f);
             return water;
         }
 
@@ -63,14 +64,14 @@ namespace Game.Terrain
         {
             if (materials == null) return;
 
-            Texture texture = null;
+            var textures = new System.Collections.Generic.HashSet<Texture>();
             foreach (var material in materials)
             {
                 if (material == null) continue;
-                if (texture == null) texture = material.mainTexture;
+                if (material.mainTexture != null) textures.Add(material.mainTexture);
                 Object.Destroy(material);
             }
-            if (texture != null) Object.Destroy(texture);
+            foreach (var texture in textures) Object.Destroy(texture);
         }
 
         static Shader FindShader(TerrainSettings settings)
@@ -128,14 +129,13 @@ namespace Game.Terrain
                     int tile = (y / TileSize) * GrassTilesPerAxis + x / TileSize;
                     int tx = x % TileSize;
                     int ty = y % TileSize;
-                    // Hash entero, no estado global de Random. 16 tonos suaves y
-                    // briznas de 1-2 texels; atlas compartido de solo 64x64 (16 KiB).
-                    uint hash = unchecked((uint)(tx * 374761393 + (ty / 2) * 668265263 + tile * 1274126177));
-                    hash = (hash ^ (hash >> 13)) * 1274126177u;
-                    float shade = 0.85f + tile * 0.01f;
-                    if (hash % 13u < 2u) shade *= ty % 2 == 0 ? 0.78f : 1.08f;
-                    if (tx == 0 || ty == 0 || tx == TileSize - 1 || ty == TileSize - 1)
-                        shade *= 0.9f;
+                    // Grandes manchas de color + pocos píxeles de hierba: lectura pixel-art
+                    // sin bordes oscuros que dibujen una cuadrícula alrededor de cada bloque.
+                    uint hash = Hash((uint)(tx / 4 + tile * 17), (uint)(ty / 4 + tile * 31));
+                    uint grain = Hash((uint)(tx + tile * 11), (uint)(ty + tile * 23));
+                    float shade = 0.92f + ((int)(hash % 17u) - 8) * 0.009f;
+                    if (grain % 37u == 0u) shade *= 0.72f;
+                    else if (grain % 29u == 0u) shade *= 1.10f;
                     pixels[y * size + x] = new Color(shade, shade, shade, 1f);
                 }
             }
@@ -143,6 +143,62 @@ namespace Game.Terrain
             texture.SetPixels(pixels);
             texture.Apply(false, true);
             return texture;
+        }
+
+        static Texture2D CreateSideTexture()
+        {
+            const int size = TileSize * GrassTilesPerAxis;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Terrain_EarthAtlas", filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Repeat
+            };
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                int localY = y % TileSize;
+                uint hash = Hash((uint)(x / 3), (uint)(y / 3));
+                float variation = hash % 11u < 2u ? .82f : 1f;
+                // Banda superior fina de césped que corona los cortes de altura.
+                pixels[y * size + x] = localY >= TileSize - 2
+                    ? new Color(.62f, .76f, .49f, 1f)
+                    : new Color(.63f * variation, .53f * variation, .37f * variation, 1f);
+            }
+            texture.SetPixels(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
+        /// <summary>Small opaque pixel pattern used by the animated lake surface.</summary>
+        public static Texture2D CreateWaterTexture()
+        {
+            const int size = 32;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Terrain_WaterPixels", filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Repeat
+            };
+            var pixels = new Color[size * size];
+            Color baseWater = new Color(.72f, .88f, .86f, 1f);
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                // Thin, staggered wave crests rather than floating square noise.
+                int waveX = (x + (y / 8) * 7) % 16;
+                bool crest = y % 8 == 3 && waveX >= 3 && waveX <= 7;
+                bool trough = y % 8 == 4 && waveX >= 5 && waveX <= 9;
+                pixels[y * size + x] = crest ? new Color(.9f, 1f, .94f, 1f)
+                    : trough ? new Color(.66f, .83f, .85f, 1f) : baseWater;
+            }
+            texture.SetPixels(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
+        static uint Hash(uint x, uint y)
+        {
+            uint value = x * 374761393u + y * 668265263u + 1274126177u;
+            value = (value ^ (value >> 13)) * 1274126177u;
+            return value ^ (value >> 16);
         }
     }
 }

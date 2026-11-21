@@ -18,8 +18,8 @@ namespace Game.UI
         public PokemonDetailsView(Transform parent)
         {
             Root = UIFactory.Surface("PokemonDetails", parent);
-            UIFactory.Stack(Root, 28, 14);
-            var header = UIFactory.CreateRect("Identity", Root);
+            var content = UIFactory.ScrollStack(Root, 22, 10);
+            var header = UIFactory.CreateRect("Identity", content);
             UIFactory.Layout(header, 150);
             _portrait = UIFactory.CreateImage("Portrait", header, null, Color.white);
             _portrait.preserveAspect = true;
@@ -30,10 +30,10 @@ namespace Game.UI
             identity.offsetMin = new Vector2(174, 0);
             UIFactory.Stack(identity, 0, 8);
             _category = UIFactory.Label(identity, "Rarity", "", 24, UIFactory.Sun, 32);
-            _name = UIFactory.Label(identity, "Name", "", 42, UIFactory.Cream, 56);
+            _name = UIFactory.Label(identity, "Name", "", 36, UIFactory.Cream, 56);
             _nature = UIFactory.Label(identity, "Nature", "", 24, UIFactory.Muted, 40);
 
-            var columns = UIFactory.CreateRect("Columns", Root);
+            var columns = UIFactory.CreateRect("Columns", content);
             UIFactory.Layout(columns, 32);
             Column(columns, "Stat", "ESTADÍSTICA", 0, .43f, UIFactory.Muted, 20);
             Column(columns, "Base", "BASE", .43f, .62f, UIFactory.Muted, 20);
@@ -42,16 +42,18 @@ namespace Game.UI
             string[] names = { "Salud", "Ataque", "Defensa", "Velocidad" };
             for (int i = 0; i < names.Length; i++)
             {
-                var row = UIFactory.Surface(names[i], Root, i % 2 == 0 ? UIFactory.DeepViolet : UIFactory.CardViolet);
-                UIFactory.Layout(row, 52);
+                var row = UIFactory.Surface(names[i], content, i % 2 == 0 ? UIFactory.DeepViolet : UIFactory.CardViolet);
+                UIFactory.Layout(row, 46);
                 Column(row, "Name", names[i], 0, .43f, UIFactory.Cream);
                 _base[i] = Column(row, "Base", "", .43f, .62f, UIFactory.Muted);
                 _ivs[i] = Column(row, "IV", "", .62f, .77f, UIFactory.Muted);
-                _total[i] = Column(row, "Total", "", .77f, 1, UIFactory.Cream);
+                _total[i] = Column(row, "Total", "", .77f, 1, UIFactory.Sun);
                 _total[i].fontStyle = TMPro.FontStyles.Bold;
             }
-            UIFactory.Label(Root, "Explanation", "Total con naturaleza · sin EV de partida", 21, UIFactory.Muted, 30);
-            Message = UIFactory.Label(Root, "Message", "", 24, UIFactory.Lime, 54);
+            var explanation = UIFactory.Label(content, "Explanation", "Total con naturaleza · sin EV de partida", 21, UIFactory.Muted, 36);
+            UIFactory.LayoutHeight(explanation, 36);
+            Message = UIFactory.Label(content, "Message", "", 24, UIFactory.Lime, 48);
+            UIFactory.LayoutHeight(Message, 48);
         }
 
         static TMPro.TMP_Text Column(RectTransform parent, string name, string value,

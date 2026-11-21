@@ -434,7 +434,8 @@ namespace Game.UI
                 RefreshSettings();
             });
             _qualityValue = quality.GetComponentInChildren<TMPro.TMP_Text>();
-            UIFactory.Label(stack, "Hint", "Pulsa la calidad para cambiarla. Los ajustes se guardan al volver.", 24, UIFactory.Muted, 80);
+            var hint = UIFactory.Label(stack, "Hint", "Pulsa la calidad para cambiarla. Los ajustes se guardan al volver.", 24, UIFactory.Muted, 80);
+            UIFactory.LayoutHeight(hint, 80);
             page.Action("Back", "Guardar y volver", UIFactory.Sun, CloseSettings);
             RefreshSettings();
         }
@@ -475,8 +476,7 @@ namespace Game.UI
         {
             var root = UIFactory.Surface("Card", page.Body);
             UIFactory.Region(root, .18f, 0, .82f, 1);
-            UIFactory.Stack(root, 32, 24);
-            return root;
+            return UIFactory.ScrollStack(root, 28, 20);
         }
         static UnityEngine.UI.Button StackButton(Transform parent, string name, string text, Color color,
             UnityEngine.Events.UnityAction action)

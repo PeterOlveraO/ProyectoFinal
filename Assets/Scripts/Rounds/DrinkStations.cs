@@ -138,6 +138,7 @@ namespace Game.Rounds
             if (player == null || !player.IsAlive || round == null || NearbyOffer(player.transform.position) != index) return false;
             if (!round.SpendPoints(Prices[index])) return false;
             _purchased[index] = true;
+            _platforms[index]?.SetPurchased();
             if ((DrinkType)index == DrinkType.Vitality) player.Heal(50);
             return true;
         }

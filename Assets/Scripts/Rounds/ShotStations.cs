@@ -84,10 +84,8 @@ namespace Game.Rounds
             root.AddComponent<BillboardSprite>().SetContinuous(false);
 
             var icon = root.AddComponent<SpriteRenderer>();
-            icon.sprite = ProceduralSprites.RoundedRect;
-            icon.drawMode = SpriteDrawMode.Sliced;
-            icon.size = new Vector2(1.2f, 1.4f);
-            icon.color = ShotDefinitions.Color(type);
+            icon.sprite = RetroWorldArt.Terminal;
+            root.transform.localScale = Vector3.one * 1.8f;
             icon.sortingOrder = 12;
 
             var symbol = new GameObject("Symbol");
@@ -95,10 +93,12 @@ namespace Game.Rounds
             // TMP's readable face is -Z, opposite to the sprite billboard's forward.
             symbol.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             var text = symbol.AddComponent<TextMeshPro>();
-            text.text = type == ShotType.Burst ? "III" : type == ShotType.Fan ? "V" : "↑";
-            text.fontSize = 6f;
+            symbol.transform.localPosition = new Vector3(0, .065f, -.02f);
+            text.text = type == ShotType.Burst ? "III" : type == ShotType.Fan ? "V" :
+                type == ShotType.Piercing ? ">>" : ">";
+            text.fontSize = 3.5f;
             text.alignment = TextAlignmentOptions.Center;
-            text.color = new Color(.08f, .04f, .16f);
+            text.color = Color.Lerp(ShotDefinitions.Color(type), RetroWorldArt.Cream, .4f);
             text.rectTransform.sizeDelta = new Vector2(1.2f, 1.3f);
             text.GetComponent<MeshRenderer>().sortingOrder = 13;
 

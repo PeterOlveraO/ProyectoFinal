@@ -41,7 +41,10 @@ namespace Game.Pokemon
         }
 
         readonly List<Occupied> _placed = new List<Occupied>();
+        readonly List<Vector3> _groveCenters = new List<Vector3>();
         System.Random _random;
+        Vector3 _activeGroveCenter;
+        bool _usingGroveCenter;
 
         void Start()
         {
@@ -54,10 +57,15 @@ namespace Game.Pokemon
 
             _random = new System.Random(unchecked(terrain.Settings.seed * 7919 + 101));
             _placed.Clear();
+            ConfigureWater(terrain);
+            LakeShoreline.Create(terrain);
+            CardinalPathOverlay.Create(terrain);
+            BuildGroveCenters(terrain);
             var root = new GameObject("Decor").transform;
             root.SetParent(transform, false);
 
-            // El lago puede ocupar casi toda la zona central: buscar también en los anillos exteriores.
+            // Cohortes de una misma silueta por claro, en vez de sortear todas las formas
+            // en cada celda. Los centros nacen solo sobre suelo plano y fuera de reservas.
             PlaceGroup(terrain, root, CatalogTrees(), canopyTrees, 12f, 76f);
             PlaceGroup(terrain, root, CatalogShrubs(), shrubs, 12f, 76f);
             PlaceGroup(terrain, root, CatalogPlants(), groundPlants, 12f, 76f);
@@ -101,9 +109,22 @@ namespace Game.Pokemon
 
         void PlaceGroup(WorldTerrain terrain, Transform root, List<Profile> profiles, int count, float minRadius, float maxRadius)
         {
+            int grove = 0;
+            int family = _random.Next(3);
+            _usingGroveCenter = _groveCenters.Count > 0;
             for (int i = 0; i < count; i++)
             {
-                Profile profile = profiles[_random.Next(profiles.Count)];
+                if (_usingGroveCenter)
+                {
+                    int nextGrove = (i / 18) % _groveCenters.Count;
+                    if (nextGrove != grove)
+                    {
+                        grove = nextGrove;
+                        family = _random.Next(3);
+                    }
+                    _activeGroveCenter = _groveCenters[grove];
+                }
+                Profile profile = ChooseProfile(profiles, family);
                 Sprite sprite = Resources.Load<Sprite>(profile.Path);
                 if (sprite == null)
                 {
@@ -112,6 +133,101 @@ namespace Game.Pokemon
                 }
                 if (TryFindSpot(terrain, profile, minRadius, maxRadius, out Vector3 position))
                     Spawn(terrain, root, sprite, profile, position);
+            }
+            _usingGroveCenter = false;
+        }
+
+        Profile ChooseProfile(List<Profile> profiles, int family)
+        {
+            // Keep the catalog broad for compatibility/audits, but actual groves use a
+            // restrained palette: rounded crowns, broadleaf or conifer silhouettes.
+            var compatible = new List<Profile>();
+            foreach (var profile in profiles)
+            {
+                int id = ParseSpriteId(profile.Path);
+                bool include = profile.Kind == Kind.Tree
+                    ? family == TreeFamily(id)
+                    : profile.Kind == Kind.Shrub ? id != 43 : id != 13;
+                if (include) compatible.Add(profile);
+            }
+            return compatible.Count == 0 ? profiles[0] : compatible[_random.Next(compatible.Count)];
+        }
+
+        static int ParseSpriteId(string path)
+        {
+            int underscore = path.LastIndexOf('_');
+            return underscore >= 0 && int.TryParse(path.Substring(underscore + 1), out int id) ? id : 0;
+        }
+
+        static int TreeFamily(int id)
+        {
+            if (id <= 11 || id >= 36) return 0; // compact, rounded crowns
+            if (id >= 24 && id <= 31) return 2; // conifers
+            return 1; // broadleaf and trunked crowns
+        }
+
+        void BuildGroveCenters(WorldTerrain terrain)
+        {
+            _groveCenters.Clear();
+            Profile tree = CatalogTrees()[0];
+            int width = terrain.Map.Width, depth = terrain.Map.Depth;
+            var candidates = new List<Vector3>();
+            for (int z = 2; z < depth - 2; z += 3)
+            for (int x = 2; x < width - 2; x += 3)
+            {
+                Vector3 point = terrain.BlockTopCenter(x, z);
+                Vector3 offset = point - terrain.SpawnPosition;
+                if (offset.magnitude < 22f || offset.magnitude > 70f ||
+                    IsReserved(offset, tree.Clearance, spawnClearRadius,
+                    terrain.Settings.rampWidth * terrain.BlockSize, terrain.Settings.rampHalfAngle) ||
+                    !SuitableGround(terrain, x, z, tree)) continue;
+                candidates.Add(point);
+            }
+            // Seeded shuffle avoids a scan-order bias toward one map edge.
+            for (int i = candidates.Count - 1; i > 0; i--)
+            {
+                int swap = _random.Next(i + 1);
+                Vector3 temporary = candidates[i];
+                candidates[i] = candidates[swap];
+                candidates[swap] = temporary;
+            }
+            foreach (Vector3 point in candidates)
+            {
+                bool near = false;
+                foreach (Vector3 center in _groveCenters)
+                {
+                    float dx = center.x - point.x, dz = center.z - point.z;
+                    if (dx * dx + dz * dz < 22f * 22f) { near = true; break; }
+                }
+                if (near) continue;
+                _groveCenters.Add(point);
+                if (_groveCenters.Count == 12) break;
+            }
+        }
+
+        static void ConfigureWater(WorldTerrain terrain)
+        {
+            var renderers = terrain.GetComponentsInChildren<MeshRenderer>(true);
+            foreach (var renderer in renderers)
+            {
+                if (!renderer.gameObject.name.Contains("_Water") || renderer.sharedMaterial == null) continue;
+                var filter = renderer.GetComponent<MeshFilter>();
+                if (filter != null && filter.sharedMesh != null)
+                {
+                    var vertices = filter.sharedMesh.vertices;
+                    var uvs = new Vector2[vertices.Length];
+                    float scale = .25f / terrain.BlockSize;
+                    for (int i = 0; i < vertices.Length; i++)
+                        uvs[i] = new Vector2(vertices[i].x * scale, vertices[i].z * scale);
+                    filter.sharedMesh.uv = uvs;
+                }
+
+                var animator = terrain.GetComponent<WaterSurfaceAnimator>();
+                if (animator == null)
+                {
+                    animator = terrain.gameObject.AddComponent<WaterSurfaceAnimator>();
+                    animator.Initialize(renderer.sharedMaterial);
+                }
             }
         }
 
@@ -168,10 +284,23 @@ namespace Game.Pokemon
             float block = terrain.BlockSize;
             for (int attempt = 0; attempt < 640; attempt++)
             {
-                double angle = _random.NextDouble() * Math.PI * 2;
-                float radius = Mathf.Lerp(minRadius, maxRadius, Mathf.Sqrt((float)_random.NextDouble()));
-                int x = Mathf.RoundToInt(map.Width * .5f + (float)Math.Cos(angle) * radius);
-                int z = Mathf.RoundToInt(map.Depth * .5f + (float)Math.Sin(angle) * radius);
+                int x, z;
+                if (_usingGroveCenter && _random.NextDouble() < .85)
+                {
+                    double angle = _random.NextDouble() * Math.PI * 2;
+                    float radius = Mathf.Lerp(2f, 13f, Mathf.Sqrt((float)_random.NextDouble()));
+                    x = Mathf.RoundToInt((_activeGroveCenter.x - terrain.transform.position.x) / block +
+                        (float)Math.Cos(angle) * radius);
+                    z = Mathf.RoundToInt((_activeGroveCenter.z - terrain.transform.position.z) / block +
+                        (float)Math.Sin(angle) * radius);
+                }
+                else
+                {
+                    double angle = _random.NextDouble() * Math.PI * 2;
+                    float radius = Mathf.Lerp(minRadius, maxRadius, Mathf.Sqrt((float)_random.NextDouble()));
+                    x = Mathf.RoundToInt(map.Width * .5f + (float)Math.Cos(angle) * radius);
+                    z = Mathf.RoundToInt(map.Depth * .5f + (float)Math.Sin(angle) * radius);
+                }
                 if (!map.Contains(x, z)) continue;
                 Vector3 candidate = terrain.BlockTopCenter(x, z);
                 // Reserva tycoon: disco de radio >=15 MÁS huella visual, y cuatro corredores.

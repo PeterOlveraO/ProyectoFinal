@@ -1,4 +1,3 @@
-using Game.Rendering;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -6,23 +5,21 @@ using UnityEngine.UI;
 namespace Game.UI
 {
     /// <summary>
-    /// Construcción de interfaz por código con un estilo vivo y consistente.
-    /// Todo (fondos, botones, pokéballs, degradados) se genera con
-    /// <see cref="ProceduralSprites"/>: el menú no necesita ninguna imagen importada.
+    /// Shared handheld-inspired UI primitives. Legacy violet names remain for compatibility.
     /// </summary>
     public static class UIFactory
     {
         // ------------------------------------------------------------- Paleta
-        public static readonly Color Ink = new Color32(24, 13, 43, 255);
-        public static readonly Color DeepViolet = new Color32(37, 24, 66, 255);
-        public static readonly Color CardViolet = new Color32(54, 37, 87, 255);
-        public static readonly Color Sun = new Color32(255, 222, 66, 255);
-        public static readonly Color Lime = new Color32(48, 209, 116, 255);
-        public static readonly Color Sky = new Color32(56, 137, 255, 255);
-        public static readonly Color Coral = new Color32(255, 90, 95, 255);
-        public static readonly Color Cream = new Color32(255, 249, 240, 255);
-        public static readonly Color Muted = new Color32(191, 181, 211, 255);
-        public static readonly Color Border = new Color32(91, 72, 125, 255);
+        public static readonly Color Ink = new Color32(34, 57, 64, 255);
+        public static readonly Color DeepViolet = new Color32(41, 71, 78, 255);
+        public static readonly Color CardViolet = new Color32(54, 86, 91, 255);
+        public static readonly Color Sun = new Color32(233, 196, 106, 255);
+        public static readonly Color Lime = new Color32(134, 185, 107, 255);
+        public static readonly Color Sky = new Color32(117, 185, 195, 255);
+        public static readonly Color Coral = new Color32(216, 120, 101, 255);
+        public static readonly Color Cream = new Color32(245, 239, 214, 255);
+        public static readonly Color Muted = new Color32(192, 209, 197, 255);
+        public static readonly Color Border = new Color32(117, 155, 153, 255);
 
         static TMPro.TMP_FontAsset _font;
 
@@ -143,7 +140,7 @@ namespace Game.UI
             rect.sizeDelta = size;
 
             var image = rect.gameObject.AddComponent<Image>();
-            image.sprite = ProceduralSprites.RoundedRect;
+            image.sprite = RetroUiArt.Frame;
             image.type = Image.Type.Sliced;
             image.color = color;
 
@@ -154,17 +151,17 @@ namespace Game.UI
 
             var colors = button.colors;
             colors.normalColor = Color.white;
-            colors.highlightedColor = new Color(1.12f, 1.12f, 1.12f, 1f);
-            colors.pressedColor = new Color(0.78f, 0.78f, 0.78f, 1f);
-            colors.selectedColor = new Color(1.12f, 1.12f, 1.12f, 1f);
-            colors.disabledColor = new Color(0.55f, 0.55f, 0.55f, 0.7f);
+            colors.highlightedColor = new Color(1f, 1f, .92f, 1f);
+            colors.pressedColor = new Color(.76f, .84f, .82f, 1f);
+            colors.selectedColor = new Color(1f, 1f, .92f, 1f);
+            colors.disabledColor = new Color(.62f, .68f, .66f, .85f);
             colors.fadeDuration = 0.08f;
             button.colors = colors;
 
             if (onClick != null) button.onClick.AddListener(onClick);
 
             var text = CreateText("Label", rect, label, fontSize,
-                color == Sun || color == Lime ? Ink : Cream);
+                color == Sun || color == Lime || color == Sky || color == Coral ? Ink : Cream);
             text.fontStyle = TMPro.FontStyles.Bold;
             Stretch(text.rectTransform);
             text.rectTransform.offsetMin = new Vector2(20f, 4f);
@@ -180,7 +177,7 @@ namespace Game.UI
             borderRect.sizeDelta = size + new Vector2(10f, 10f);
 
             var borderImage = borderRect.gameObject.AddComponent<Image>();
-            borderImage.sprite = ProceduralSprites.RoundedRect;
+            borderImage.sprite = RetroUiArt.Frame;
             borderImage.type = Image.Type.Sliced;
             borderImage.color = border;
             borderImage.raycastTarget = false;
@@ -190,7 +187,7 @@ namespace Game.UI
             Stretch(cardRect, 5f);
 
             var cardImage = cardRect.gameObject.AddComponent<Image>();
-            cardImage.sprite = ProceduralSprites.RoundedRect;
+            cardImage.sprite = RetroUiArt.Frame;
             cardImage.type = Image.Type.Sliced;
             cardImage.color = fill;
             cardImage.raycastTarget = false;
@@ -207,8 +204,7 @@ namespace Game.UI
             hitArea.color = Color.clear;
             hitArea.raycastTarget = true;
 
-            var track = CreateImage("Track", rect, ProceduralSprites.RoundedRect,
-                                    new Color(0.10f, 0.05f, 0.20f, 0.85f), false, true);
+            var track = CreateImage("Track", rect, RetroUiArt.Frame, Ink, false, true);
             Stretch(track.rectTransform, 0f);
             track.rectTransform.anchorMin = new Vector2(0f, 0.30f);
             track.rectTransform.anchorMax = new Vector2(1f, 0.70f);
@@ -219,13 +215,13 @@ namespace Game.UI
             fillArea.offsetMin = new Vector2(12f, 0f);
             fillArea.offsetMax = new Vector2(-12f, 0f);
 
-            var fill = CreateImage("Fill", fillArea, ProceduralSprites.RoundedRect, Sun, false, true);
+            var fill = CreateImage("Fill", fillArea, RetroUiArt.Frame, Sun, false, true);
             Stretch(fill.rectTransform);
 
             var handleArea = CreateRect("HandleArea", rect);
             Stretch(handleArea);
 
-            var handle = CreateImage("Handle", handleArea, ProceduralSprites.Circle, Cream, true);
+            var handle = CreateImage("Handle", handleArea, RetroUiArt.Frame, Cream, true, true);
             handle.rectTransform.sizeDelta = new Vector2(size.y * 0.78f, size.y * 0.78f);
             handle.preserveAspect = true;
 
@@ -270,8 +266,33 @@ namespace Game.UI
 
         public static RectTransform Surface(string name, Transform parent, Color? color = null)
         {
-            return CreateImage(name, parent, ProceduralSprites.RoundedRect,
+            return CreateImage(name, parent, RetroUiArt.Frame,
                 color ?? CardViolet, false, true).rectTransform;
+        }
+
+        /// <summary>Scrollable vertical card content; fixed typography never clips below a short viewport.</summary>
+        public static RectTransform ScrollStack(RectTransform root, int padding = 20, float gap = 12)
+        {
+            var image = root.GetComponent<UnityEngine.UI.Image>();
+            if (image != null) image.raycastTarget = true;
+            var scroll = root.gameObject.AddComponent<UnityEngine.UI.ScrollRect>();
+            scroll.horizontal = false;
+            scroll.movementType = UnityEngine.UI.ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 36;
+            var viewport = CreateRect("Viewport", root);
+            Stretch(viewport, 6);
+            viewport.gameObject.AddComponent<UnityEngine.UI.RectMask2D>();
+            var content = CreateRect("Content", viewport);
+            content.anchorMin = new Vector2(0, 1);
+            content.anchorMax = Vector2.one;
+            content.pivot = new Vector2(.5f, 1);
+            content.sizeDelta = Vector2.zero;
+            Stack(content, padding, gap);
+            var fitter = content.gameObject.AddComponent<UnityEngine.UI.ContentSizeFitter>();
+            fitter.verticalFit = UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
+            scroll.viewport = viewport;
+            scroll.content = content;
+            return content;
         }
 
         public static RectTransform SafeRoot(Transform parent, string name = "SafeArea")
@@ -327,6 +348,13 @@ namespace Game.UI
             var text = CreateText(name, parent, value, size, color, alignment);
             Layout(text.transform, height);
             return text;
+        }
+
+        public static void LayoutHeight(TMPro.TMP_Text text, float minimum)
+        {
+            var fitter = text.GetComponent<ContentTextLayout>();
+            if (fitter == null) fitter = text.gameObject.AddComponent<ContentTextLayout>();
+            fitter.Configure(minimum);
         }
 
         public static Color RarityColor(Game.Pokemon.Progression.Rarity rarity) =>

@@ -36,11 +36,16 @@ namespace Game.UI
             width.flexibleWidth = 1;
             width.minWidth = 0;
             width.preferredWidth = 0;
-            UIFactory.Stack(root, 24, 12);
+            // Keep the price/action visible while long pool lists scroll above it.
+            var info = UIFactory.Surface("Information", root, UIFactory.CardViolet);
+            UIFactory.Stretch(info);
+            info.offsetMin = new Vector2(8, 104);
+            info.offsetMax = new Vector2(-8, -8);
+            var content = UIFactory.ScrollStack(info, 18, 12);
             var offer = new Offer { root = root };
-            offer.title = UIFactory.Label(root, "Name", "", 36, index == 0 ? UIFactory.Cream : UIFactory.Sun, 48);
-            var art = UIFactory.CreateRect("FeaturedPokemon", root);
-            UIFactory.Layout(art, 120, 1);
+            offer.title = UIFactory.Label(content, "Name", "", 34, index == 0 ? UIFactory.Cream : UIFactory.Sun, 48);
+            var art = UIFactory.Surface("FeaturedPokemon", content, UIFactory.Ink);
+            UIFactory.Layout(art, 156);
             UIFactory.Row(art, 12);
             offer.portraits = new UnityEngine.UI.Image[3];
             for (int i = 0; i < 3; i++)
@@ -52,12 +57,17 @@ namespace Game.UI
                 element.flexibleWidth = 1;
                 offer.portraits[i] = image;
             }
-            offer.odds = UIFactory.Label(root, "Odds", "", 25, UIFactory.Sun, 40);
-            offer.species = UIFactory.Label(root, "Species", "", 22, UIFactory.Muted, 112, TextAnchor.UpperLeft);
-            offer.notice = UIFactory.Label(root, "Availability", "", 23, UIFactory.Muted, 34);
+            offer.odds = UIFactory.Label(content, "Odds", "", 24, UIFactory.Sun, 56);
+            offer.species = UIFactory.Label(content, "Species", "", 22, UIFactory.Cream, 112, TextAnchor.UpperLeft);
+            offer.notice = UIFactory.Label(content, "Availability", "", 23, UIFactory.Muted, 64);
+            UIFactory.LayoutHeight(offer.notice, 64);
             offer.buy = UIFactory.CreateButton(root, "Pull", "", index == 0 ? UIFactory.Sky : UIFactory.Sun,
                 new Vector2(500, 76), () => _pull(index), 30);
-            UIFactory.Layout(offer.buy.transform, 76);
+            var buyRect = (RectTransform)offer.buy.transform;
+            UIFactory.Region(buyRect, 0, 0, 1, 0);
+            buyRect.pivot = new Vector2(.5f, 0);
+            buyRect.offsetMin = new Vector2(20, 18);
+            buyRect.offsetMax = new Vector2(-20, 94);
             _offers.Add(offer);
             return offer;
         }
@@ -79,6 +89,7 @@ namespace Game.UI
                 int total = pool.weightF + pool.weightA + pool.weightS;
                 offer.odds.text = $"F  {PokemonUi.Percent(pool.weightF, total)}     A  {PokemonUi.Percent(pool.weightA, total)}     S  {PokemonUi.Percent(pool.weightS, total)}";
                 offer.species.text = "POKÉMON DISPONIBLES\n" + string.Join(" · ", pool.species.Select(id => species(id)?.name ?? id));
+                UIFactory.LayoutHeight(offer.species, 112);
                 for (int p = 0; p < offer.portraits.Length; p++)
                 {
                     var portrait = offer.portraits[p];

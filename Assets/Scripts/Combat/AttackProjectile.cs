@@ -86,26 +86,26 @@ namespace Game.Combat
             billboard.SetContinuous(false);
 
             _glow = gameObject.AddComponent<SpriteRenderer>();
-            _glow.sprite = ProceduralSprites.Glow;
-            _glow.color = new Color(_color.r, _color.g, _color.b, 0.85f);
+            _glow.sprite = PixelCombatSprites.Shot;
+            _glow.color = new Color(_color.r, _color.g, _color.b, 1f);
             _glow.sortingOrder = 18;
-            transform.localScale = Vector3.one * 1.05f;
+            transform.localScale = Vector3.one * .48f;
 
             var core = new GameObject("Core");
             core.transform.SetParent(transform, false);
-            core.transform.localScale = Vector3.one * 0.34f;
+            core.transform.localScale = Vector3.one * 0.44f;
 
             var coreRenderer = core.AddComponent<SpriteRenderer>();
-            coreRenderer.sprite = ProceduralSprites.Circle;
+            coreRenderer.sprite = PixelCombatSprites.Shot;
             coreRenderer.color = new Color(1f, 0.98f, 0.85f, 1f);
             coreRenderer.sortingOrder = 19;
 
             var trail = gameObject.AddComponent<TrailRenderer>();
-            trail.time = 0.20f;
-            trail.startWidth = 0.40f;
+            trail.time = 0.10f;
+            trail.startWidth = 0.12f;
             trail.endWidth = 0f;
             trail.minVertexDistance = 0.04f;
-            trail.numCapVertices = 3;
+            trail.numCapVertices = 0;
             trail.alignment = LineAlignment.View;
             trail.sortingOrder = 17;
             trail.startColor = _color;
@@ -173,7 +173,7 @@ namespace Game.Combat
             if (_glow == null) return;
 
             _pulse += Time.deltaTime * 14f;
-            float scale = 1.05f + Mathf.Sin(_pulse) * 0.08f;
+            float scale = .48f + Mathf.Sin(_pulse) * .025f;
             transform.localScale = new Vector3(scale, scale, 1f);
         }
 

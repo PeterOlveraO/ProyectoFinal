@@ -30,9 +30,9 @@ namespace Game.UI
                     : UIFactory.Surface("CompactPanel", safeRoot, CompactMenuArt.Backing);
                 var header = main ? UIFactory.Surface("Header", safeRoot, CompactMenuArt.Backing)
                     : UIFactory.CreateRect("Header", panel);
-                var headingText = UIFactory.CreateText("Title", header, title, 38, UIFactory.Cream);
+                var headingText = UIFactory.CreateText("Title", header, title, 38, UIFactory.Sun);
                 UIFactory.Region(headingText.rectTransform, .02f, .48f, .98f, .98f);
-                Status = UIFactory.CreateText("Subtitle", header, subtitle, 28, UIFactory.Cream);
+                Status = UIFactory.CreateText("Subtitle", header, subtitle, 28, UIFactory.Muted);
                 UIFactory.Region(Status.rectTransform, .02f, .02f, .98f, .48f);
                 Wallet = UIFactory.CreateText("Wallet", header, "", 28, UIFactory.Sun);
                 Wallet.gameObject.SetActive(false);
@@ -50,6 +50,12 @@ namespace Game.UI
                 Game.Rendering.ProceduralSprites.VerticalGradient(UIFactory.DeepViolet, UIFactory.Ink),
                 Color.white, true);
             UIFactory.Stretch(background.rectTransform);
+            var topRule = UIFactory.CreateImage("TopRule", Root, null, UIFactory.Sun);
+            UIFactory.Region(topRule.rectTransform, 0, 1, 1, 1);
+            topRule.rectTransform.offsetMin = new Vector2(0, -4);
+            var bottomRule = UIFactory.CreateImage("BottomRule", Root, null, UIFactory.Border);
+            UIFactory.Region(bottomRule.rectTransform, 0, 0, 1, 0);
+            bottomRule.rectTransform.offsetMax = new Vector2(0, 4);
             var safe = UIFactory.SafeRoot(Root);
             var content = UIFactory.CreateRect("Content", safe);
             UIFactory.Stretch(content);
@@ -60,22 +66,22 @@ namespace Game.UI
                 TextAnchor.UpperLeft);
             UIFactory.Region(eyebrow.rectTransform, 0, 1, .65f, 1);
             eyebrow.rectTransform.offsetMin = new Vector2(0, -28);
-            var heading = UIFactory.CreateText("Title", content, title, 54, UIFactory.Cream, TextAnchor.MiddleLeft);
-            UIFactory.Region(heading.rectTransform, 0, 1, .78f, 1);
+            var heading = UIFactory.CreateText("Title", content, title, 46, UIFactory.Cream, TextAnchor.MiddleLeft);
+            UIFactory.Region(heading.rectTransform, 0, 1, 1, 1);
             heading.rectTransform.offsetMin = new Vector2(0, -102);
             heading.rectTransform.offsetMax = new Vector2(0, -32);
-            Status = UIFactory.CreateText("Subtitle", content, subtitle, 25, UIFactory.Muted, TextAnchor.MiddleLeft);
+            Status = UIFactory.CreateText("Subtitle", content, subtitle, 24, UIFactory.Muted, TextAnchor.MiddleLeft);
             UIFactory.Region(Status.rectTransform, 0, 1, 1, 1);
-            Status.rectTransform.offsetMin = new Vector2(0, -148);
+            Status.rectTransform.offsetMin = new Vector2(0, -160);
             Status.rectTransform.offsetMax = new Vector2(0, -104);
             Wallet = UIFactory.CreateText("Wallet", content, "", 28, UIFactory.Sun, TextAnchor.UpperRight);
             UIFactory.Region(Wallet.rectTransform, .68f, 1, 1, 1);
-            Wallet.rectTransform.offsetMin = new Vector2(0, -45);
+            Wallet.rectTransform.offsetMin = new Vector2(0, -30);
 
             Body = UIFactory.CreateRect("Body", content);
             UIFactory.Stretch(Body);
             Body.offsetMin = new Vector2(0, 100);
-            Body.offsetMax = new Vector2(0, -172);
+            Body.offsetMax = new Vector2(0, -184);
             Footer = UIFactory.CreateRect("Footer", content);
             UIFactory.Region(Footer, 0, 0, 1, 0);
             Footer.sizeDelta = new Vector2(0, 76);

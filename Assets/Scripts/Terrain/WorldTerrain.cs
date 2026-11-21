@@ -77,7 +77,11 @@ namespace Game.Terrain
             foreach (var mesh in _lakeMeshes)
                 if (mesh != null) Destroy(mesh);
             TerrainMaterials.Destroy(_materials);
-            if (_waterMaterial != null) Destroy(_waterMaterial);
+            if (_waterMaterial != null)
+            {
+                if (_waterMaterial.mainTexture != null) Destroy(_waterMaterial.mainTexture);
+                Destroy(_waterMaterial);
+            }
         }
 
         void Update()
