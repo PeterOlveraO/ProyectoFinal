@@ -2,26 +2,32 @@ using UnityEngine;
 
 namespace Game.UI
 {
-    /// <summary>Small nine-sliced frames extracted from Imagenes/botones.jpg.
-    /// Original artwork remains the outer frame, paired with the shared ink inset.</summary>
+    /// <summary>The original main-menu artwork: colored nine-sliced frame, ink inset and side accent.
+    /// Shared by every action button so other screens use the same design.</summary>
     public static class CompactMenuArt
     {
         public static readonly Color Text = UIFactory.Cream;
-        public static readonly Color Backing = new Color32(41, 71, 78, 246);
+        public static readonly Color Backing = UIFactory.Panel;
 
         public static UnityEngine.UI.Button Button(Transform parent, string name, string label,
             string frame, UnityEngine.Events.UnityAction callback)
         {
-            var button = UIFactory.CreateButton(parent, name, label, Color.white,
-                new Vector2(320, 96), callback, 28);
+            return UIFactory.CreateButton(parent, name, label, UIFactory.Border,
+                new Vector2(320, 96), callback, 28, confirm: frame == "Green", frame: frame);
+        }
+
+        internal static void ApplyFrame(UnityEngine.UI.Button button, string frame)
+        {
             var sprite = Resources.Load<Sprite>("UI/CompactMenus/" + frame);
             if (sprite != null)
             {
                 button.image.sprite = sprite;
                 button.image.type = UnityEngine.UI.Image.Type.Sliced;
+                button.image.color = Color.white;
             }
             else button.image.color = UIFactory.CardViolet;
-            var inset = UIFactory.Surface("InkInset", button.transform, UIFactory.DeepViolet);
+            var inset = UIFactory.CreateImage("InkInset", button.transform, RetroUiArt.Frame,
+                UIFactory.DeepViolet, false, true).rectTransform;
             UIFactory.Stretch(inset, 7);
             var accent = UIFactory.CreateImage("Accent", inset, null,
                 frame == "Green" ? UIFactory.Lime : frame == "Amber" ? UIFactory.Sun :
@@ -33,7 +39,6 @@ namespace Game.UI
             text.transform.SetAsLastSibling();
             text.color = Text;
             text.fontStyle = TMPro.FontStyles.Bold;
-            return button;
         }
     }
 }

@@ -84,6 +84,51 @@ namespace Game.Tests.PlayMode
             return player;
         }
 
+        [TestCase("jolteon", PokemonElement.Electric)]
+        [TestCase("charizard", PokemonElement.Fire)]
+        [TestCase("garchomp", PokemonElement.Dragon)]
+        [TestCase("vaporeon", PokemonElement.Water)]
+        [TestCase("flareon", PokemonElement.Fire)]
+        [TestCase("snorlax", PokemonElement.Normal)]
+        [TestCase("blastoise", PokemonElement.Water)]
+        [TestCase("dragonite", PokemonElement.Dragon)]
+        [TestCase("lucario", PokemonElement.Fighting)]
+        [TestCase("venusaur", PokemonElement.Grass)]
+        [TestCase("gengar", PokemonElement.Ghost)]
+        [TestCase("gyarados", PokemonElement.Water)]
+        [TestCase("lapras", PokemonElement.Ice)]
+        [TestCase("ditto", PokemonElement.Normal)]
+        [TestCase("aerodactyl", PokemonElement.Rock)]
+        [TestCase("kangaskhan", PokemonElement.Normal)]
+        [TestCase("tauros", PokemonElement.Normal)]
+        [TestCase("mew", PokemonElement.Psychic)]
+        [TestCase("unknown", PokemonElement.Normal)]
+        public void SpeciesElementIsDeterministic(string species, PokemonElement expected)
+        {
+            Assert.AreEqual(expected, PokemonElementResolver.Resolve(species));
+        }
+
+        [UnityTest]
+        public IEnumerator ElementShotsHaveDifferentMasksAndLegacySpawnStillWorks()
+        {
+            var fire = AttackProjectile.Spawn(Vector3.zero, Vector3.forward, 4f, 10f, 2, Color.white, 1, PokemonElement.Fire);
+            var electric = AttackProjectile.Spawn(Vector3.zero, Vector3.right, 4f, 10f, 2, Color.white, 1, PokemonElement.Electric);
+            var legacy = Projectile(Vector3.zero);
+            _created.Add(fire.gameObject);
+            _created.Add(electric.gameObject);
+            var fireSprite = fire.transform.Find("VisualAnchor/ElementVisual").GetComponent<SpriteRenderer>().sprite;
+            var electricSprite = electric.transform.Find("VisualAnchor/ElementVisual").GetComponent<SpriteRenderer>().sprite;
+            Assert.AreNotSame(fireSprite, electricSprite);
+            Assert.AreEqual(FilterMode.Point, fireSprite.texture.filterMode);
+            Assert.AreEqual(Color.white, fire.transform.Find("VisualAnchor/ElementVisual").GetComponent<SpriteRenderer>().color,
+                "Elemental textures carry their own palette and must not be tinted twice.");
+            Assert.IsNotNull(legacy.transform.Find("VisualAnchor/ElementVisual").GetComponent<SpriteRenderer>().sprite);
+            GameFlow.Blocked = false;
+            yield return null;
+            Assert.Greater(fire.transform.position.z, 0f);
+            Assert.Greater(electric.transform.position.x, 0f);
+        }
+
         [UnityTest]
         public IEnumerator ImpactPoolIsBoundedReusesExpiredEffectsAndSurvivesDestroyedInstances()
         {

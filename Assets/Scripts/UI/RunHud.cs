@@ -52,6 +52,7 @@ namespace Game.UI
 
         GameObject _gameOverRoot;
         TMPro.TMP_Text _gameOverStats;
+        TMPro.TMP_Text _gameOverRounds, _gameOverReward;
         MenuPage _gameOverPage;
 
         void Start()
@@ -138,7 +139,7 @@ namespace Game.UI
 
             var background = UIFactory.CreateImage("Background", _statusPanel,
                                                    RetroUiArt.Frame,
-                                                   UIFactory.DeepViolet, false, true);
+                                                   UIFactory.Panel, false, true);
             UIFactory.Stretch(background.rectTransform);
 
             var healthTitle = UIFactory.CreateText("HealthTitle", _statusPanel, "VIDA", 26,
@@ -219,8 +220,8 @@ namespace Game.UI
             }
             bool purchased = stations.Has((DrinkType)_nearbyDrink);
             _drinkLabel.text = purchased ?
-                "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · ADQUIRIDA" :
-                "BEBIDA " + DrinkStations.Names[_nearbyDrink] + " · " + DrinkStations.Prices[_nearbyDrink] + " PUNTOS";
+                "PERK " + DrinkStations.Names[_nearbyDrink] + " · ADQUIRIDO" :
+                "COMPRAR PERK " + DrinkStations.Names[_nearbyDrink] + " · " + DrinkStations.Prices[_nearbyDrink] + " PUNTOS";
             _drinkButton.interactable = !purchased &&
                                          round.Points >= DrinkStations.Prices[_nearbyDrink];
             StyleShopOffer(_drinkButton, _drinkLabel, UIFactory.Sky, purchased);
@@ -235,9 +236,8 @@ namespace Game.UI
                 colors.disabledColor = Color.white;
                 button.colors = colors;
             }
-            button.image.color = button.interactable ? available : UIFactory.DeepViolet;
-            label.color = !button.interactable ? (purchased ? UIFactory.Lime : UIFactory.Cream)
-                : available == UIFactory.Sky ? UIFactory.Ink : UIFactory.Cream;
+            button.image.color = Color.white;
+            label.color = purchased ? UIFactory.Muted : UIFactory.Cream;
         }
 
         void BuyDrink()
@@ -255,7 +255,7 @@ namespace Game.UI
             UIFactory.Place(panel, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
                 new Vector2(0f, -20f), new Vector2(500f, 52f));
             var background = UIFactory.CreateImage("Background", panel, RetroUiArt.Frame,
-                UIFactory.DeepViolet, false, true);
+                UIFactory.Panel, false, true);
             UIFactory.Stretch(background.rectTransform);
             _equippedShotLabel = UIFactory.CreateText("EquippedShot", panel, "DISPARO · BÁSICO", 22, UIFactory.Cream);
             UIFactory.Place(_equippedShotLabel.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
@@ -274,7 +274,7 @@ namespace Game.UI
         {
             if (_equippedShotLabel == null) return;
             var equipped = round != null ? round.Shots.Equipped : ShotType.Basic;
-            _equippedShotLabel.text = "DISPARO EQUIPADO · " + ShotDefinitions.Name(equipped);
+            _equippedShotLabel.text = "DISPARO · " + ShotDefinitions.Name(equipped);
         }
 
         void UpdateShotOffer(RoundManager round, PlayerSphereController player, bool playing)
@@ -334,16 +334,22 @@ namespace Game.UI
 
         void BuildGameOver(Transform parent)
         {
-            _gameOverPage = new MenuPage(parent, "GameOver", "Cada partida te hace más fuerte", "Fin de la partida · Este es tu progreso");
+            _gameOverPage = new MenuPage(parent, "GameOver", "Derrota", "");
+            _gameOverPage.SetSize(new Vector2(900, 560));
             _gameOverRoot = _gameOverPage.Root.gameObject;
+            var record = UIFactory.Surface("RunRecord", _gameOverPage.Body, UIFactory.CardViolet);
+            UIFactory.Region(record, 0, 0, .34f, 1);
+            var recordContent = UIFactory.ScrollStack(record, 28, 16);
+            _gameOverRounds = UIFactory.Label(recordContent, "RoundsPassed", "0", 84, UIFactory.Cream, 120, TextAnchor.MiddleCenter);
+            UIFactory.Label(recordContent, "RoundsCaption", "RONDAS", 24, UIFactory.Muted, 40, TextAnchor.MiddleCenter);
+            _gameOverReward = UIFactory.Label(recordContent, "Reward", "", 28, UIFactory.Cream, 80, TextAnchor.MiddleCenter);
             var card = UIFactory.Surface("Summary", _gameOverPage.Body);
-            UIFactory.Region(card, .15f, 0, .85f, 1);
+            UIFactory.Region(card, .36f, 0, 1, 1);
             var content = UIFactory.ScrollStack(card, 32, 20);
-            UIFactory.Label(content, "Title", "PARTIDA TERMINADA", 40, UIFactory.Sun, 72);
-            _gameOverStats = UIFactory.Label(content, "Stats", "", 30, UIFactory.Cream, 360, TextAnchor.UpperLeft);
-            UIFactory.LayoutHeight(_gameOverStats, 360);
-            _gameOverPage.Action("RetryButton", "VOLVER A INTENTAR", UIFactory.Sun, Retry);
-            _gameOverPage.Action("MenuButton", "Volver al menú", UIFactory.CardViolet, BackToMenu);
+            _gameOverStats = UIFactory.Label(content, "Stats", "", 28, UIFactory.Cream, 220, TextAnchor.UpperLeft);
+            UIFactory.LayoutHeight(_gameOverStats, 220);
+            _gameOverPage.Action("RetryButton", "Reintentar", UIFactory.Sun, Retry);
+            _gameOverPage.Action("MenuButton", "Menú", UIFactory.CardViolet, BackToMenu);
         }
 
         // ---------------------------------------------------------------- Estado
@@ -379,7 +385,7 @@ namespace Game.UI
             _enemiesLabel.text = round.EnemiesDefeatedThisRound + " / " + round.EnemiesThisRound;
             _pointsLabel.text = "PUNTOS " + round.Points;
             _coinsLabel.text = "PREMIO +" + round.CoinsEarned;
-            _bonusLabel.text = "BONUS x" + round.BonusDrops + "  ·  CARTERA " + PlayerEconomy.Coins;
+            _bonusLabel.text = round.BonusDrops > 0 ? "BONUS x" + round.BonusDrops : "";
         }
 
         void UpdateBanner(RoundManager round, bool playing)
@@ -409,8 +415,7 @@ namespace Game.UI
 
                     case RoundManager.RoundPhase.Fighting:
                         SetBanner(round.IsBossRound ? "JEFE · " + round.BossName : "RONDA " + round.Round,
-                                  round.IsBossRound ? "Un único rival · Sin refuerzos" :
-                                  "Elimina a " + round.EnemiesThisRound + " enemigos");
+                                   round.IsBossRound ? "" : round.EnemiesThisRound + " enemigos");
                         _bannerTimer = 2.2f;
                         break;
 
@@ -462,18 +467,16 @@ namespace Game.UI
 
             if (gameOver && !_gameOverRoot.activeSelf)
             {
+                _gameOverRounds.text = round.RoundsPassed.ToString("00");
+                _gameOverReward.text = round.RewardSaveFailed ? "NO GUARDADO" : $"+{round.CoinsEarned:N0}\nMONEDAS";
+                _gameOverReward.color = round.RewardSaveFailed ? UIFactory.Coral : UIFactory.Cream;
                 _gameOverStats.text =
-                    "Rondas superadas: " + round.RoundsPassed +
-                    "\nEnemigos derrotados: " + round.EnemiesDefeated +
-                    "\nPuntos ganados: " + round.TotalPointsEarned +
-                    "\nPuntos restantes: " + round.Points +
-                    "\nMonedas ganadas: " + round.CoinsEarned +
-                    "\nBonus de puntos: " + round.BonusDrops +
-                    "\n\n" + (round.RewardSaveFailed ? "Saldo no disponible" : "Monedas totales: " + PlayerEconomy.Coins);
+                    "Enemigos: " + round.EnemiesDefeated +
+                    "\nPuntos ganados: " + round.TotalPointsEarned;
 
                 _gameOverPage.Status.text = round.RewardSaveFailed
                     ? "No se pudieron guardar las monedas. Revisa el almacenamiento antes de volver a jugar."
-                    : "Recompensa guardada · Tu colección te espera";
+                    : "";
                 _gameOverPage.Status.color = round.RewardSaveFailed ? UIFactory.Coral : UIFactory.Muted;
                 _gameOverPage.Wallet.text = round.RewardSaveFailed
                     ? "SALDO NO DISPONIBLE" : $"{PlayerEconomy.Coins:N0} MONEDAS";

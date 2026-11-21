@@ -11,11 +11,13 @@ namespace Game.UI
         UnityEngine.UI.Outline _outline;
         UnityEngine.UI.Selectable _selectable;
         bool _focused, _hovered;
+        Transform _label;
 
         void Awake()
         {
             _selectable = GetComponent<UnityEngine.UI.Selectable>();
-            _outline = gameObject.AddComponent<UnityEngine.UI.Outline>();
+            var graphic = _selectable.targetGraphic;
+            _outline = (graphic != null ? graphic.gameObject : gameObject).AddComponent<UnityEngine.UI.Outline>();
             _outline.effectColor = UIFactory.Sun;
             _outline.effectDistance = new Vector2(2f, -2f);
             _outline.enabled = false;
@@ -25,6 +27,7 @@ namespace Game.UI
         {
             _focused = _hovered = false;
             if (_outline != null) _outline.enabled = false;
+            if (_label != null) _label.localScale = Vector3.one;
         }
 
         public void OnSelect(BaseEventData data)
@@ -46,6 +49,23 @@ namespace Game.UI
         public void OnDeselect(BaseEventData data) { _focused = false; Refresh(); }
         public void OnPointerEnter(PointerEventData data) { _hovered = true; Refresh(); }
         public void OnPointerExit(PointerEventData data) { _hovered = false; Refresh(); }
-        void Refresh() => _outline.enabled = (_focused || _hovered) && _selectable.IsInteractable();
+        void LateUpdate()
+        {
+            Refresh();
+            if (_label == null) _label = transform.Find("Label");
+            if (_label == null) return;
+            float target = (_focused || _hovered) && _selectable.IsInteractable() ? 1.015f : 1f;
+            var scale = Vector3.one * target;
+            if (_label.localScale != scale)
+                _label.localScale = Vector3.MoveTowards(_label.localScale, scale, Time.unscaledDeltaTime * .2f);
+        }
+        void Refresh()
+        {
+            if (_outline != null && _selectable != null)
+            {
+                bool active = (_focused || _hovered) && _selectable.IsInteractable();
+                if (_outline.enabled != active) _outline.enabled = active;
+            }
+        }
     }
 }

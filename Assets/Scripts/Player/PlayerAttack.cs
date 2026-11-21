@@ -146,9 +146,14 @@ namespace Game.Player
         void FireProjectile(Vector3 direction, int shotDamage, ShotType type)
         {
             Vector3 origin = transform.position + Vector3.up * muzzleHeight + direction * .55f;
+            var round = RoundManager.Instance;
+            var species = round != null ? round.RunSpecies : null;
+            var element = PokemonElementResolver.Resolve(species != null ? species.id : null);
             AttackProjectile.Spawn(origin, direction, projectileSpeed, range, shotDamage,
                 type == ShotType.Basic ? projectileColor : ShotDefinitions.Color(type),
-                type == ShotType.Piercing ? ShotDefinitions.MaxPiercingTargets : 1);
+                type == ShotType.Piercing ? ShotDefinitions.MaxPiercingTargets : 1, element);
+            HitBurst.SpawnMuzzle(origin, element);
+            Game.Audio.GameAudio.PlayShot(element);
         }
 
         bool TryReadAim(out Vector3 worldDirection)

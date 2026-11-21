@@ -20,6 +20,7 @@ namespace Game.UI
         {
             public UnityEngine.UI.Button button;
             public UnityEngine.UI.Image portrait;
+            public UnityEngine.UI.Image selection;
             public TMPro.TMP_Text name, badge;
         }
 
@@ -27,7 +28,7 @@ namespace Game.UI
             UnityEngine.Events.UnityAction release, UnityEngine.Events.UnityAction gacha, UnityEngine.Events.UnityAction back)
         {
             _select = select;
-            Page = new MenuPage(canvas, "CollectionMenu", "Tu colección", "Elige un compañero para la próxima partida.");
+            Page = new MenuPage(canvas, "CollectionMenu", "Colección", "");
             var scrollRoot = UIFactory.Surface("Inventory", Page.Body, UIFactory.Ink);
             UIFactory.Region(scrollRoot, 0, 0, .51f, 1);
             scrollRoot.offsetMax = new Vector2(-20, 0);
@@ -59,7 +60,7 @@ namespace Game.UI
             UIFactory.Region(_details.Root, .51f, 0, 1, 1);
             _equip = Page.Action("Equip", "EQUIPAR", UIFactory.Sun, equip);
             _release = Page.Action("Release", "Liberar", UIFactory.CardViolet, release);
-            Page.Action("Gacha", "Conseguir Pokémon", UIFactory.Sky, gacha);
+            Page.Action("Gacha", "Gacha", UIFactory.Sky, gacha);
             Page.Action("Back", "Volver", UIFactory.CardViolet, back);
         }
 
@@ -79,11 +80,16 @@ namespace Game.UI
                 var portrait = UIFactory.CreateImage("Portrait", button.transform, null, Color.white);
                 portrait.preserveAspect = true;
                 UIFactory.Region(portrait.rectTransform, .15f, .25f, .85f, .84f);
-                var badge = UIFactory.CreateText("Badge", button.transform, "", 20, UIFactory.Muted, TextAnchor.MiddleLeft);
-                UIFactory.Region(badge.rectTransform, 0, .82f, 1, 1);
-                badge.rectTransform.offsetMin = new Vector2(10, 2);
-                badge.rectTransform.offsetMax = new Vector2(-10, -2);
-                _slots.Add(new Slot { button = button, portrait = portrait, name = label, badge = badge });
+                var badgeFrame = UIFactory.Surface("ClassBadge", button.transform, UIFactory.Inner);
+                UIFactory.Place(badgeFrame, new Vector2(0, 1), new Vector2(0, 1), new Vector2(8, -8), new Vector2(34, 32));
+                var badge = UIFactory.CreateText("Badge", badgeFrame, "", 22, UIFactory.Muted);
+                UIFactory.Stretch(badge.rectTransform);
+                var selection = UIFactory.CreateImage("Selection", button.transform, null, UIFactory.Sun);
+                UIFactory.Region(selection.rectTransform, 0, .08f, 0, .92f);
+                selection.rectTransform.offsetMin = new Vector2(3, 0);
+                selection.rectTransform.offsetMax = new Vector2(7, 0);
+                selection.enabled = false;
+                _slots.Add(new Slot { button = button, portrait = portrait, name = label, badge = badge, selection = selection });
             }
         }
 
@@ -92,7 +98,7 @@ namespace Game.UI
         {
             EnsureSlots(capacity);
             Page.Wallet.text = $"{coins:N0} MONEDAS";
-            Page.Status.text = $"{inventory.Count} / {capacity} espacios  ·  Selecciona una tarjeta para ver sus estadísticas";
+            Page.Status.text = $"{inventory.Count} / {capacity}";
             for (int i = 0; i < _slots.Count; i++)
             {
                 var slot = _slots[i];
@@ -101,13 +107,13 @@ namespace Game.UI
                 var pokemon = exists ? inventory[i] : null;
                 bool isEquipped = pokemon != null && pokemon.instanceId == equipped?.instanceId;
                 slot.button.interactable = exists && !busy;
-                slot.button.image.color = exists && i == selected
-                    ? UIFactory.Sky : isEquipped ? Color.Lerp(UIFactory.CardViolet, UIFactory.Lime, .3f) : UIFactory.CardViolet;
+                slot.button.image.color = Color.white;
+                slot.selection.enabled = exists && i == selected;
                 slot.name.text = exists ? species(pokemon.speciesId)?.name ?? pokemon.speciesId : "Espacio libre";
                 slot.name.color = exists ? UIFactory.Cream : UIFactory.Muted;
                 slot.portrait.sprite = exists ? PokemonCollection.GetSprite(pokemon) : null;
                 slot.portrait.enabled = slot.portrait.sprite != null;
-                slot.badge.text = exists ? $"{pokemon.rarity}" + (isEquipped ? "  ·  EQUIPADO" : i == selected ? "  ·  SELECCIÓN" : "") : $"{i + 1:00}";
+                slot.badge.text = exists ? pokemon.rarity.ToString() : "–";
                 slot.badge.color = exists ? UIFactory.RarityColor(pokemon.rarity) : UIFactory.Muted;
             }
             var chosen = selected >= 0 && selected < inventory.Count ? inventory[selected] : null;

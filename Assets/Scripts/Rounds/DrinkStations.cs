@@ -66,8 +66,8 @@ namespace Game.Rounds
 
         void CreateStand(int index, Vector3 ground)
         {
-            var platform = new TycoonPlatform(transform, ground, "MÁQUINA " + Names[index],
-                BuildPrices[index], Prices[index], Colors[index]);
+            var platform = new TycoonPlatform(transform, ground, Names[index],
+                BuildPrices[index], Prices[index], Colors[index], (StationIcon)((int)StationIcon.Power + index));
             _platforms[index] = platform;
             _stands[index] = platform.Vendor;
 

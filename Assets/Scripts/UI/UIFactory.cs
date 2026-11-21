@@ -20,6 +20,9 @@ namespace Game.UI
         public static readonly Color Cream = new Color32(245, 239, 214, 255);
         public static readonly Color Muted = new Color32(192, 209, 197, 255);
         public static readonly Color Border = new Color32(117, 155, 153, 255);
+        public static readonly Color Black = new Color32(15, 24, 27, 255);
+        public static readonly Color Panel = new Color32(21, 33, 36, 255);
+        public static readonly Color Inner = new Color32(29, 43, 46, 255);
 
         static TMPro.TMP_FontAsset _font;
 
@@ -134,7 +137,8 @@ namespace Game.UI
 
         // ------------------------------------------------------------ Botones
         public static Button CreateButton(Transform parent, string name, string label, Color color,
-                                          Vector2 size, UnityAction onClick, int fontSize = 44)
+                                          Vector2 size, UnityAction onClick, int fontSize = 44, bool confirm = false,
+                                          string frame = null)
         {
             var rect = CreateRect(name, parent);
             rect.sizeDelta = size;
@@ -142,7 +146,7 @@ namespace Game.UI
             var image = rect.gameObject.AddComponent<Image>();
             image.sprite = RetroUiArt.Frame;
             image.type = Image.Type.Sliced;
-            image.color = color;
+            image.color = Color.white;
 
             var button = rect.gameObject.AddComponent<Button>();
             button.targetGraphic = image;
@@ -154,18 +158,24 @@ namespace Game.UI
             colors.highlightedColor = new Color(1f, 1f, .92f, 1f);
             colors.pressedColor = new Color(.76f, .84f, .82f, 1f);
             colors.selectedColor = new Color(1f, 1f, .92f, 1f);
-            colors.disabledColor = new Color(.62f, .68f, .66f, .85f);
+            colors.disabledColor = new Color(.78f, .82f, .80f, 1f);
             colors.fadeDuration = 0.08f;
             button.colors = colors;
 
-            if (onClick != null) button.onClick.AddListener(onClick);
+            if (onClick != null)
+            {
+                // One event path for pointer, keyboard and gamepad. No hover/selection sound duplication.
+                button.onClick.AddListener(() => Game.Audio.GameAudio.PlayUi(confirm || color == Sun));
+                button.onClick.AddListener(onClick);
+            }
 
-            var text = CreateText("Label", rect, label, fontSize,
-                color == Sun || color == Lime || color == Sky || color == Coral ? Ink : Cream);
+            var text = CreateText("Label", rect, label, fontSize, Cream);
             text.fontStyle = TMPro.FontStyles.Bold;
             Stretch(text.rectTransform);
             text.rectTransform.offsetMin = new Vector2(20f, 4f);
             text.rectTransform.offsetMax = new Vector2(-20f, -4f);
+            CompactMenuArt.ApplyFrame(button, frame ??
+                (color == Coral ? "Red" : color == Sun ? "Amber" : color == Lime ? "Green" : "Blue"));
 
             return button;
         }
@@ -242,6 +252,7 @@ namespace Game.UI
             colors.selectedColor = Color.white;
             colors.fadeDuration = 0.05f;
             slider.colors = colors;
+            rect.gameObject.AddComponent<UIFocusFeedback>();
 
             slider.SetValueWithoutNotify(Mathf.Clamp01(value));
             if (onChange != null) slider.onValueChanged.AddListener(onChange);
@@ -266,8 +277,36 @@ namespace Game.UI
 
         public static RectTransform Surface(string name, Transform parent, Color? color = null)
         {
-            return CreateImage(name, parent, RetroUiArt.Frame,
-                color ?? CardViolet, false, true).rectTransform;
+            var fill = color ?? Panel;
+            if (fill == Ink || fill == DeepViolet || fill == CardViolet) fill = fill == CardViolet ? Inner : Panel;
+            return CreateImage(name, parent, RetroUiArt.Frame, fill, false, true).rectTransform;
+        }
+
+        public static void SectionRule(Transform parent, string title, Color accent)
+        {
+            var row = CreateRect("Section", parent);
+            Layout(row, 38);
+            var bar = CreateImage("Marker", row, null, accent);
+            Region(bar.rectTransform, 0, .2f, 0, .8f);
+            bar.rectTransform.offsetMax = new Vector2(4, 0);
+            var text = CreateText("SectionTitle", row, title, 21, accent, TextAnchor.MiddleLeft);
+            Stretch(text.rectTransform);
+            text.rectTransform.offsetMin = new Vector2(16, 0);
+        }
+
+        /// <summary>Quiet inset stage keeps species art distinct from the frame, not floating on flat UI.</summary>
+        public static UnityEngine.UI.Image PortraitStage(Transform parent, string name, Sprite sprite)
+        {
+            var stage = Surface(name, parent, Ink);
+            var platform = Surface("Platform", stage, CardViolet);
+            Region(platform, .12f, .08f, .88f, .25f);
+            var highlight = CreateImage("PlatformEdge", platform, null, Border);
+            Region(highlight.rectTransform, .08f, 1, .92f, 1);
+            highlight.rectTransform.offsetMin = new Vector2(0, -2);
+            var portrait = CreateImage("Portrait", stage, sprite, Color.white);
+            portrait.preserveAspect = true;
+            Region(portrait.rectTransform, .12f, .16f, .88f, .94f);
+            return portrait;
         }
 
         /// <summary>Scrollable vertical card content; fixed typography never clips below a short viewport.</summary>

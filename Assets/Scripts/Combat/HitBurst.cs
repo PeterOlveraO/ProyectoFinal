@@ -29,8 +29,21 @@ namespace Game.Combat
         float _time;
         int _count;
         Color _color;
+        float _life;
+        bool _muzzle;
+        bool _elemental;
 
         public static void Spawn(Vector3 position, Color color, int count = 9, float spread = 1f)
+            => SpawnVisual(position, color, PokemonElement.Normal, count, spread, false, false);
+
+        public static void SpawnElement(Vector3 position, PokemonElement element, int count = 6, float spread = 1f)
+            => SpawnVisual(position, PixelCombatSprites.ElementColor(element), element, count, spread, true, false);
+
+        public static void SpawnMuzzle(Vector3 position, PokemonElement element)
+            => SpawnVisual(position, PixelCombatSprites.ElementColor(element), element, 0, 0f, true, true);
+
+        static void SpawnVisual(Vector3 position, Color color, PokemonElement element, int count, float spread,
+                                bool elemental, bool muzzle)
         {
             HitBurst burst = null;
             HitBurst oldest = null;
@@ -52,7 +65,7 @@ namespace Game.Combat
             else if (burst == null) burst = oldest;
 
             burst.gameObject.SetActive(true);
-            burst.Play(position, color, count, spread);
+            burst.Play(position, color, element, count, spread, elemental, muzzle);
         }
 
         void CreateVisuals()
@@ -77,18 +90,23 @@ namespace Game.Combat
             }
         }
 
-        void Play(Vector3 position, Color color, int count, float spread)
+        void Play(Vector3 position, Color color, PokemonElement element, int count, float spread, bool elemental, bool muzzle)
         {
             transform.position = position;
             _time = 0f;
             _color = color;
-            _count = Mathf.Clamp(count, 1, MaxSparks);
+            _muzzle = muzzle;
+            _elemental = elemental;
+            _life = muzzle ? .09f : Life;
+            _count = muzzle ? 0 : Mathf.Clamp(count, 1, MaxSparks);
             _core.enabled = true;
-            _core.color = Color.Lerp(color, new Color(1f, .97f, .78f, color.a), .7f);
-            _core.transform.localScale = Vector3.one * .48f;
+            _core.sprite = elemental ? PixelCombatSprites.ElementShot(element, 0) : PixelCombatSprites.Burst;
+            _core.color = elemental ? Color.white : Color.Lerp(color, new Color(1f, .97f, .78f, color.a), .7f);
+            _core.transform.localScale = Vector3.one * (muzzle ? .25f : .48f);
             for (int i = 0; i < MaxSparks; i++)
             {
                 var spark = _sparks[i];
+                spark.Renderer.sprite = elemental ? PixelCombatSprites.ElementShot(element, i & 1) : PixelCombatSprites.Spark;
                 spark.Renderer.enabled = i < _count;
                 if (i >= _count) continue;
                 spark.Transform.localPosition = Vector3.zero;
@@ -98,8 +116,8 @@ namespace Game.Combat
                                  Random.Range(1.2f, 2.7f) * Mathf.Max(.1f, spread);
                 spark.Size = Random.Range(.09f, .16f);
                 spark.Transform.localScale = Vector3.one * spark.Size;
-                spark.Color = color;
-                spark.Renderer.color = color;
+                spark.Color = elemental ? Color.white : color;
+                spark.Renderer.color = spark.Color;
             }
         }
 
@@ -112,11 +130,11 @@ namespace Game.Combat
             }
             if (GameFlow.Blocked) return;
             _time += Time.deltaTime;
-            float t = Mathf.Clamp01(_time / Life);
-            float coreT = Mathf.Clamp01(_time / CoreLife);
+            float t = Mathf.Clamp01(_time / _life);
+            float coreT = Mathf.Clamp01(_time / (_muzzle ? _life : CoreLife));
             _core.enabled = coreT < 1f;
-            _core.transform.localScale = Vector3.one * (.48f * (1f - coreT * .55f));
-            Color coreColor = Color.Lerp(_color, new Color(1f, .97f, .78f, _color.a), .7f);
+            _core.transform.localScale = Vector3.one * ((_muzzle ? .25f : .48f) * (1f - coreT * .55f));
+            Color coreColor = _elemental ? Color.white : Color.Lerp(_color, new Color(1f, .97f, .78f, _color.a), .7f);
             coreColor.a *= 1f - coreT;
             _core.color = coreColor;
             for (int i = 0; i < _count; i++)

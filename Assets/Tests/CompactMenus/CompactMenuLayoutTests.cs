@@ -106,17 +106,23 @@ namespace Game.Tests.CompactMenus
         }
 
         [Test]
-        public void SharedPagesKeepTheirExistingShellAndActions()
+        public void SharedPagesKeepMapVisibleAndActionsWorking()
         {
             _canvas = UIFactory.CreateCanvas("StandardPageTest", 0);
-            var page = new MenuPage(_canvas, "Collection", "Colección", "Tu colección");
+            var page = new MenuPage(_canvas, "CollectionMenu", "Colección", "");
             int calls = 0;
             var button = page.Action("Back", "Volver", UIFactory.Sun, () => calls++);
             button.onClick.Invoke();
             Assert.AreEqual(1, calls);
             Assert.NotNull(page.Root.Find("Background"));
+            Assert.AreEqual(0, page.Root.Find("Background").GetComponent<UnityEngine.UI.Image>().color.a);
             Assert.IsNull(page.Root.GetComponent<CompactMenuLayout>());
-            Assert.AreEqual(UIFactory.Sun, button.image.color);
+            Assert.NotNull(page.Root.GetComponent<MenuPageLayout>());
+            Assert.AreEqual(Color.white, button.image.color);
+            Assert.AreSame(Resources.Load<Sprite>("UI/CompactMenus/Amber"), button.image.sprite);
+            Assert.NotNull(button.transform.Find("InkInset/Accent"));
+            Assert.AreEqual(UIFactory.DeepViolet,
+                button.transform.Find("InkInset").GetComponent<UnityEngine.UI.Image>().color);
             Assert.IsTrue(page.Wallet.gameObject.activeSelf);
         }
 

@@ -1,0 +1,85 @@
+{
+  "soundtrack": "Lavender Town — Pokémon Red (Junichi Masuda, 1996)",
+  "loop_seconds": 305.386962890625,
+  "intro_trim_seconds": 7.651416778564453,
+  "cry_version": "PokéAPI legacy (original pre-Gen-VI cries)",
+  "rights": "Pokémon audio belongs to its respective rights holders; not original project composition.",
+  "sources": [
+    {
+      "url": "https://fi.zophar.net/soundfiles/gameboy-gbs/pokemon-red/Pokemon%20Red%20%28EMU%29.zophar.zip",
+      "sha256": "dfba721f7e8b0300e14f5e4d8135a2117c2fdf10052f6a643b6e21b51223e7c4"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/135.ogg",
+      "sha256": "1dc565fc51d2125d930ed1c6714779a7a90114c0eb3139b6d7dba72a48c1a2a8"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/6.ogg",
+      "sha256": "8efe1d8cc6b4fdec46a16bc9692812ab2471bd731064490ba6ffa2048a04d89e"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/136.ogg",
+      "sha256": "2e3eeaf86022959acaedf0e6a39e0ae110ca661fcd9f657fefa19ddeef3e6fab"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/134.ogg",
+      "sha256": "3d3acb296fcd1b850f7c87f89fe83dfff0f3097a67d8abf21eebf72674dca379"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/9.ogg",
+      "sha256": "57bdc3dc86c43f14ea6fef936755df31d38d9fcbb5cedcf401774803c055b487"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/130.ogg",
+      "sha256": "bbdf6741aef4c843f7dc29ffba4d0227fd43177d819f7bfc820ac626d3dbfc9c"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/3.ogg",
+      "sha256": "12edbf9e32695549bf6c67dde00c32aa3d7733b804281543cd0fbfa8fea22310"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/131.ogg",
+      "sha256": "aabc2fb0869fe10363f3b2854c32785438233fb628d7b815c08db551f9e450cf"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/151.ogg",
+      "sha256": "284e179ac1035fb66ef68a5cbc4c7e63f9a97aa098ed1aff7baae4a6c4a84809"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/94.ogg",
+      "sha256": "8d56849e53a2f4a3f00134a8212c519484e1aee4282171fb6f2985d711592e39"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/142.ogg",
+      "sha256": "672daa4f74f7bd24fe8f9d43c74bed017e74d5f402ebe01369bc11f2b75d40ca"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/445.ogg",
+      "sha256": "cb31c166cc194bbc4b6f5ab5f3b74cb23f13b6c6ca655759589d91170c7bb000"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/149.ogg",
+      "sha256": "efbff32254284b60443d2b754df6d4a6b30ffce503a13241cfb88e975eff2f64"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/448.ogg",
+      "sha256": "a373adf5f409c2dceb3861339b0ee5d144640631daeca60a25659e0088653e6e"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/143.ogg",
+      "sha256": "e80a76f9e2eda9559285df07e09c8e3df850d2c610b6701d927733d5c782635d"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/132.ogg",
+      "sha256": "c8904e28ee7b9f5b150e723f204d27f0e38f5b1e4f91a2cc239602185a6dc1cb"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/115.ogg",
+      "sha256": "3bd485588754d177e61830826ff61435d05f0cf13d71026b9ea3884484f3a3b9"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/128.ogg",
+      "sha256": "b6067e826936c83d0a764290a3ade1081b25dba4bfeddcae7c051a2ad18d392b"
+    }
+  ]
+}

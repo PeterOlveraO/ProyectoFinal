@@ -18,7 +18,6 @@ namespace Game.Combat
         const float MaxHitHeight = 1.9f;
         const float GroundClearance = 0.62f;
 
-        static Material _trailMaterial;
         static readonly List<AttackProjectile> Active = new List<AttackProjectile>(64);
 
         Vector3 _direction;
@@ -32,13 +31,29 @@ namespace Game.Combat
         readonly EnemyTriangle[] _hitTargets = new EnemyTriangle[ShotDefinitions.MaxPiercingTargets];
         bool _retired;
         Color _color;
+        PokemonElement _element;
+        bool _elemental;
         WorldTerrain _terrain;
 
         SpriteRenderer _glow;
+        Transform _visual;
+        Transform _visualAnchor;
+        Camera _camera;
+        Sprite _frame0;
+        Sprite _frame1;
         float _pulse;
+        float _visualTime;
 
         public static AttackProjectile Spawn(Vector3 origin, Vector3 direction, float speed, float range,
                                              int damage, Color color, int maxTargets = 1)
+            => SpawnInternal(origin, direction, speed, range, damage, color, maxTargets, PokemonElement.Normal, false);
+
+        public static AttackProjectile Spawn(Vector3 origin, Vector3 direction, float speed, float range,
+                                             int damage, Color color, int maxTargets, PokemonElement element)
+            => SpawnInternal(origin, direction, speed, range, damage, color, maxTargets, element, true);
+
+        static AttackProjectile SpawnInternal(Vector3 origin, Vector3 direction, float speed, float range,
+                                               int damage, Color color, int maxTargets, PokemonElement element, bool elemental)
         {
             if (direction.sqrMagnitude < 0.0001f) direction = Vector3.forward;
 
@@ -46,6 +61,8 @@ namespace Game.Combat
             go.transform.position = origin;
 
             var projectile = go.AddComponent<AttackProjectile>();
+            projectile._element = element;
+            projectile._elemental = elemental;
             projectile.Initialize(direction, speed, range, damage, color, maxTargets);
             return projectile;
         }
@@ -82,23 +99,37 @@ namespace Game.Combat
 
         void BuildVisual()
         {
-            var billboard = gameObject.AddComponent<BillboardSprite>();
+            var anchor = new GameObject("VisualAnchor");
+            anchor.transform.SetParent(transform, false);
+            _visualAnchor = anchor.transform;
+            var billboard = anchor.AddComponent<BillboardSprite>();
             billboard.SetContinuous(false);
 
-            _glow = gameObject.AddComponent<SpriteRenderer>();
-            _glow.sprite = PixelCombatSprites.Shot;
-            _glow.color = new Color(_color.r, _color.g, _color.b, 1f);
+            var visual = new GameObject("ElementVisual");
+            visual.transform.SetParent(anchor.transform, false);
+            _visual = visual.transform;
+            _glow = visual.AddComponent<SpriteRenderer>();
+            if (_elemental)
+            {
+                _frame0 = PixelCombatSprites.ElementShot(_element, 0);
+                _frame1 = PixelCombatSprites.ElementShot(_element, 1);
+                _camera = Camera.main;
+            }
+            _glow.sprite = _elemental ? _frame0 : PixelCombatSprites.Shot;
+            Color visualColor = _elemental ? PixelCombatSprites.ElementColor(_element) : _color;
+            _glow.color = _elemental ? Color.white : new Color(visualColor.r, visualColor.g, visualColor.b, 1f);
             _glow.sortingOrder = 18;
-            transform.localScale = Vector3.one * .48f;
+            _visual.localScale = Vector3.one * (_elemental ? .78f : .48f);
 
             var core = new GameObject("Core");
-            core.transform.SetParent(transform, false);
+            core.transform.SetParent(_visual, false);
             core.transform.localScale = Vector3.one * 0.44f;
 
             var coreRenderer = core.AddComponent<SpriteRenderer>();
             coreRenderer.sprite = PixelCombatSprites.Shot;
             coreRenderer.color = new Color(1f, 0.98f, 0.85f, 1f);
             coreRenderer.sortingOrder = 19;
+            coreRenderer.enabled = !_elemental;
 
             var trail = gameObject.AddComponent<TrailRenderer>();
             trail.time = 0.10f;
@@ -108,16 +139,10 @@ namespace Game.Combat
             trail.numCapVertices = 0;
             trail.alignment = LineAlignment.View;
             trail.sortingOrder = 17;
-            trail.startColor = _color;
-            trail.endColor = new Color(_color.r, _color.g, _color.b, 0f);
+            trail.startColor = visualColor;
+            trail.endColor = new Color(visualColor.r, visualColor.g, visualColor.b, 0f);
 
-            if (_trailMaterial == null)
-            {
-                var shader = Shader.Find("Sprites/Default");
-                if (shader == null) shader = Shader.Find("Universal Render Pipeline/Unlit");
-                if (shader != null) _trailMaterial = new Material(shader) { name = "ProjectileTrail" };
-            }
-            if (_trailMaterial != null) trail.material = _trailMaterial;
+            trail.sharedMaterial = _glow.sharedMaterial;
 
             _pulse = Random.Range(0f, Mathf.PI * 2f);
         }
@@ -144,7 +169,8 @@ namespace Game.Combat
 
             if (_travelled >= _range)
             {
-                HitBurst.Spawn(transform.position, _color, 5, 0.5f);
+                if (_elemental) HitBurst.SpawnElement(transform.position, _element, 4, .5f);
+                else HitBurst.Spawn(transform.position, _color, 5, 0.5f);
                 Retire();
             }
         }
@@ -173,8 +199,28 @@ namespace Game.Combat
             if (_glow == null) return;
 
             _pulse += Time.deltaTime * 14f;
-            float scale = .48f + Mathf.Sin(_pulse) * .025f;
-            transform.localScale = new Vector3(scale, scale, 1f);
+            float scale = (_elemental ? .78f : .48f) + Mathf.Sin(_pulse) * .025f;
+            _visual.localScale = new Vector3(scale, scale, 1f);
+            if (_elemental)
+            {
+                _visualTime += Time.deltaTime;
+                _glow.sprite = ((int)(_visualTime * 12f) & 1) == 0 ? _frame0 : _frame1;
+                if (_camera == null) _camera = Camera.main;
+                if (_camera != null)
+                {
+                    Vector3 view = _camera.transform.InverseTransformDirection(_direction);
+                    Vector3 right = _camera.transform.InverseTransformDirection(_visualAnchor.right);
+                    Vector3 up = _camera.transform.InverseTransformDirection(_visualAnchor.up);
+                    float determinant = right.x * up.y - right.y * up.x;
+                    if (Mathf.Abs(determinant) > .0001f)
+                    {
+                        float x = (view.x * up.y - view.y * up.x) / determinant;
+                        float y = (view.y * right.x - view.x * right.y) / determinant;
+                        if (x * x + y * y > .00001f)
+                            _visual.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(y, x) * Mathf.Rad2Deg);
+                    }
+                }
+            }
         }
 
         bool CheckHit()
@@ -208,7 +254,12 @@ namespace Game.Combat
                 if (nearest == null) break;
                 _hitTargets[_hitCount++] = nearest;
                 nearest.TakeDamage(_damage);
-                HitBurst.Spawn(_previousPosition + segment * nearestT, _color, 8, .8f);
+                if (_elemental)
+                {
+                    HitBurst.SpawnElement(_previousPosition + segment * nearestT, _element, 6, .8f);
+                    Game.Audio.GameAudio.PlayImpact(_element);
+                }
+                else HitBurst.Spawn(_previousPosition + segment * nearestT, _color, 8, .8f);
                 if (_hitCount >= _maxTargets)
                 {
                     Retire();

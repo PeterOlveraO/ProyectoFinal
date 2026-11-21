@@ -137,7 +137,8 @@ namespace Game.Tests.CompactMenus
             Assert.IsTrue(_menu.IsPaused);
             Assert.IsTrue(GameFlow.Blocked);
             Assert.AreEqual(0, Time.timeScale);
-            Assert.IsTrue(AudioListener.pause);
+            Assert.IsFalse(AudioListener.pause, "The DSP clock must keep running for the adaptive score.");
+            Assert.IsTrue(_menu.GetComponent<Game.Audio.GameAudio>().CombatPaused);
             Assert.IsTrue(RoundManager.Instance.IsRunActive);
         }
         void AssertRunning()
@@ -146,6 +147,7 @@ namespace Game.Tests.CompactMenus
             Assert.IsFalse(GameFlow.Blocked);
             Assert.AreEqual(1, Time.timeScale);
             Assert.IsFalse(AudioListener.pause);
+            Assert.IsFalse(_menu.GetComponent<Game.Audio.GameAudio>().CombatPaused);
         }
     }
 }

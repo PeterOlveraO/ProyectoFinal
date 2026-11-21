@@ -4,7 +4,6 @@ using Game.Core;
 using Game.Player;
 using Game.Rendering;
 using Game.Terrain;
-using TMPro;
 using UnityEngine;
 
 namespace Game.Rounds
@@ -77,8 +76,9 @@ namespace Game.Rounds
         void CreateStand(int index, Vector3 ground)
         {
             var type = OfferType(index);
-            var platform = new TycoonPlatform(transform, ground, "ARSENAL " + ShotDefinitions.Name(type),
-                BuildPrice(index), ShotDefinitions.Price(type), ShotDefinitions.Color(type));
+            var productIcon = (StationIcon)((int)StationIcon.Burst + index);
+            var platform = new TycoonPlatform(transform, ground, ShotDefinitions.Name(type),
+                BuildPrice(index), ShotDefinitions.Price(type), ShotDefinitions.Color(type), productIcon, true);
             _platforms[index] = platform;
             var root = platform.Vendor.gameObject;
             root.AddComponent<BillboardSprite>().SetContinuous(false);
@@ -90,17 +90,11 @@ namespace Game.Rounds
 
             var symbol = new GameObject("Symbol");
             symbol.transform.SetParent(root.transform, false);
-            // TMP's readable face is -Z, opposite to the sprite billboard's forward.
-            symbol.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-            var text = symbol.AddComponent<TextMeshPro>();
             symbol.transform.localPosition = new Vector3(0, .065f, -.02f);
-            text.text = type == ShotType.Burst ? "III" : type == ShotType.Fan ? "V" :
-                type == ShotType.Piercing ? ">>" : ">";
-            text.fontSize = 3.5f;
-            text.alignment = TextAlignmentOptions.Center;
-            text.color = Color.Lerp(ShotDefinitions.Color(type), RetroWorldArt.Cream, .4f);
-            text.rectTransform.sizeDelta = new Vector2(1.2f, 1.3f);
-            text.GetComponent<MeshRenderer>().sortingOrder = 13;
+            symbol.transform.localScale = Vector3.one * .63f;
+            var pictogram = symbol.AddComponent<SpriteRenderer>();
+            pictogram.sprite = StationIconArt.Get(productIcon);
+            pictogram.sortingOrder = 13;
 
         }
 

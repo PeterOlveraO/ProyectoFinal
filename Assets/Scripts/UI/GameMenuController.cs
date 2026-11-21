@@ -28,6 +28,9 @@ namespace Game.UI
         CollectionView _collection;
         GachaView _gacha;
         PokemonDetailsView _resultDetails;
+        UnityEngine.UI.Image _resultPortrait;
+        TMPro.TMP_Text _resultBadge;
+        UnityEngine.UI.Image[] _starterCards;
         IReadOnlyList<SpeciesDefinition> _catalog;
         IReadOnlyList<PokemonInstance> _inventory;
         IReadOnlyList<GachaPool> _pools;
@@ -35,21 +38,20 @@ namespace Game.UI
         int _collectionIndex, _starterIndex;
         bool _busy, _starterResult;
         string _message = "", _pullRequest, _releaseTarget;
-        float _volume;
         int _quality;
-        UnityEngine.UI.Slider _volumeSlider;
-        TMPro.TMP_Text _volumeValue, _qualityValue, _starterInfo, _releaseInfo;
+        UnityEngine.UI.Slider _volumeSlider, _musicSlider, _effectsSlider;
+        TMPro.TMP_Text _volumeValue, _musicValue, _effectsValue, _qualityValue, _starterInfo, _releaseInfo;
         UnityEngine.UI.Button _starterConfirm;
         UnityEngine.UI.Button[] _starterButtons, _skillButtons;
+        UnityEngine.UI.Image[] _skillProgress;
         GameObject _pauseButton, _skillsButton;
 
         void Awake()
         {
             Instance = this;
-            _volume = Mathf.Clamp01(PlayerPrefs.GetFloat(VolumeKey, .8f));
+            Game.Audio.GameAudio.EnsureExists(gameObject);
             _quality = Mathf.Clamp(PlayerPrefs.GetInt(QualityKey, QualitySettings.GetQualityLevel()),
                 0, Mathf.Max(0, QualitySettings.names.Length - 1));
-            AudioListener.volume = _volume;
             if (QualitySettings.names.Length > 0) QualitySettings.SetQualityLevel(_quality, true);
             RefreshSnapshots();
             Build();
@@ -65,7 +67,6 @@ namespace Game.UI
             Instance = null;
             GameFlow.Blocked = GameFlow.Over = false;
             Time.timeScale = 1;
-            AudioListener.pause = false;
         }
 
         void Update()
@@ -105,7 +106,7 @@ namespace Game.UI
             bool blocked = next != ScreenId.None || GameFlow.Over;
             GameFlow.Blocked = blocked;
             Time.timeScale = blocked ? 0 : 1;
-            AudioListener.pause = IsPlaying && blocked;
+            Game.Audio.GameAudio.SyncState();
             if (_pages.TryGetValue(next, out var page))
             {
                 page.Wallet.text = PokemonCollection.Progression.IsReady
@@ -142,6 +143,7 @@ namespace Game.UI
             }
             IsPlaying = true;
             Show(ScreenId.None);
+            Game.Audio.GameAudio.PlayCry(RoundManager.Instance.RunSpecies?.id);
         }
 
         public void Pause()
@@ -161,6 +163,7 @@ namespace Game.UI
         void OpenSettings()
         {
             _settingsOrigin = _screen;
+            RefreshSettings();
             Show(ScreenId.Settings);
         }
         void CloseSettings() => Show(_settingsOrigin);
@@ -213,6 +216,7 @@ namespace Game.UI
             _collectionIndex = index;
             _message = "";
             RefreshCollection();
+            Game.Audio.GameAudio.PlayCry(_inventory[index].speciesId);
         }
         void RefreshCollection()
         {
@@ -226,7 +230,7 @@ namespace Game.UI
             _busy = true;
             var result = PokemonCollection.Equip(_inventory[_collectionIndex].instanceId);
             _busy = false;
-            _message = result.success ? "Listo para tu próxima partida." : ErrorMessage(result.error);
+            _message = result.success ? "" : ErrorMessage(result.error);
             RefreshCollection();
         }
         void AskRelease()
@@ -234,7 +238,7 @@ namespace Game.UI
             if (_busy || _inventory.Count <= 1) return;
             var pokemon = _inventory[_collectionIndex];
             _releaseTarget = pokemon.instanceId;
-            _releaseInfo.text = $"¿Liberar a {Species(pokemon.speciesId)?.name}?\n\nRareza {pokemon.rarity} · Naturaleza {PokemonUi.NatureName(pokemon.nature)}\n\nEsta acción no se puede deshacer.";
+            _releaseInfo.text = $"¿Liberar a {Species(pokemon.speciesId)?.name}?\n\nNo se puede deshacer.";
             Show(ScreenId.Release);
         }
         void CancelRelease()
@@ -251,7 +255,7 @@ namespace Game.UI
             _releaseTarget = null;
             var result = PokemonCollection.Release(target);
             _busy = false;
-            _message = result.success ? "Pokémon liberado. Tienes un espacio disponible." : ErrorMessage(result.error);
+            _message = result.success ? "" : ErrorMessage(result.error);
             RefreshCollection();
             Show(ScreenId.Collection);
         }
@@ -268,15 +272,13 @@ namespace Game.UI
             _starterIndex = Mathf.Clamp(_starterIndex, 0, _starterButtons.Length - 1);
             for (int i = 0; i < _starterButtons.Length; i++)
             {
-                _starterButtons[i].image.color = i == _starterIndex ? UIFactory.Sun : UIFactory.CardViolet;
+                _starterButtons[i].image.color = Color.white;
+                _starterCards[i].color = UIFactory.Panel;
                 var text = _starterButtons[i].GetComponentInChildren<TMPro.TMP_Text>();
-                text.color = i == _starterIndex ? UIFactory.Ink : UIFactory.Cream;
-                text.text = i == _starterIndex ? "SELECCIONADO" : "ELEGIR";
+                text.color = i == _starterIndex ? UIFactory.Sun : UIFactory.Cream;
+                text.text = i == _starterIndex ? "ELEGIDO" : "ELEGIR";
             }
-            var config = PokemonCollection.Configuration;
-            int total = config.starterF + config.starterA + config.starterS;
-            _starterInfo.text = string.IsNullOrEmpty(_message)
-                ? $"Rareza inicial: F {PokemonUi.Percent(config.starterF, total)} · A {PokemonUi.Percent(config.starterA, total)} · S {PokemonUi.Percent(config.starterS, total)}" : _message;
+            _starterInfo.text = _message;
         }
         void ConfirmStarter()
         {
@@ -318,8 +320,17 @@ namespace Game.UI
         {
             _starterResult = starter;
             RefreshSnapshots();
-            _resultDetails.Bind(pokemon, Species(pokemon.speciesId), starter, "Guardado en tu colección.");
+            _resultDetails.Root.gameObject.SetActive(!starter);
+            if (!starter) _resultDetails.Bind(pokemon, Species(pokemon.speciesId), false, "");
+            var resultPage = _pages[ScreenId.Result];
+            resultPage.SetSize(starter ? new Vector2(520, 480) : new Vector2(1060, 680));
+            UIFactory.Region((RectTransform)_resultPortrait.transform.parent.parent, starter ? .12f : 0, 0, starter ? .88f : .42f, 1);
+            _resultPortrait.sprite = PokemonCollection.GetSprite(pokemon);
+            _resultPortrait.enabled = _resultPortrait.sprite != null;
+            _resultBadge.text = Species(pokemon.speciesId)?.name ?? pokemon.speciesId;
+            _resultBadge.color = UIFactory.Cream;
             Show(ScreenId.Result);
+            Game.Audio.GameAudio.PlayCry(pokemon.speciesId);
         }
         void CloseResult()
         {
@@ -347,15 +358,25 @@ namespace Game.UI
             _gacha = new GachaView(_canvas, PullPool, OpenCollection);
             _pages.Add(ScreenId.Gacha, _gacha.Page);
             BuildStarter();
-            var result = Add(ScreenId.Result, "ResultMenu", "¡Un nuevo compañero!", "Cada Pokémon tiene su propia naturaleza y potencial.");
-            _resultDetails = new PokemonDetailsView(result.Body);
-            UIFactory.Region(_resultDetails.Root, .15f, 0, .85f, 1);
+            var result = Add(ScreenId.Result, "ResultMenu", "", "");
+            var showcase = UIFactory.Surface("Acquisition", result.Body, UIFactory.CardViolet);
+            UIFactory.Region(showcase, 0, 0, .34f, 1);
+            _resultPortrait = UIFactory.PortraitStage(showcase, "RevealStage", null);
+            UIFactory.Region((RectTransform)_resultPortrait.transform.parent, .06f, .22f, .94f, .98f);
+            _resultPortrait.rectTransform.gameObject.AddComponent<UIReveal>();
+            _resultBadge = UIFactory.CreateText("AcquisitionBadge", showcase, "", 30, UIFactory.Cream);
+            UIFactory.Region(_resultBadge.rectTransform, .06f, .04f, .94f, .22f);
+            _resultDetails = new PokemonDetailsView(result.Body, false);
+            UIFactory.Region(_resultDetails.Root, .44f, 0, 1, 1);
             result.Action("Continue", "CONTINUAR", UIFactory.Sun, CloseResult);
             var release = Add(ScreenId.Release, "ReleaseMenu", "Liberar Pokémon", "Revisa tu elección antes de continuar.");
-            _releaseInfo = UIFactory.CreateText("Summary", release.Body, "", 36, UIFactory.Cream);
-            UIFactory.Stretch(_releaseInfo.rectTransform, 40);
-            release.Action("Cancel", "Conservar Pokémon", UIFactory.Sky, CancelRelease);
-            release.Action("Confirm", "Sí, liberar", UIFactory.Coral, ReleasePokemon);
+            var releaseCard = UIFactory.Surface("Confirmation", release.Body);
+            UIFactory.Region(releaseCard, 0, 0, 1, 1);
+            var releaseContent = UIFactory.ScrollStack(releaseCard, 32, 20);
+            _releaseInfo = UIFactory.Label(releaseContent, "Summary", "", 28, UIFactory.Cream, 160);
+            UIFactory.LayoutHeight(_releaseInfo, 160);
+            release.Action("Cancel", "Conservar", UIFactory.Sky, CancelRelease);
+            release.Action("Confirm", "Liberar", UIFactory.Coral, ReleasePokemon);
             BuildSkills();
         }
 
@@ -372,12 +393,11 @@ namespace Game.UI
         void RefreshHero()
         {
             if (!_pages.TryGetValue(ScreenId.Main, out var page)) return;
-            page.Status.text = _equipped == null ? "Elige tu inicial" :
-                $"{Species(_equipped.speciesId)?.name} · Rareza {_equipped.rarity} · {PokemonUi.NatureName(_equipped.nature)}";
+            page.Status.text = _equipped == null ? "" : Species(_equipped.speciesId)?.name ?? _equipped.speciesId;
         }
         void BuildPause()
         {
-            var page = Add(ScreenId.Pause, "PauseMenu", "PAUSA", "Partida detenida", CompactMenuKind.Pause);
+            var page = Add(ScreenId.Pause, "PauseMenu", "PAUSA", "", CompactMenuKind.Pause);
             CompactMenuArt.Button(page.Body, "Resume", "CONTINUAR", "Green", Resume);
             CompactMenuArt.Button(page.Body, "Skills", "Mejoras EV", "Blue", OpenSkills);
             CompactMenuArt.Button(page.Body, "Settings", "Ajustes", "Amber", OpenSettings);
@@ -385,12 +405,13 @@ namespace Game.UI
         }
         void BuildStarter()
         {
-            var page = Add(ScreenId.Starter, "StarterMenu", "Elige a tu primer compañero", "Tu inicial es gratuito. Solo puedes elegirlo una vez.");
+            var page = Add(ScreenId.Starter, "StarterMenu", "Elegir inicial", "");
             var row = UIFactory.CreateRect("Starters", page.Body);
-            UIFactory.Region(row, 0, .15f, 1, 1);
+            UIFactory.Region(row, 0, .08f, 1, 1);
             UIFactory.Row(row, 24);
             var ids = PokemonCollection.StarterIds;
             _starterButtons = new UnityEngine.UI.Button[ids.Count];
+            _starterCards = new UnityEngine.UI.Image[ids.Count];
             for (int i = 0; i < ids.Count; i++)
             {
                 int index = i;
@@ -398,34 +419,66 @@ namespace Game.UI
                 var size = card.gameObject.AddComponent<UnityEngine.UI.LayoutElement>();
                 size.minWidth = size.preferredWidth = 0;
                 size.flexibleWidth = 1;
-                UIFactory.Stack(card, 24, 14);
-                var image = UIFactory.CreateImage("Portrait", card,
-                    PokemonCollection.GetSprite(new PokemonInstance { speciesId = ids[i] }), Color.white);
-                image.preserveAspect = true;
-                UIFactory.Layout(image.transform, 150, 1);
-                UIFactory.Label(card, "Name", Species(ids[i])?.name ?? ids[i], 38, UIFactory.Cream, 56, TextAnchor.MiddleCenter);
-                _starterButtons[i] = StackButton(card, "Select", "ELEGIR", UIFactory.CardViolet,
-                    () => { _starterIndex = index; _message = ""; RefreshStarter(); });
+                _starterCards[i] = card.GetComponent<UnityEngine.UI.Image>();
+                var name = UIFactory.CreateText("Name", card, Species(ids[i])?.name ?? ids[i], 36, UIFactory.Cream);
+                UIFactory.Region(name.rectTransform, .06f, .74f, .94f, .92f);
+                var image = UIFactory.PortraitStage(card, "StarterStage",
+                    PokemonCollection.GetSprite(new PokemonInstance { speciesId = ids[i] }));
+                UIFactory.Region((RectTransform)image.transform.parent, .06f, .30f, .94f, .74f);
+                _starterButtons[i] = UIFactory.CreateButton(card, "Select", "ELEGIR", UIFactory.CardViolet,
+                    new Vector2(320, 76), () =>
+                    {
+                        _starterIndex = index;
+                        _message = "";
+                        RefreshStarter();
+                        Game.Audio.GameAudio.PlayCry(ids[index]);
+                    }, 28);
+                var choose = (RectTransform)_starterButtons[i].transform;
+                UIFactory.Region(choose, .06f, 0, .94f, 0);
+                choose.pivot = new Vector2(.5f, 0);
+                choose.offsetMin = new Vector2(0, 12);
+                choose.offsetMax = new Vector2(0, 76);
             }
             _starterInfo = UIFactory.CreateText("Odds", page.Body, "", 25, UIFactory.Muted);
-            UIFactory.Region(_starterInfo.rectTransform, 0, 0, 1, .13f);
-            _starterConfirm = page.Action("ConfirmStarter", "CONFIRMAR INICIAL", UIFactory.Sun, ConfirmStarter);
+            UIFactory.Region(_starterInfo.rectTransform, 0, 0, 1, .07f);
+            _starterConfirm = page.Action("ConfirmStarter", "CONFIRMAR", UIFactory.Sun, ConfirmStarter);
         }
         void BuildSettings()
         {
-            var page = Add(ScreenId.Settings, "SettingsMenu", "A tu manera", "Ajusta el sonido y la calidad visual.");
-            var stack = CenterStack(page);
-            _volumeValue = UIFactory.Label(stack, "Volume", "", 34, UIFactory.Cream, 56);
-            _volumeSlider = UIFactory.CreateSlider(stack, new Vector2(600, 72), _volume, value =>
+            var page = Add(ScreenId.Settings, "SettingsMenu", "Ajustes", "");
+            var audio = UIFactory.Surface("AudioSettings", page.Body);
+            UIFactory.Region(audio, 0, 0, .62f, 1);
+            var stack = UIFactory.ScrollStack(audio, 18, 8);
+            _volumeValue = UIFactory.Label(stack, "Volume", "", 28, UIFactory.Cream, 44);
+            _volumeSlider = UIFactory.CreateSlider(stack, new Vector2(600, 64), Game.Audio.GameAudio.MasterVolume, value =>
             {
-                _volume = value;
-                AudioListener.volume = value;
+                Game.Audio.GameAudio.SetMasterVolume(value);
                 PlayerPrefs.SetFloat(VolumeKey, value);
                 RefreshSettings();
             });
-            UIFactory.Layout(_volumeSlider.transform, 72);
-            UIFactory.Label(stack, "QualityTitle", "Calidad gráfica", 34, UIFactory.Cream, 70);
-            var quality = StackButton(stack, "Quality", "", UIFactory.CardViolet, () =>
+            _volumeSlider.name = "MasterVolumeSlider";
+            UIFactory.Layout(_volumeSlider.transform, 64);
+            _musicValue = UIFactory.Label(stack, "MusicVolume", "", 28, UIFactory.Cream, 44);
+            _musicSlider = UIFactory.CreateSlider(stack, new Vector2(600, 64), Game.Audio.GameAudio.MusicVolume, value =>
+            {
+                Game.Audio.GameAudio.SetMusicVolume(value);
+                RefreshSettings();
+            });
+            _musicSlider.name = "MusicVolumeSlider";
+            UIFactory.Layout(_musicSlider.transform, 64);
+            _effectsValue = UIFactory.Label(stack, "EffectsVolume", "", 28, UIFactory.Cream, 44);
+            _effectsSlider = UIFactory.CreateSlider(stack, new Vector2(600, 64), Game.Audio.GameAudio.EffectsVolume, value =>
+            {
+                Game.Audio.GameAudio.SetEffectsVolume(value);
+                RefreshSettings();
+            });
+            _effectsSlider.name = "EffectsVolumeSlider";
+            UIFactory.Layout(_effectsSlider.transform, 64);
+            var visual = UIFactory.Surface("VisualSettings", page.Body);
+            UIFactory.Region(visual, .64f, 0, 1, 1);
+            var visualStack = UIFactory.ScrollStack(visual, 28, 18);
+            UIFactory.Label(visualStack, "QualityTitle", "Calidad", 28, UIFactory.Cream, 44);
+            var quality = StackButton(visualStack, "Quality", "", UIFactory.CardViolet, () =>
             {
                 if (QualitySettings.names.Length <= 1) return;
                 _quality = (_quality + 1) % QualitySettings.names.Length;
@@ -434,15 +487,17 @@ namespace Game.UI
                 RefreshSettings();
             });
             _qualityValue = quality.GetComponentInChildren<TMPro.TMP_Text>();
-            var hint = UIFactory.Label(stack, "Hint", "Pulsa la calidad para cambiarla. Los ajustes se guardan al volver.", 24, UIFactory.Muted, 80);
-            UIFactory.LayoutHeight(hint, 80);
-            page.Action("Back", "Guardar y volver", UIFactory.Sun, CloseSettings);
+            page.Action("Back", "Volver", UIFactory.Sun, CloseSettings);
             RefreshSettings();
         }
         void RefreshSettings()
         {
-            _volumeValue.text = $"Volumen  ·  {Mathf.RoundToInt(_volume * 100)}%";
-            _volumeSlider.SetValueWithoutNotify(_volume);
+            _volumeValue.text = $"General  /  {Mathf.RoundToInt(Game.Audio.GameAudio.MasterVolume * 100)}%";
+            _volumeSlider.SetValueWithoutNotify(Game.Audio.GameAudio.MasterVolume);
+            _musicValue.text = $"Música  /  {Mathf.RoundToInt(Game.Audio.GameAudio.MusicVolume * 100)}%";
+            _musicSlider.SetValueWithoutNotify(Game.Audio.GameAudio.MusicVolume);
+            _effectsValue.text = $"Efectos  /  {Mathf.RoundToInt(Game.Audio.GameAudio.EffectsVolume * 100)}%";
+            _effectsSlider.SetValueWithoutNotify(Game.Audio.GameAudio.EffectsVolume);
             if (_qualityValue != null) _qualityValue.text = QualitySettings.names.Length > 0 ? QualitySettings.names[_quality] : "Predeterminada";
         }
         void BuildSkills()
@@ -450,11 +505,20 @@ namespace Game.UI
             var page = Add(ScreenId.Skills, "SkillsMenu", "MEJORAS EV", "", CompactMenuKind.Skills);
             string[] names = { "SALUD", "ATAQUE", "DEFENSA", "VELOCIDAD" };
             _skillButtons = new UnityEngine.UI.Button[names.Length];
+            _skillProgress = new UnityEngine.UI.Image[names.Length];
             for (int i = 0; i < names.Length; i++)
             {
                 int stat = i;
                 _skillButtons[i] = CompactMenuArt.Button(page.Body, "EV_" + names[i], "", "Blue",
                     () => { RoundManager.Instance?.BuyEV(stat); RefreshSkills(); });
+                var label = _skillButtons[i].GetComponentInChildren<TMPro.TMP_Text>();
+                label.rectTransform.offsetMin = new Vector2(20, 18);
+                var track = UIFactory.CreateImage("LevelTrack", _skillButtons[i].transform, null, UIFactory.Ink);
+                UIFactory.Region(track.rectTransform, .08f, 0, .92f, 0);
+                track.rectTransform.offsetMin = new Vector2(0, 8);
+                track.rectTransform.offsetMax = new Vector2(0, 12);
+                _skillProgress[i] = UIFactory.CreateImage("LevelFill", track.transform, null, UIFactory.Sun);
+                UIFactory.Stretch(_skillProgress[i].rectTransform);
             }
             page.Action("Back", "Volver", UIFactory.Sun, CloseSkills);
         }
@@ -462,7 +526,7 @@ namespace Game.UI
         {
             var round = RoundManager.Instance;
             if (round == null) return;
-            _pages[ScreenId.Skills].Status.text = $"{round.Points} PT · Solo esta partida";
+            _pages[ScreenId.Skills].Status.text = $"{round.Points} PT";
             string[] names = { "SALUD", "ATAQUE", "DEFENSA", "VELOCIDAD" };
             for (int i = 0; i < 4; i++)
             {
@@ -470,13 +534,9 @@ namespace Game.UI
                 _skillButtons[i].GetComponentInChildren<TMPro.TMP_Text>().text = $"{names[i]}\n{level}/10 · " +
                     (level >= 10 ? "MÁX." : $"{round.EVCost(i)} PT");
                 _skillButtons[i].interactable = round.CanBuyEV(i);
+                _skillProgress[i].rectTransform.anchorMax = new Vector2(Mathf.Clamp01(level / 10f), 1);
+                _skillProgress[i].color = level >= 10 ? UIFactory.Lime : UIFactory.Sun;
             }
-        }
-        static RectTransform CenterStack(MenuPage page)
-        {
-            var root = UIFactory.Surface("Card", page.Body);
-            UIFactory.Region(root, .18f, 0, .82f, 1);
-            return UIFactory.ScrollStack(root, 28, 20);
         }
         static UnityEngine.UI.Button StackButton(Transform parent, string name, string text, Color color,
             UnityEngine.Events.UnityAction action)

@@ -10,18 +10,25 @@ namespace Game.Rounds
         readonly GameObject _vendor;
         readonly GameObject _construction;
         readonly TextMeshPro _label;
-        readonly TextMeshPro _symbol;
+        readonly SpriteRenderer _icon;
+        readonly GameObject _acquired;
+        readonly Sprite _machineIcon, _productIcon;
         readonly SpriteRenderer _corners;
         readonly StationPresentation _presentation;
         readonly string _name;
+        readonly string _structure, _product;
         readonly int _buildPrice, _productPrice;
         readonly Color _accent;
         public Transform Vendor => _vendor.transform;
 
         public TycoonPlatform(Transform parent, Vector3 ground, string name, int buildPrice,
-            int productPrice, Color color)
+            int productPrice, Color color, StationIcon productIcon, bool arsenal = false)
         {
             _name = name;
+            _structure = arsenal ? "ARSENAL" : "MÁQUINA";
+            _product = arsenal ? "DISPARO" : "PERK";
+            _machineIcon = StationIconArt.Get(arsenal ? StationIcon.Arsenal : StationIcon.Machine);
+            _productIcon = StationIconArt.Get(productIcon);
             _buildPrice = buildPrice;
             _productPrice = productPrice;
             _accent = Color.Lerp(color, RetroWorldArt.Cream, .3f);
@@ -42,11 +49,11 @@ namespace Game.Rounds
             _construction.AddComponent<BillboardSprite>();
             CreateSprite(_construction.transform, "Madera", RetroWorldArt.Construction,
                 Vector3.zero, Vector3.one * 1.3f);
-            string marker = Marker(name);
-            _symbol = CreateText(_construction.transform, "Icono", marker,
-                new Vector3(0, .12f, -.015f), new Vector2(.7f, .6f), marker.Length > 1 ? 3.5f : 5f);
-            _symbol.textWrappingMode = TextWrappingModes.NoWrap;
-            _symbol.color = RetroWorldArt.Cream;
+            CreateSprite(_construction.transform, "MaquinaPorConstruir", _machineIcon,
+                new Vector3(0, .15f, -.015f), Vector3.one * .85f).sortingOrder = 13;
+            // Product identity remains visible at a distance, including before construction.
+            CreateSprite(_construction.transform, "Especialidad", _productIcon,
+                new Vector3(-.42f, .52f, -.025f), Vector3.one * .55f).sortingOrder = 14;
 
             var sign = new GameObject("EstructuraYCoste");
             sign.transform.SetParent(root.transform, false);
@@ -54,9 +61,16 @@ namespace Game.Rounds
             sign.AddComponent<BillboardSprite>();
             CreateSprite(sign.transform, "Marco", RetroWorldArt.Sign, Vector3.zero,
                 new Vector3(2.05f, 1.7f, 1));
-            _label = CreateText(sign.transform, "Texto", "", new Vector3(0, 0, -.02f),
-                new Vector2(3.8f, 1.1f), 2.2f);
+            _icon = CreateSprite(sign.transform, "CompraActual", _machineIcon,
+                new Vector3(1.45f, 0, -.025f), Vector3.one * 1.15f);
+            _icon.sortingOrder = 14;
+            _acquired = CreateSprite(sign.transform, "PerkAdquirido", StationIconArt.Get(StationIcon.Acquired),
+                new Vector3(1.08f, -.34f, -.035f), Vector3.one * .55f).gameObject;
+            _acquired.GetComponent<SpriteRenderer>().sortingOrder = 15;
+            _label = CreateText(sign.transform, "Texto", "", new Vector3(-.4f, 0, -.02f),
+                new Vector2(2.9f, 1.1f), 2.1f);
             _label.color = RetroWorldArt.Cream;
+            _label.textWrappingMode = TextWrappingModes.NoWrap;
 
             _vendor = new GameObject("Vendedor_" + name);
             _vendor.transform.SetParent(root.transform, false);
@@ -64,16 +78,6 @@ namespace Game.Rounds
             _presentation = root.AddComponent<StationPresentation>();
             _presentation.Initialize(sign);
             SetBuilt(false);
-        }
-
-        static string Marker(string name)
-        {
-            if (name.Contains("RÁFAGA")) return "III";
-            if (name.Contains("PERFORANTE") || name.Contains("SPRINT")) return ">>";
-            if (name.Contains("ABANICO")) return "V";
-            if (name.Contains("FUERZA")) return "F";
-            if (name.Contains("ESCUDO")) return "E";
-            return name.StartsWith("ARSENAL") ? ">" : "+";
         }
 
         static SpriteRenderer CreateSprite(Transform parent, string name, Sprite sprite,
@@ -109,16 +113,20 @@ namespace Game.Rounds
         {
             _vendor.SetActive(built);
             _construction.SetActive(!built);
+            _icon.sprite = built ? _productIcon : _machineIcon;
+            _acquired.SetActive(false);
             _corners.color = built ? _accent : Color.Lerp(_accent, RetroWorldArt.Ink, .45f);
-            _label.text = _name + (built ? "\nCOMPRAR · " + _productPrice :
-                "\nCONSTRUIR · " + _buildPrice) + " PT" +
-                (built ? "" : "\nPRODUCTO · " + _productPrice + " PT");
+            _label.text = "<color=#E9C46A><size=80%>" + (built ? "2 · " + _product : "1 · " + _structure) +
+                "</size></color>\n" + _name + (built ? "\nCOMPRAR · " + _productPrice :
+                "\nCONSTRUIR · " + _buildPrice) + " PT";
         }
 
         public void SetPurchased()
         {
             _corners.color = new Color32(134, 185, 107, 255);
-            _label.text = _name + "\nADQUIRIDA";
+            _acquired.SetActive(true);
+            _label.text = "<color=#96D179><size=80%>" + _product + "</size></color>\n" + _name +
+                "\n<color=#96D179>ADQUIRIDO</color>";
         }
     }
 }
