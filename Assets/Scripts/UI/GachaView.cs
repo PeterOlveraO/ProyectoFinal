@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Game.Pokemon;
 using Game.Pokemon.Progression;
 using UnityEngine;
@@ -15,10 +14,10 @@ namespace Game.UI
         sealed class Offer
         {
             public RectTransform root;
-            public TMPro.TMP_Text title, species, notice;
+            public TMPro.TMP_Text title, notice;
             public PokemonIvView[] classes;
             public UnityEngine.UI.Button buy;
-            public UnityEngine.UI.Image[] portraits;
+            public GachaRoulette roulette;
         }
 
         public GachaView(Transform canvas, Action<int> pull, UnityEngine.Events.UnityAction back)
@@ -36,7 +35,7 @@ namespace Game.UI
             width.flexibleWidth = 1;
             width.minWidth = 0;
             width.preferredWidth = 0;
-            // Keep the price/action visible while long pool lists scroll above it.
+            // Keep the price/action visible while the class previews scroll above it.
             var info = UIFactory.Surface("Information", root, UIFactory.CardViolet);
             UIFactory.Stretch(info);
             info.offsetMin = new Vector2(8, 104);
@@ -56,18 +55,8 @@ namespace Game.UI
                 layout.flexibleWidth = 1;
             }
             var art = UIFactory.Surface("FeaturedPokemon", content, UIFactory.Ink);
-            UIFactory.Layout(art, 96);
-            UIFactory.Row(art, 12);
-            offer.portraits = new UnityEngine.UI.Image[3];
-            for (int i = 0; i < 3; i++)
-            {
-                var image = UIFactory.PortraitStage(art, "Pokemon" + i, null);
-                var element = image.transform.parent.gameObject.AddComponent<UnityEngine.UI.LayoutElement>();
-                element.minWidth = 0;
-                element.flexibleWidth = 1;
-                offer.portraits[i] = image;
-            }
-            offer.species = UIFactory.Label(content, "Species", "", 20, UIFactory.Cream, 72, TextAnchor.UpperLeft);
+            UIFactory.Layout(art, 174);
+            offer.roulette = art.gameObject.AddComponent<GachaRoulette>();
             offer.notice = UIFactory.Label(content, "Availability", "", 21, UIFactory.Muted, 40);
             UIFactory.LayoutHeight(offer.notice, 40);
             offer.buy = UIFactory.CreateButton(root, "Pull", "", index == 0 ? UIFactory.Sky : UIFactory.Sun,
@@ -98,15 +87,10 @@ namespace Game.UI
                 int[] weights = { pool.weightF, pool.weightA, pool.weightS };
                 for (int c = 0; c < 3; c++)
                     offer.classes[c].Bind((Rarity)c, PokemonIvView.ClassPreview((Rarity)c), PokemonUi.Percent(weights[c], total) + " · IV");
-                offer.species.text = string.Join(" · ", pool.species.Select(id => species(id)?.name ?? id));
-                UIFactory.LayoutHeight(offer.species, 72);
-                for (int p = 0; p < offer.portraits.Length; p++)
-                {
-                    var portrait = offer.portraits[p];
-                    portrait.sprite = p < pool.species.Length
-                        ? PokemonCollection.GetSprite(new PokemonInstance { speciesId = pool.species[p] }) : null;
-                    portrait.enabled = portrait.sprite != null;
-                }
+                var portraits = new Sprite[pool.species.Length];
+                for (int p = 0; p < portraits.Length; p++)
+                    portraits[p] = PokemonCollection.GetSprite(new PokemonInstance { speciesId = pool.species[p] });
+                offer.roulette.Bind(portraits);
                 string reason = !ready ? "Progreso no disponible" : count >= capacity ? "Colección llena: libera un espacio"
                     : coins < pool.price ? $"Faltan {pool.price - coins} monedas" : busy ? "Procesando…" : "";
                 offer.notice.text = reason;

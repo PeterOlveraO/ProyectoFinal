@@ -1,7 +1,7 @@
 # Game audio
 
 The final soundtrack uses **the original Lavender Town theme from Pokémon Red** as
-its predominant score, plus the original cries for all 18 species. Source attribution,
+its predominant score, plus the original cries for all 28 species. Source attribution,
 hashes and reproducible import are documented in [pokemon-audio.md](pokemon-audio.md).
 
 The four previously composed tracks and 24 elemental/UI cues are synthesized specifically

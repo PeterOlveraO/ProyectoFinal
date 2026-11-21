@@ -8,6 +8,8 @@ tiradas, compras y resultados.
 
 ![Todas las pantallas](evidence/elemental-final/pantallas.png)
 
+Actualización del gacha: [13 opciones especiales y ruleta de sprites](gacha-special.md).
+
 Cada enlace abre una captura. Las panorámicas se redujeron de 1920×1080 a 1200×675;
 las capturas 4:3 conservan sus 1024×768.
 
@@ -70,6 +72,6 @@ las formas y el sonido no modifican los valores de combate.
 
 [Pueblo Lavanda](../Assets/Resources/Audio/Music/LavenderTown.ogg) es el tema predominante;
 la [música de jefe](../Assets/Resources/Audio/Music/Boss.ogg) marca las rondas especiales.
-Los 18 Pokémon tienen su grito original. [Fuentes y uso](pokemon-audio.md).
+Los 28 Pokémon tienen su grito original. [Fuentes y uso](pokemon-audio.md).
 
 [Detalles técnicos y medición de la mezcla](audio-composition.md).

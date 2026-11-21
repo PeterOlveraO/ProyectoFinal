@@ -11,7 +11,7 @@
     {
       "id": "premium", "price": 125,
       "weightF": 40, "weightA": 45, "weightS": 15,
-      "species": ["dragonite", "garchomp", "mew"]
+      "species": ["dragonite", "garchomp", "mew", "tyranitar", "salamence", "metagross", "mewtwo", "lugia", "ho-oh", "rayquaza", "celebi", "jirachi", "darkrai"]
     }
   ]
 }

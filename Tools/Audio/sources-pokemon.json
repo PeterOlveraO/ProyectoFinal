@@ -80,6 +80,46 @@
     {
       "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/128.ogg",
       "sha256": "b6067e826936c83d0a764290a3ade1081b25dba4bfeddcae7c051a2ad18d392b"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/248.ogg",
+      "sha256": "fda59f43950649c933a6065c70e7acb68a199f3cd0ef37394cd52a00c00a3c7d"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/373.ogg",
+      "sha256": "6ebc284541106f902b0b35ecc1313e6930fce313bdbdb5ced78c5b72d1ef9339"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/376.ogg",
+      "sha256": "5d968475c0ba80d0103110a891aec37d394b9414ce8e08c20a30c9ee089ebc8e"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/150.ogg",
+      "sha256": "376775341fb88ca413fd0026855a1723195b926163223b2cda874c1f51eff76c"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/249.ogg",
+      "sha256": "950e01681ce4185d918016c4be5e15394ae8656bbc285db65fb4556906e92f49"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/250.ogg",
+      "sha256": "6bb9e81882c3d8ae2a22170e353967cf0384eba78bf50068a03197c239f2e789"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/384.ogg",
+      "sha256": "6dfbae3f22d12c7040486cc53a94ce5e241b09ad862c1d3aacd8e121f2ebb84d"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/251.ogg",
+      "sha256": "e63534984c14951d6359accd9059ed902b1c57de039bb2c3411782af79ee2c88"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/385.ogg",
+      "sha256": "8eeb4bc55a488c8a231b13a0185e5a27f2c4e6134ce7ec542c9d286b30a9e0fc"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/491.ogg",
+      "sha256": "83f4010ddaf36731ff4d7c8eab4695e8ece82192ec68fa0ec317618fe52195c7"
     }
   ]
 }

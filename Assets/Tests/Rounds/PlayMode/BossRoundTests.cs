@@ -78,7 +78,8 @@ namespace Game.Tests.Rounds
         {
             Call(_round, "StartRound", 5);
             Assert.IsTrue(_round.IsBossRound);
-            Assert.AreEqual("Mew", _round.BossName);
+            // The expanded catalog's alphabetical legendary/mythical rotation starts at Celebi.
+            Assert.AreEqual("Celebi", _round.BossName);
             Assert.AreEqual(1, _round.EnemiesThisRound);
             Call(_round, "BeginFighting");
             Call(_round, "Update"); // real CountAlive + spawn lifecycle
@@ -94,7 +95,7 @@ namespace Game.Tests.Rounds
             Assert.AreEqual(216, boss.MaxHealth);
             Assert.AreEqual(39f, boss.ContactDamage);
             Assert.AreEqual(3.12f, boss.Speed, .0001f);
-            Assert.AreEqual("species_mew", boss.GetComponentInChildren<SpriteRenderer>().sprite.name);
+            Assert.AreEqual("species_celebi", boss.GetComponentInChildren<SpriteRenderer>().sprite.name);
             for (int i = 0; i < 10; i++)
             {
                 Set(_round, "_spawnTimer", 100f);

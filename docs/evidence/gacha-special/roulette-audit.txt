@@ -1,0 +1,1 @@
+slots=13 frames=113 paused=0 coins=5000 inventory=1 overflow=0

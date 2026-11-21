@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -9,6 +10,7 @@ using Game.Rounds;
 using Game.UI;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
 
 namespace Game.Tests.CompactMenus
@@ -117,6 +119,32 @@ namespace Game.Tests.CompactMenus
             Assert.IsTrue(texts.Any(t => t.text == "Pedro Olvera"));
             Click("CreditsMenu", "Back");
             AssertActive("MainMenu");
+        }
+
+        [UnityTest]
+        public IEnumerator GachaPreviewsCycleWhilePausedWithoutSpendingOrDuplicatingSlots()
+        {
+            Click("MainMenu", "Gacha");
+            Assert.AreEqual(0, Time.timeScale);
+            var page = CanvasRoot().Find("GachaMenu");
+            var roulette = page.GetComponentsInChildren<GachaRoulette>()
+                .Single(r => r.transform.IsChildOf(page.GetComponentsInChildren<RectTransform>().Single(t => t.name == "Pool1")));
+            Assert.IsFalse(page.GetComponentsInChildren<TMPro.TMP_Text>().Any(t => t.name == "Species"));
+            int coins = PokemonCollection.Progression.Coins;
+            int count = PokemonCollection.Inventory.Count;
+            yield return null;
+            int initial = roulette.FeaturedIndex;
+            yield return new WaitForSecondsRealtime(1.9f);
+            Assert.AreNotEqual(initial, roulette.FeaturedIndex, "Preview must keep moving at timeScale zero.");
+            Assert.AreEqual(coins, PokemonCollection.Progression.Coins);
+            Assert.AreEqual(count, PokemonCollection.Inventory.Count);
+            var portraits = roulette.GetComponentsInChildren<UnityEngine.UI.Image>().Where(i => i.name == "Portrait").ToArray();
+            Assert.AreEqual(7, portraits.Length);
+            Assert.IsTrue(portraits.All(i => i.sprite != null));
+            Click("GachaMenu", "Back");
+            Click("CollectionMenu", "Back");
+            Click("MainMenu", "Gacha");
+            Assert.AreEqual(7, roulette.GetComponentsInChildren<UnityEngine.UI.Image>().Count(i => i.name == "Portrait"));
         }
 
         void Click(string root, string name)

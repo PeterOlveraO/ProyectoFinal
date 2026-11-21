@@ -215,6 +215,56 @@
         "speed": 100
       },
       "spriteName": "species_mew"
+    },
+    {
+      "id": "tyranitar", "name": "Tyranitar", "category": "PseudoLegendary",
+      "baseStats": { "health": 100, "attack": 134, "defense": 110, "speed": 61 },
+      "spriteName": "species_tyranitar"
+    },
+    {
+      "id": "salamence", "name": "Salamence", "category": "PseudoLegendary",
+      "baseStats": { "health": 95, "attack": 135, "defense": 80, "speed": 100 },
+      "spriteName": "species_salamence"
+    },
+    {
+      "id": "metagross", "name": "Metagross", "category": "PseudoLegendary",
+      "baseStats": { "health": 80, "attack": 135, "defense": 130, "speed": 70 },
+      "spriteName": "species_metagross"
+    },
+    {
+      "id": "mewtwo", "name": "Mewtwo", "category": "Legendary",
+      "baseStats": { "health": 106, "attack": 110, "defense": 90, "speed": 130 },
+      "spriteName": "species_mewtwo"
+    },
+    {
+      "id": "lugia", "name": "Lugia", "category": "Legendary",
+      "baseStats": { "health": 106, "attack": 90, "defense": 130, "speed": 110 },
+      "spriteName": "species_lugia"
+    },
+    {
+      "id": "ho-oh", "name": "Ho-Oh", "category": "Legendary",
+      "baseStats": { "health": 106, "attack": 130, "defense": 90, "speed": 90 },
+      "spriteName": "species_ho-oh"
+    },
+    {
+      "id": "rayquaza", "name": "Rayquaza", "category": "Legendary",
+      "baseStats": { "health": 105, "attack": 150, "defense": 90, "speed": 95 },
+      "spriteName": "species_rayquaza"
+    },
+    {
+      "id": "celebi", "name": "Celebi", "category": "Mythical",
+      "baseStats": { "health": 100, "attack": 100, "defense": 100, "speed": 100 },
+      "spriteName": "species_celebi"
+    },
+    {
+      "id": "jirachi", "name": "Jirachi", "category": "Mythical",
+      "baseStats": { "health": 100, "attack": 100, "defense": 100, "speed": 100 },
+      "spriteName": "species_jirachi"
+    },
+    {
+      "id": "darkrai", "name": "Darkrai", "category": "Mythical",
+      "baseStats": { "health": 70, "attack": 90, "defense": 90, "speed": 125 },
+      "spriteName": "species_darkrai"
     }
   ]
 }

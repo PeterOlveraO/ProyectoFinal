@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Regenerate reviewed frames: uv run --with pillow python Tools/PokemonAnimations/extract.py."""
+import argparse
 import hashlib
 import json
 import re
@@ -19,6 +20,8 @@ def guid(path):
 
 
 def meta(path, folder=False):
+    if Path(str(path) + ".meta").exists():
+        return  # Preserve existing GUIDs and user import settings.
     relative = path.relative_to(ROOT).as_posix()
     if folder:
         content = "fileFormatVersion: 2\nguid: " + guid(relative) + "\n"
@@ -41,11 +44,14 @@ def remove_background(image):
     pixels = image.load()
     bg = pixels[0, 0]
     q = deque()
-    for i in range(32):
-        q.extend(((i, 0), (i, 31), (0, i), (31, i)))
+    width, height = image.size
+    for x in range(width):
+        q.extend(((x, 0), (x, height - 1)))
+    for y in range(height):
+        q.extend(((0, y), (width - 1, y)))
     while q:
         x, y = q.popleft()
-        if not (0 <= x < 32 and 0 <= y < 32) or pixels[x, y] != bg:
+        if not (0 <= x < width and 0 <= y < height) or pixels[x, y] != bg:
             continue
         pixels[x, y] = (0, 0, 0, 0)
         q.extend(((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)))
@@ -53,26 +59,40 @@ def remove_background(image):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--only", nargs="+", help="Extract only these mapped keys")
+    parser.add_argument("--portraits", action="store_true", help="Also export the first front view to PokemonPortraits")
+    args = parser.parse_args()
     sheet = Image.open(SHEET).convert("RGBA")
     entries = json.loads(MAPPING.read_text())["cells"]
+    if args.only:
+        entries = {name: entries[name] for name in args.only}
     OUT.mkdir(parents=True, exist_ok=True)
     meta(OUT, True)
     # These sheets put different perspectives, not walk frames, in adjacent columns.
     # Duplicating a view is preferable to alternating between unrelated perspectives.
     single_column = {"poke_040", "poke_043", "poke_081", "poke_140"}
-    for name, (x, y) in entries.items():
+    for name, cell in entries.items():
+        x, y = cell[:2]
+        size = cell[2] if len(cell) > 2 else 32
         directory = OUT / name
         directory.mkdir(exist_ok=True)
         meta(directory, True)
         for view, row in (("back", 0), ("front", 1), ("side", 2)):
             for i in range(2):
-                left, top = x + 32 * (0 if name in single_column else i), y + 32 * row
-                frame = remove_background(sheet.crop((left, top, left + 32, top + 32)))
+                left, top = x + size * (0 if name in single_column else i), y + size * row
+                frame = remove_background(sheet.crop((left, top, left + size, top + size)))
                 if view == "side":
                     frame = frame.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
                 path = directory / f"{view}_{i}.png"
                 frame.save(path, optimize=False)
                 meta(path)
+                if args.portraits and view == "front" and i == 0:
+                    portrait = ROOT / "Assets/Resources/PokemonPortraits" / f"{name}.png"
+                    portrait.parent.mkdir(exist_ok=True)
+                    meta(portrait.parent, True)
+                    frame.save(portrait, optimize=False)
+                    meta(portrait)
     print(f"Generated {len(entries) * 6} frames for {len(entries)} source sprites.")
 
 

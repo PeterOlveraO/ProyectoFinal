@@ -31,7 +31,7 @@ namespace Game.Pokemon.Tests
             new ProgressionService(store, catalog, config, coins, new System.Random(123));
         [Test] public void CatalogAndPoolsHaveExpectedMembership()
         {
-            Assert.AreEqual(18, catalog.species.Count);
+            Assert.AreEqual(28, catalog.species.Count);
             Assert.AreEqual(10, config.capacity);
             CollectionAssert.AreEquivalent(new[] { "jolteon", "charizard", "blastoise" }, config.starters);
             Assert.AreEqual(95, config.starterF);
@@ -48,9 +48,33 @@ namespace Game.Pokemon.Tests
             Assert.AreEqual(40, premium.weightF);
             Assert.AreEqual(45, premium.weightA);
             Assert.AreEqual(15, premium.weightS);
-            CollectionAssert.AreEquivalent(new[] { "dragonite", "garchomp", "mew" }, premium.species);
+            CollectionAssert.AreEquivalent(new[] { "dragonite", "garchomp", "mew", "tyranitar", "salamence",
+                "metagross", "mewtwo", "lugia", "ho-oh", "rayquaza", "celebi", "jirachi", "darkrai" }, premium.species);
+            Assert.IsTrue(premium.species.All(id =>
+                new[] { "PseudoLegendary", "Legendary", "Mythical" }.Contains(catalog.species.Single(s => s.id == id).category)));
             CollectionAssert.AreEquivalent(catalog.species.Select(s => s.id), basic.species.Concat(premium.species));
             Assert.IsTrue(Open(new MemoryStore()).IsReady);
+        }
+
+        [Test]
+        public void EverySpecialCandidateHasPortraitDirectionalFramesAndOriginalCry()
+        {
+            foreach (string id in config.pools.Single(p => p.id == "premium").species)
+            {
+                var definition = catalog.species.Single(s => s.id == id);
+                var portrait = Resources.Load<Sprite>("PokemonPortraits/" + definition.spriteName) ??
+                    Resources.Load<Sprite>("PokemonSprites/" + definition.spriteName);
+                Assert.IsNotNull(portrait, id);
+                Assert.AreEqual(FilterMode.Point, portrait.texture.filterMode, id);
+                foreach (string view in new[] { "front", "back", "side" })
+                    for (int frame = 0; frame < 2; frame++)
+                    {
+                        var sprite = Resources.Load<Sprite>($"PokemonAnimations/{definition.spriteName}/{view}_{frame}");
+                        Assert.IsNotNull(sprite, id + " " + view);
+                        Assert.AreEqual(portrait.rect.size, sprite.rect.size, id + " must not change size when moving");
+                    }
+                Assert.IsNotNull(Resources.Load<AudioClip>("Audio/Cries/" + id), id);
+            }
         }
 
         [Test] public void RelativeStorePathSupportsAtomicReloadAndCompareAndSwap()

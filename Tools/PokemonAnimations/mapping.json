@@ -180,6 +180,16 @@
     "poke_092": [704, 2400],
     "poke_114": [320, 384],
     "poke_139": [192, 2208],
-    "poke_140": [960, 1024]
+    "poke_140": [960, 1024],
+    "species_tyranitar": [768, 2208],
+    "species_salamence": [832, 3424],
+    "species_metagross": [0, 3552],
+    "species_mewtwo": [448, 1152],
+    "species_lugia": [832, 2208, 64],
+    "species_ho-oh": [0, 2400, 64],
+    "species_rayquaza": [640, 3552, 64],
+    "species_celebi": [128, 2400],
+    "species_jirachi": [768, 3552],
+    "species_darkrai": [0, 4832]
   }
 }
