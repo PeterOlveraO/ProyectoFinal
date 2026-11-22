@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using Game.Combat;
+using Game.Core;
 using Game.Player;
+using Game.Pokemon;
 using Game.Rendering;
 using Game.Rounds;
 using Game.Terrain;
@@ -69,6 +71,7 @@ namespace Game.Enemies
         public float Speed => _speed;
         public float ContactDamage => _contactDamage;
         public bool IsBoss { get; private set; }
+        internal int BonusDropPoints { get; set; }
         public bool IsDead => _dead || _health <= 0;
         public Renderer VisualRenderer => _visualRenderer;
 
@@ -119,6 +122,12 @@ namespace Game.Enemies
         void ResetCombatState(bool boss, float damage)
         {
             IsBoss = boss;
+            BonusDropPoints = 0;
+            var pokemonVisual = GetComponent<PokemonEnemyVisual>();
+            if (pokemonVisual != null)
+                pokemonVisual.SetVisualProfile(boss ? 1.9f : PokemonEnemyVisual.NormalHeight,
+                    boss ? 3.2f : PokemonEnemyVisual.NormalMaximumWidth);
+            if (_healthBar != null) _healthBar.localPosition = Vector3.up * (boss ? 2.17f : 1.62f);
             _contactDamage = Mathf.Max(0f, damage);
             _flashUntil = 0f;
             if (_spriteVisual != null) _spriteVisual.color = _baseVisualColor;
@@ -163,7 +172,7 @@ namespace Game.Enemies
 
         void Update()
         {
-            if (IsDead) return;
+            if (IsDead || !GameFlow.Playing) return;
 
             UpdateFlash();
 
@@ -187,7 +196,8 @@ namespace Game.Enemies
             toPlayer.y = 0f;
             float distance = toPlayer.magnitude;
 
-            if (distance <= TouchRadius && heightDifference <= MaxTouchHeight)
+            if (distance <= TouchRadius && heightDifference <= MaxTouchHeight &&
+                (_terrain.Traversal == null || _terrain.Traversal.CanTraverse(position, _player.transform.position, .35f)))
             {
                 ApplyContact(_player);
                 return;
@@ -196,6 +206,13 @@ namespace Game.Enemies
             if (distance <= 0.0001f) return;
 
             Vector3 direction = toPlayer / distance;
+            if (_terrain.Traversal != null)
+            {
+                _terrain.Traversal.UpdateTarget(_player.transform.position);
+                if (!_terrain.Traversal.CanTraverse(position, _player.transform.position, .35f))
+                    direction = _terrain.Traversal.DirectionToTarget(position);
+                if (direction.sqrMagnitude < .0001f) return;
+            }
             transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
             Move(direction, _speed * Time.deltaTime);
         }
@@ -340,6 +357,7 @@ namespace Game.Enemies
             if (delta.sqrMagnitude < 1e-8f) return false;
 
             Vector3 candidate = from + delta;
+            if (_terrain.Traversal != null && !_terrain.Traversal.CanTraverse(from, candidate, .35f)) return false;
             if (!TryGround(candidate, out Vector3 ground)) return false;
 
             float y = Mathf.MoveTowards(from.y, ground.y, GroundSnapSpeed * Time.deltaTime);

@@ -8,8 +8,8 @@ using UnityEngine;
 namespace Game.Combat
 {
     /// <summary>
-    /// Straight, terrain-following projectile. Sweeps each frame; piercing is bounded
-    /// to three unique enemies with no per-frame allocations or target steering.
+    /// Terrain-following fixed-axis shots. Swept hits, bounded piercing, a two-leg
+    /// boomerang and a deduplicated explosion never choose or steer the aim axis.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class AttackProjectile : MonoBehaviour
@@ -19,6 +19,10 @@ namespace Game.Combat
         const float GroundClearance = 0.62f;
 
         static readonly List<AttackProjectile> Active = new List<AttackProjectile>(64);
+        static readonly RaycastHit[] BlastHits = new RaycastHit[32];
+
+        /// <summary>Optional world-zone guard, also applied to explosion line-of-sight segments.</summary>
+        public static System.Func<Vector3, Vector3, bool> CanTravelSegment { get; set; }
 
         Vector3 _direction;
         Vector3 _previousPosition;
@@ -28,7 +32,9 @@ namespace Game.Combat
         int _damage;
         int _maxTargets = 1;
         int _hitCount;
-        readonly EnemyTriangle[] _hitTargets = new EnemyTriangle[ShotDefinitions.MaxPiercingTargets];
+        readonly EnemyTriangle[] _hitTargets = new EnemyTriangle[1 + ShotDefinitions.MaxExplosionAdditionalTargets];
+        ShotType _shotType;
+        bool _returning;
         bool _retired;
         Color _color;
         PokemonElement _element;
@@ -51,6 +57,17 @@ namespace Game.Combat
         public static AttackProjectile Spawn(Vector3 origin, Vector3 direction, float speed, float range,
                                              int damage, Color color, int maxTargets, PokemonElement element)
             => SpawnInternal(origin, direction, speed, range, damage, color, maxTargets, element, true);
+
+        /// <summary>Range is the one-way distance for a boomerang; damage is already modified by the firing pattern.</summary>
+        public static AttackProjectile SpawnPattern(Vector3 origin, Vector3 direction, float speed, float range,
+            int damage, Color color, ShotType type, PokemonElement element)
+        {
+            int targets = type == ShotType.Piercing ? ShotDefinitions.MaxPiercingTargets :
+                type == ShotType.Boomerang ? ShotDefinitions.MaxBoomerangTargetsPerLeg : 1;
+            var projectile = SpawnInternal(origin, direction, speed, range, damage, color, targets, element, true);
+            projectile._shotType = type;
+            return projectile;
+        }
 
         static AttackProjectile SpawnInternal(Vector3 origin, Vector3 direction, float speed, float range,
                                                int damage, Color color, int maxTargets, PokemonElement element, bool elemental)
@@ -147,7 +164,9 @@ namespace Game.Combat
             _pulse = Random.Range(0f, Mathf.PI * 2f);
         }
 
-        void Update()
+        void Update() => TickProjectile(Time.deltaTime);
+
+        void TickProjectile(float deltaTime)
         {
             if (_retired) return;
             if (GameFlow.Over)
@@ -157,22 +176,63 @@ namespace Game.Combat
             }
             if (GameFlow.Blocked) return;
 
-            _previousPosition = transform.position;
-            float step = Mathf.Min(_speed * Time.deltaTime, _range - _travelled);
-            transform.position += _direction * step;
-            _travelled += step;
-
-            FollowGround();
-            Pulse();
-
-            if (CheckHit()) return;
-
-            if (_travelled >= _range)
+            float remaining = Mathf.Max(0f, deltaTime) * _speed;
+            // At most two segments: one outward leg and one return on the original axis.
+            // Splitting at the endpoint prevents a long frame from skipping the turn or its hit reset.
+            for (int leg = 0; leg < 2 && !_retired; leg++)
             {
-                if (_elemental) HitBurst.SpawnElement(transform.position, _element, 4, .5f);
-                else HitBurst.Spawn(transform.position, _color, 5, 0.5f);
-                Retire();
+                _previousPosition = transform.position;
+                float step = Mathf.Min(remaining, _range - _travelled);
+                Vector3 next = transform.position + _direction * step;
+                bool blocked = !CanTravel(_previousPosition, next);
+                if (blocked)
+                {
+                    if (!CanTravel(_previousPosition, _previousPosition))
+                    {
+                        Retire();
+                        return;
+                    }
+                    // A long frame may reach a frontier after passing a valid enemy.
+                    // Sweep up to the last legal point before retiring at the boundary.
+                    float low = 0f, high = 1f;
+                    for (int i = 0; i < 14; i++)
+                    {
+                        float middle = (low + high) * .5f;
+                        if (CanTravel(_previousPosition, Vector3.Lerp(_previousPosition, next, middle)))
+                            low = middle;
+                        else high = middle;
+                    }
+                    next = Vector3.Lerp(_previousPosition, next, low);
+                    step *= low;
+                }
+                transform.position = next;
+                _travelled += step;
+                remaining -= step;
+                FollowGround();
+                if (CheckHit()) return;
+                if (blocked)
+                {
+                    Retire();
+                    return;
+                }
+                if (_travelled < _range) break;
+                if (_shotType == ShotType.Boomerang && !_returning)
+                {
+                    _returning = true;
+                    _direction = -_direction;
+                    _travelled = 0f;
+                    _hitCount = 0;
+                    System.Array.Clear(_hitTargets, 0, _hitTargets.Length);
+                    if (remaining <= 0f) break;
+                }
+                else
+                {
+                    if (_elemental) HitBurst.SpawnElement(transform.position, _element, 4, .5f);
+                    else HitBurst.Spawn(transform.position, _color, 5, .5f);
+                    Retire();
+                }
             }
+            Pulse();
         }
 
         /// <summary>Mantiene la bala a una altura constante sobre el terreno para no cruzar colinas.</summary>
@@ -248,20 +308,24 @@ namespace Game.Combat
                     if (Mathf.Abs(delta.y) > MaxHitHeight) continue;
                     delta.y = 0f;
                     if (delta.sqrMagnitude > HitRadius * HitRadius || t >= nearestT) continue;
+                    if (!CanTravel(closest, enemy.transform.position)) continue;
                     nearestT = t;
                     nearest = enemy;
                 }
                 if (nearest == null) break;
                 _hitTargets[_hitCount++] = nearest;
                 nearest.TakeDamage(_damage);
+                Vector3 impact = _previousPosition + segment * nearestT;
                 if (_elemental)
                 {
-                    HitBurst.SpawnElement(_previousPosition + segment * nearestT, _element, 6, .8f);
+                    HitBurst.SpawnElement(impact, _element, 6, .8f);
                     Game.Audio.GameAudio.PlayImpact(_element);
                 }
-                else HitBurst.Spawn(_previousPosition + segment * nearestT, _color, 8, .8f);
+                else HitBurst.Spawn(impact, _color, 8, .8f);
+                if (_shotType == ShotType.Explosive) Explode(impact);
                 if (_hitCount >= _maxTargets)
                 {
+                    if (_shotType == ShotType.Boomerang) return false;
                     Retire();
                     return true;
                 }
@@ -269,11 +333,70 @@ namespace Game.Combat
             return false;
         }
 
+        void Explode(Vector3 center)
+        {
+            if (_elemental) HitBurst.SpawnElement(center, _element, 14, ShotDefinitions.ExplosionRadius);
+            else HitBurst.Spawn(center, _color, 14, ShotDefinitions.ExplosionRadius);
+            int splashDamage = Mathf.Max(1, Mathf.RoundToInt(_damage * ShotDefinitions.ExplosionDamageMultiplier));
+            int additional = 0;
+            var enemies = EnemyTriangle.All;
+            while (additional < ShotDefinitions.MaxExplosionAdditionalTargets)
+            {
+                EnemyTriangle nearest = null;
+                float best = float.PositiveInfinity;
+                for (int i = 0; i < enemies.Count; i++)
+                {
+                    var enemy = enemies[i];
+                    if (enemy == null || enemy.IsDead || AlreadyHit(enemy)) continue;
+                    Vector3 delta = enemy.transform.position - center;
+                    if (Mathf.Abs(delta.y) > MaxHitHeight) continue;
+                    float distance = delta.sqrMagnitude;
+                    if (distance > ShotDefinitions.ExplosionRadius * ShotDefinitions.ExplosionRadius ||
+                        distance >= best || !HasClearBlastPath(center, enemy)) continue;
+                    nearest = enemy;
+                    best = distance;
+                }
+                if (nearest == null) break;
+                _hitTargets[_hitCount++] = nearest;
+                nearest.TakeDamage(splashDamage);
+                additional++;
+            }
+        }
+
+        static bool HasClearBlastPath(Vector3 center, EnemyTriangle target)
+        {
+            // Aim the occlusion ray at the body, not the feet on the terrain collider.
+            Vector3 destination = target.transform.position + Vector3.up * GroundClearance;
+            if (!CanTravel(center, destination)) return false;
+            Vector3 delta = destination - center;
+            float distance = delta.magnitude;
+            if (distance < .001f) return true;
+            int count = Physics.RaycastNonAlloc(center, delta / distance, BlastHits, distance,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            if (count == BlastHits.Length) return false;
+            for (int i = 0; i < count; i++)
+            {
+                var collider = BlastHits[i].collider;
+                if (collider == null || collider.GetComponentInParent<EnemyTriangle>() != null ||
+                    collider.GetComponentInParent<Game.Player.PlayerSphereController>() != null) continue;
+                return false;
+            }
+            return true;
+        }
+
         bool AlreadyHit(EnemyTriangle enemy)
         {
             for (int i = 0; i < _hitCount; i++)
                 if (_hitTargets[i] == enemy) return true;
             return false;
+        }
+
+        static bool CanTravel(Vector3 from, Vector3 to)
+        {
+            var terrain = WorldTerrain.Instance;
+            return (terrain == null || terrain.Traversal == null ||
+                terrain.Traversal.CanProjectileTraverse(from, to, .1f)) &&
+                (CanTravelSegment == null || CanTravelSegment(from, to));
         }
     }
 }

@@ -7,18 +7,151 @@ using UnityEngine;
 namespace Game.Rounds
 {
     /// <summary>
-    /// Compact run-only tycoon hub in the flora-free spawn clearing. All pads must be
-    /// dry, flat, collision-free and connected to spawn; failure never scatters vendors.
+    /// Shared deterministic shop reservations and bounded placement searches.
+    /// Zoned worlds distribute vendors; small legacy maps retain a central hub.
     /// </summary>
     public static class WorldShopPlacement
     {
         // Reserved for tycoon inside the flora-free spawn clearing (15 world units).
         public const float TycoonReservationRadius = 15f;
-        public const int TycoonSlots = 9;
+        public const int TycoonSlots = 15;
+        public const float VendorClearingRadius = 6f;
+        const float AnchorSearchRadius = 3f;
         const float SpawnClearance = 5f;
         const float CollisionRadius = 0.48f;
         const float CollisionHeight = 0.72f;
         static readonly Collider[] OverlapBuffer = new Collider[32];
+        static readonly WorldZoneLayout CellLayout = new WorldZoneLayout(256, 256, 1f, Vector3.zero);
+
+        // Set by the run's world controller. Null keeps legacy / isolated fixtures usable.
+        public static Func<int, bool> IsZoneAccessible { get; set; }
+        public static bool CanAccessZone(int zone)
+        {
+            if (zone <= 0) return false;
+            var terrain = WorldTerrain.Instance;
+            return (terrain == null || terrain.Traversal == null || terrain.Traversal.IsUnlocked(zone)) &&
+                (IsZoneAccessible == null || IsZoneAccessible(zone));
+        }
+
+        public static bool UsesWorldZones(WorldTerrain terrain) =>
+            terrain != null && terrain.Settings != null && terrain.Settings.enableWorldZones &&
+            terrain.Map != null && terrain.Map.Width >= 256 && terrain.Map.Depth >= 256;
+
+        public static Vector3[] FindDrinkPositions(WorldTerrain terrain) =>
+            UsesWorldZones(terrain) ? FindZonePositions(terrain, false) :
+            FindPositions(terrain, DrinkStations.OfferCount, 0x51A7, null, TycoonSlots);
+
+        public static Vector3[] FindShotPositions(WorldTerrain terrain, IReadOnlyList<Vector3> reserved = null) =>
+            UsesWorldZones(terrain) ? FindZonePositions(terrain, true, reserved) :
+            FindPositions(terrain, ShotStations.OfferCount, 104729, reserved, TycoonSlots);
+
+        /// <summary>Call before flora is generated. Radius includes the decoration's own footprint.</summary>
+        public static bool IsReservedForShop(WorldTerrain terrain, Vector3 point, float radius)
+        {
+            if (terrain == null || terrain.Map == null) return false;
+            radius = Mathf.Max(0f, radius);
+            if (!UsesWorldZones(terrain))
+                return HorizontalDistanceSquared(point, terrain.SpawnPosition) <=
+                    (TycoonReservationRadius + radius) * (TycoonReservationRadius + radius);
+            float clearance = VendorClearingRadius + radius;
+            for (int i = 0; i < DrinkStations.OfferCount; i++)
+                if (HorizontalDistanceSquared(point, GetAnchor(terrain, false, i)) <= clearance * clearance) return true;
+            for (int i = 0; i < ShotStations.OfferCount; i++)
+                if (HorizontalDistanceSquared(point, GetAnchor(terrain, true, i)) <= clearance * clearance) return true;
+            return false;
+        }
+
+        /// <summary>Pure layout offsets in cells; also usable by terrain generation to flatten vendor clearings.</summary>
+        public static Vector2Int GetAnchorOffset(bool shot, int index)
+        {
+            if (shot)
+                return index == 3 ? new Vector2Int(0, -8) :
+                    index < 3 ? new Vector2Int(4, 0) : Vector2Int.zero;
+            switch ((DrinkType)index)
+            {
+                case DrinkType.Power: return new Vector2Int(-7, 4);
+                case DrinkType.Vitality: return new Vector2Int(7, 4);
+                case DrinkType.Recovery: return new Vector2Int(4, 0);
+                case DrinkType.Reserve: return Vector2Int.zero;
+                default: return new Vector2Int(-4, 0);
+            }
+        }
+
+        public static Vector3 GetAnchor(WorldTerrain terrain, bool shot, int index)
+        {
+            int zone = shot ? ShotStations.OfferZone(index) : DrinkStations.OfferZone(index);
+            Vector2Int center = ZoneCenterCell(terrain, zone);
+            Vector2Int offset = GetAnchorOffset(shot, index);
+            return terrain.BlockTopCenter(center.x + offset.x, center.y + offset.y);
+        }
+
+        static Vector2Int ZoneCenterCell(WorldTerrain terrain, int zone)
+        {
+            if (zone < 1 || zone > WorldZoneLayout.ZoneCount)
+                throw new ArgumentOutOfRangeException(nameof(zone));
+            Vector2 center = CellLayout.Bounds(zone).center;
+            return new Vector2Int(Mathf.FloorToInt(center.x * terrain.Map.Width / 256f),
+                Mathf.FloorToInt(center.y * terrain.Map.Depth / 256f));
+        }
+
+        static Vector3[] FindZonePositions(WorldTerrain terrain, bool shot, IReadOnlyList<Vector3> reserved = null)
+        {
+            var result = new Vector3[shot ? ShotStations.OfferCount : DrinkStations.OfferCount];
+            Physics.SyncTransforms();
+            int cells = Mathf.CeilToInt(AnchorSearchRadius / terrain.BlockSize);
+            for (int i = 0; i < result.Length; i++)
+            {
+                int zone = shot ? ShotStations.OfferZone(i) : DrinkStations.OfferZone(i);
+                Vector2Int center = ZoneCenterCell(terrain, zone);
+                Vector2Int anchorCell = center + GetAnchorOffset(shot, i);
+                Vector3 anchor = terrain.BlockTopCenter(anchorCell.x, anchorCell.y);
+                float best = float.PositiveInfinity;
+                bool found = false;
+                for (int z = anchorCell.y - cells; z <= anchorCell.y + cells; z++)
+                for (int x = anchorCell.x - cells; x <= anchorCell.x + cells; x++)
+                {
+                    if (!terrain.Map.Contains(x, z) || !IsLocallyFlat(terrain.Map, x, z)) continue;
+                    Vector3 point = terrain.BlockTopCenter(x, z);
+                    float distance = HorizontalDistanceSquared(point, anchor);
+                    if (distance > AnchorSearchRadius * AnchorSearchRadius || distance >= best ||
+                        !IsDryAndInsideClearance(terrain, point) || IsReserved(point, reserved) || HasBlockingCollider(terrain, point) ||
+                        !HasLocalApproach(terrain, center, point)) continue;
+                    // Keep all stations separated even when the nearest valid cell shifts.
+                    bool overlaps = false;
+                    for (int j = 0; j < i; j++)
+                        if (HorizontalDistanceSquared(point, result[j]) < 4.5f * 4.5f) overlaps = true;
+                    if (overlaps) continue;
+                    result[i] = point;
+                    best = distance;
+                    found = true;
+                }
+                if (!found)
+                    throw new InvalidOperationException("No hay un claro seco, llano y accesible para el puesto " +
+                        i + " de la zona " + zone + ".");
+            }
+            return result;
+        }
+
+        static bool HasLocalApproach(WorldTerrain terrain, Vector2Int center, Vector3 point)
+        {
+            Vector3 start = terrain.BlockTopCenter(center.x, center.y);
+            int steps = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(start, point) / (terrain.BlockSize * .5f)));
+            int previousLevel = terrain.Map.Get(center.x, center.y);
+            for (int step = 0; step <= steps; step++)
+            {
+                Vector3 sample = Vector3.Lerp(start, point, step / (float)steps);
+                Vector3 local = sample - terrain.transform.position;
+                int x = Mathf.FloorToInt(local.x / terrain.BlockSize);
+                int z = Mathf.FloorToInt(local.z / terrain.BlockSize);
+                if (!terrain.Map.Contains(x, z)) return false;
+                int level = terrain.Map.Get(x, z);
+                Vector3 ground = terrain.BlockTopCenter(x, z);
+                if (Mathf.Abs(level - previousLevel) > 1 || !IsDryAndInsideClearance(terrain, ground) ||
+                    HasBlockingCollider(terrain, ground)) return false;
+                previousLevel = level;
+            }
+            return true;
+        }
 
         /// <summary>
         /// Encuentra exactamente <paramref name="count"/> posiciones de suelo. reserved permite
@@ -26,7 +159,7 @@ namespace Game.Rounds
         /// descriptiva si no hay terreno válido o no se logra el grupo completo.
         /// </summary>
         public static Vector3[] FindPositions(WorldTerrain terrain, int count, int seedOffset,
-            IReadOnlyList<Vector3> reserved = null)
+            IReadOnlyList<Vector3> reserved = null, int slots = TycoonSlots)
         {
             if (terrain == null || terrain.Map == null || count < 1)
                 throw new ArgumentException("Se requiere terreno generado y una cantidad positiva de puestos.");
@@ -39,8 +172,9 @@ namespace Game.Rounds
             bool[,] reachable = FindReachable(terrain, spawnX, spawnZ);
             var candidates = new List<Candidate>();
 
-            for (int z = 1; z < map.Depth - 1; z++)
-            for (int x = 1; x < map.Width - 1; x++)
+            int searchCells = Mathf.CeilToInt(12f / terrain.BlockSize);
+            for (int z = Mathf.Max(1, spawnZ - searchCells); z <= Mathf.Min(map.Depth - 2, spawnZ + searchCells); z++)
+            for (int x = Mathf.Max(1, spawnX - searchCells); x <= Mathf.Min(map.Width - 2, spawnX + searchCells); x++)
             {
                 if (!reachable[x, z] || !IsLocallyFlat(map, x, z)) continue;
 
@@ -61,12 +195,16 @@ namespace Game.Rounds
 
             candidates.Sort((a, b) => a.Order.CompareTo(b.Order));
             var positions = new List<Vector3>(count);
-            // Nine sectors around the spawn: one compact hub, never scattered over zones.
-            // Both groups traverse the same order; reserved pads consume their sectors.
-            for (int slot = 0; slot < TycoonSlots && positions.Count < count; slot++)
+            // Two rings fit fifteen pads while retaining a clear approach from spawn.
+            // The legacy nine-slot API remains available for compact existing callers.
+            for (int slot = 0; slot < slots && positions.Count < count; slot++)
             {
-                float angle = slot * Mathf.PI * 2f / TycoonSlots;
-                Vector3 target = spawn + new Vector3(Mathf.Sin(angle), 0, Mathf.Cos(angle)) * 9f;
+                bool inner = slots == TycoonSlots && slot < 5;
+                int ringSlot = slots == TycoonSlots && !inner ? slot - 5 : slot;
+                int ringCount = slots == TycoonSlots ? (inner ? 5 : 10) : slots;
+                float angle = ringSlot * Mathf.PI * 2f / ringCount;
+                float ringRadius = slots == TycoonSlots ? (inner ? 6f : 11.5f) : 9f;
+                Vector3 target = spawn + new Vector3(Mathf.Sin(angle), 0, Mathf.Cos(angle)) * ringRadius;
                 Candidate best = default;
                 float score = float.PositiveInfinity;
                 bool found = false;
@@ -206,6 +344,8 @@ namespace Game.Rounds
                     if (!map.Contains(x, z) || reachable[x, z]) continue;
                     if (Mathf.Abs(map.Get(x, z) - map.Get(cell.x, cell.y)) > 1) continue;
                     Vector3 point = terrain.BlockTopCenter(x, z);
+                    if (HorizontalDistanceSquared(point, start) >
+                        TycoonReservationRadius * TycoonReservationRadius) continue;
                     if (!IsDryAndInsideClearance(terrain, point) || HasBlockingCollider(terrain, point))
                         continue;
                     reachable[x, z] = true;

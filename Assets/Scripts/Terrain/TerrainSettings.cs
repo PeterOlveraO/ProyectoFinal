@@ -24,6 +24,14 @@ namespace Game.Terrain
         [Tooltip("Lado de un bloque en planta (unidades de Unity).")]
         [Min(0.01f)] public float blockSize = 1f;
 
+        [Header("Expansión por partida")]
+        [Tooltip("Activa nueve regiones comprables y la frontera montañosa permanente. " +
+                 "Desactivado conserva el comportamiento de mundos y fixtures anteriores.")]
+        public bool enableWorldZones = false;
+
+        [Tooltip("Material unlit de la niebla. Si falta, usa Resources/WorldZoneFog.")]
+        public Material worldZoneFogMaterial;
+
         [Header("Niveles")]
         [Tooltip("Altura de cada nivel. 0.5 = medio bloque.")]
         [Min(0.01f)] public float stepHeight = 0.5f;

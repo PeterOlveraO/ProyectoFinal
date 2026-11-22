@@ -13,9 +13,10 @@ MonoBehaviour:
   m_Name: TerrainSettings
   m_EditorClassIdentifier: Game.Terrain::Game.Terrain.TerrainSettings
   chunkSize: 16
-  chunksX: 10
-  chunksZ: 10
+  chunksX: 16
+  chunksZ: 16
   blockSize: 1
+  enableWorldZones: 1
   stepHeight: 0.5
   maxLevel: 8
   seed: 12345

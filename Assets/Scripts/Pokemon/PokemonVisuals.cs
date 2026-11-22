@@ -44,6 +44,7 @@ namespace Game.Pokemon
             readonly SpriteRenderer renderer;
             readonly Sprite source;
             readonly Sprite[] frames;
+            readonly PokemonBillboardLayout layout;
             Facing facing = Facing.Front;
             float elapsed;
 
@@ -51,6 +52,7 @@ namespace Game.Pokemon
             {
                 this.renderer = renderer;
                 this.source = source;
+                layout = renderer.GetComponent<PokemonBillboardLayout>();
                 if (!Cache.TryGetValue(source, out frames))
                 {
                     frames = new Sprite[6];
@@ -77,20 +79,28 @@ namespace Game.Pokemon
 
                 int view = facing == Facing.Front ? 0 : facing == Facing.Back ? 2 : 4;
                 int frame = moving ? (int)(elapsed / FrameDuration) % 2 : 0;
-                Sprite frameSprite = frames[view + frame] ?? frames[view] ?? source;
+                int frameIndex = frames[view + frame] != null ? view + frame : frames[view] != null ? view : -1;
+                Sprite frameSprite = frameIndex >= 0 ? frames[frameIndex] : source;
                 renderer.sprite = frameSprite;
                 // BillboardSprite faces back towards the camera, so its local right
                 // points to screen left (opposite the camera's right vector).
                 renderer.flipX = facing == Facing.Right;
+                if (layout != null) layout.ApplyFrame(frameSprite, frameIndex);
             }
         }
 
         /// <summary>
-        /// Crea un SpriteRenderer billboard. El pivote de los sprites de Pokémon es el centro,
-        /// así que <paramref name="height"/> es la altura total en unidades de mundo.
+        /// Crea un billboard cuya altura se mide sobre píxeles visibles, con apoyo en la base.
         /// </summary>
         public static SpriteRenderer CreateBillboard(Transform parent, string name, Sprite sprite,
-                                                     float height, bool continuous)
+                                                      float height, bool continuous)
+        {
+            return CreateBillboard(parent, name, sprite, height, continuous, height * (2.25f / 1.35f), 0f);
+        }
+
+        public static SpriteRenderer CreateBillboard(Transform parent, string name, Sprite sprite,
+                                                      float height, bool continuous, float maxWidth,
+                                                      float groundOffset)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
@@ -98,9 +108,8 @@ namespace Game.Pokemon
             var renderer = go.AddComponent<SpriteRenderer>();
             renderer.sprite = sprite;
 
-            float spriteHeight = sprite.rect.height / sprite.pixelsPerUnit;
-            float scale = spriteHeight > 0.0001f ? height / spriteHeight : 1f;
-            go.transform.localScale = new Vector3(scale, scale, 1f);
+            var layout = go.AddComponent<PokemonBillboardLayout>();
+            layout.Configure(renderer, sprite, height, maxWidth, groundOffset);
 
             var billboard = go.AddComponent<BillboardSprite>();
             billboard.SetContinuous(continuous);

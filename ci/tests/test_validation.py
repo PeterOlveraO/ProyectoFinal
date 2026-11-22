@@ -229,6 +229,21 @@ class CheckoutAwareGateTests(unittest.TestCase):
         self.write_results(expected)
         self.assertEqual(self.run_gate()[0], 0)
 
+    def test_expansion_features_raise_existing_assembly_floors(self):
+        for relative, (mode, name, minimum) in validate_test_results.FEATURE_FLOORS.items():
+            with self.subTest(feature=relative):
+                feature = self.project / relative
+                feature.parent.mkdir(parents=True, exist_ok=True)
+                feature.write_text("// Feature regression fixture")
+                self.add_asmdef(name, f"{name}/{name}.asmdef")
+                self.write_results(validate_test_results.REQUIRED)
+                self.assertEqual(self.run_gate()[0], 1)
+                expected = validate_test_results.required_for_checkout(self.project)
+                self.assertEqual(expected[mode][name], minimum)
+                self.write_results(expected)
+                self.assertEqual(self.run_gate()[0], 0)
+                feature.unlink()
+
     def test_partial_feature_discovery_fails_at_its_case_floor(self):
         for name, (mode, minimum) in validate_test_results.CONDITIONAL.items():
             with self.subTest(assembly=name):
@@ -248,19 +263,19 @@ class CheckoutAwareGateTests(unittest.TestCase):
         self.write_results(expected)
         self.assertEqual(self.run_gate()[0], 0)
         # Read the declared name, not the filename, platform list, or directory.
-        self.assertEqual(expected["editmode"]["Game.ShotShop.EditMode.Tests"], 11)
-        self.assertEqual(expected["playmode"]["Game.ShotShop.PlayMode.Tests"], 24)
+        self.assertEqual(expected["editmode"]["Game.ShotShop.EditMode.Tests"], 14)
+        self.assertEqual(expected["playmode"]["Game.ShotShop.PlayMode.Tests"], 41)
 
     def test_shotshop_editmode_results_cannot_substitute_for_playmode(self):
         self.add_asmdef("Game.ShotShop.EditMode.Tests", "ShotShop/EditMode/Test.asmdef")
         self.add_asmdef("Game.ShotShop.PlayMode.Tests", "ShotShop/PlayMode/Test.asmdef")
         wrong_mode = validate_test_results.required_for_checkout(self.project)
         del wrong_mode["playmode"]["Game.ShotShop.PlayMode.Tests"]
-        wrong_mode["editmode"]["Game.ShotShop.PlayMode.Tests"] = 24
+        wrong_mode["editmode"]["Game.ShotShop.PlayMode.Tests"] = 41
         self.write_results(wrong_mode)
         code, summary = self.run_gate()
         self.assertEqual(code, 1)
-        self.assertIn("Game.ShotShop.PlayMode.Tests: expected >= 24, found 0", summary)
+        self.assertIn("Game.ShotShop.PlayMode.Tests: expected >= 41, found 0", summary)
 
     def test_directory_or_meta_without_asmdef_does_not_require_future_suite(self):
         path = self.tests / "DirectionalSprites"

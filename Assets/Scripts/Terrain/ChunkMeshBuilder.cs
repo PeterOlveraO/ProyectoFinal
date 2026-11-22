@@ -70,6 +70,7 @@ namespace Game.Terrain
                     int gx = originX + lx;
                     int gz = originZ + lz;
                     if (!map.Contains(gx, gz)) continue;
+                    if (map.IsMountainCell(gx, gz)) continue; // Resident boundary owns this geometry.
 
                     int level = map.Get(gx, gz);
                     int zone = map.GetZone(gx, gz);

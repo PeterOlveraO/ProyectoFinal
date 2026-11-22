@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Game.Rounds
 {
-    /// <summary>Four buildable arsenals, including buying Basic again. Positions describe ground.</summary>
+    /// <summary>Seven buildable arsenals, including buying Basic again. Positions describe ground.</summary>
     [DefaultExecutionOrder(200)]
     [DisallowMultipleComponent]
     public sealed class ShotStations : MonoBehaviour
@@ -16,8 +16,15 @@ namespace Game.Rounds
         const float InteractionRadius = 3.2f;
         IReadOnlyList<Vector3> _positions = System.Array.AsReadOnly(new Vector3[0]);
         public IReadOnlyList<Vector3> Positions => _positions;
-        public const int OfferCount = 4;
-        public static ShotType OfferType(int offer) => offer == 3 ? ShotType.Basic : (ShotType)(offer + 1);
+        public const int OfferCount = ShotDefinitions.Count;
+        static readonly ShotType[] Types = { ShotType.Burst, ShotType.Fan, ShotType.Piercing, ShotType.Basic,
+            ShotType.Precision, ShotType.Boomerang, ShotType.Explosive };
+        static readonly StationIcon[] Icons = { StationIcon.Burst, StationIcon.Fan, StationIcon.Piercing,
+            StationIcon.Basic, StationIcon.Precision, StationIcon.Boomerang, StationIcon.Explosive };
+        static readonly int[] Zones = { 2, 3, 4, 1, 6, 8, 7 };
+        public static ShotType OfferType(int offer) => offer >= 0 && offer < OfferCount ? Types[offer] : (ShotType)(-1);
+        public static int OfferZone(int offer) => offer >= 0 && offer < OfferCount ? Zones[offer] : 0;
+        public static StationIcon OfferIcon(int offer) => Icons[offer];
         public static int BuildPrice(int offer)
         {
             switch (offer)
@@ -26,6 +33,9 @@ namespace Game.Rounds
                 case 1: return 150;
                 case 2: return 200;
                 case 3: return 80;
+                case 4: return 180;
+                case 5: return 200;
+                case 6: return 220;
                 default: return 0;
             }
         }
@@ -62,7 +72,7 @@ namespace Game.Rounds
             Vector3[] positions;
             try
             {
-                positions = WorldShopPlacement.FindPositions(terrain, OfferCount, 104729, drinks != null ? drinks.Positions : null);
+                positions = WorldShopPlacement.FindShotPositions(terrain, drinks != null ? drinks.Positions : null);
             }
             catch (System.InvalidOperationException exception)
             {
@@ -76,10 +86,11 @@ namespace Game.Rounds
         void CreateStand(int index, Vector3 ground)
         {
             var type = OfferType(index);
-            var productIcon = (StationIcon)((int)StationIcon.Burst + index);
+            var productIcon = Icons[index];
             var platform = new TycoonPlatform(transform, ground, ShotDefinitions.Name(type),
                 BuildPrice(index), ShotDefinitions.Price(type), ShotDefinitions.Color(type), productIcon, true);
             _platforms[index] = platform;
+            platform.SetZone(OfferZone(index));
             var root = platform.Vendor.gameObject;
             root.AddComponent<BillboardSprite>().SetContinuous(false);
 
@@ -95,6 +106,7 @@ namespace Game.Rounds
             var pictogram = symbol.AddComponent<SpriteRenderer>();
             pictogram.sprite = StationIconArt.Get(productIcon);
             pictogram.sortingOrder = 13;
+            platform.RegisterFog(WorldTerrain.Instance != null ? WorldTerrain.Instance.ZoneFog : null);
 
         }
 
@@ -104,6 +116,7 @@ namespace Game.Rounds
             float best = InteractionRadius * InteractionRadius;
             for (int i = 0; i < _positions.Count; i++)
             {
+                if (!WorldShopPlacement.CanAccessZone(OfferZone(i))) continue;
                 Vector3 delta = _positions[i] - position;
                 if (Mathf.Abs(delta.y) > 1.9f) continue;
                 delta.y = 0f;

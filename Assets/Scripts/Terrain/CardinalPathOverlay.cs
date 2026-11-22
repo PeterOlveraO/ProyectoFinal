@@ -40,17 +40,34 @@ namespace Game.Terrain
             {
                 int dx = x - cx, dz = z - cz;
                 int radiusSquared = dx * dx + dz * dz;
+                bool expanded = terrain.Traversal != null;
+                int maxX = expanded ? map.Width / 2 : 76;
+                int maxZ = expanded ? map.Depth / 2 : 76;
                 bool onLane =
-                    (Mathf.Abs(dx) <= 76 && Mathf.Abs(dz) <= 1) ||
-                    (Mathf.Abs(dz) <= 76 && Mathf.Abs(dx) <= 1) ||
+                    (Mathf.Abs(dx) <= maxX && Mathf.Abs(dz) <= 1) ||
+                    (Mathf.Abs(dz) <= maxZ && Mathf.Abs(dx) <= 1) ||
                     (radiusSquared >= 64 && radiusSquared <= 100);
-                if (!onLane || terrain.IsLakeAtWorld(terrain.BlockTopCenter(x, z))) continue;
+                if (expanded)
+                {
+                    // Outer cross streets join all four corner regions through their
+                    // cardinal gates; no diagonal short-cut through a locked corner.
+                    float wx = (x + .5f) * block, wz = (z + .5f) * block;
+                    float west = map.Width * block * 5f / 32f, east = map.Width * block * 27f / 32f;
+                    float south = map.Depth * block * 5f / 32f, north = map.Depth * block * 27f / 32f;
+                    onLane |= ((Mathf.Abs(wx - west) < 1.5f || Mathf.Abs(wx - east) < 1.5f) &&
+                        wz >= south && wz <= north) ||
+                        ((Mathf.Abs(wz - south) < 1.5f || Mathf.Abs(wz - north) < 1.5f) &&
+                        wx >= west && wx <= east);
+                }
+                if (!onLane || map.IsMountainCell(x, z) ||
+                    terrain.IsLakeAtWorld(terrain.BlockTopCenter(x, z))) continue;
 
                 int level = map.Get(x, z);
                 bool flat = true;
                 for (int nz = z - 1; nz <= z + 1 && flat; nz++)
                 for (int nx = x - 1; nx <= x + 1; nx++)
-                    if (!map.Contains(nx, nz) || map.Get(nx, nz) != level ||
+                    if (!map.Contains(nx, nz) || map.IsMountainCell(nx, nz) ||
+                        Mathf.Abs(map.Get(nx, nz) - level) > (expanded ? 1 : 0) ||
                         terrain.IsLakeAtWorld(terrain.BlockTopCenter(nx, nz)))
                     {
                         flat = false;
@@ -131,6 +148,7 @@ namespace Game.Terrain
             renderer.sharedMaterial = _material;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
+            if (terrain.ZoneFog != null) terrain.ZoneFog.RegisterSurface(renderer);
             BuildHubDetails(terrain);
         }
 

@@ -39,6 +39,7 @@ namespace Game.Terrain
 
         readonly int[] _levels;
         readonly byte[] _zones;
+        readonly bool[] _mountains;
 
         /// <summary>Lagos generados: máscara compartida con agua, colliders y consultas.</summary>
         public readonly List<LakeInfo> Lakes = new List<LakeInfo>();
@@ -49,6 +50,7 @@ namespace Game.Terrain
             Depth = depth;
             _levels = new int[width * depth];
             _zones = new byte[width * depth];
+            _mountains = new bool[width * depth];
         }
 
         public bool Contains(int x, int z) => x >= 0 && z >= 0 && x < Width && z < Depth;
@@ -65,6 +67,9 @@ namespace Game.Terrain
         }
 
         public void SetZone(int x, int z, int zone) => _zones[z * Width + x] = (byte)Mathf.Clamp(zone, 1, 3);
+
+        public bool IsMountainCell(int x, int z) => Contains(x, z) && _mountains[z * Width + x];
+        public void SetMountainCell(int x, int z, bool value) => _mountains[z * Width + x] = value;
 
         public bool IsLakeCell(int x, int z)
         {

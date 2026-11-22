@@ -1,4 +1,5 @@
 using Game.Rendering;
+using Game.Terrain;
 using TMPro;
 using UnityEngine;
 
@@ -20,6 +21,14 @@ namespace Game.Rounds
         readonly int _buildPrice, _productPrice;
         readonly Color _accent;
         public Transform Vendor => _vendor.transform;
+        public void SetZone(int zone) => _presentation.SetZone(zone);
+        public void RegisterFog(WorldZoneFog fog)
+        {
+            if (fog == null) return;
+            Transform root = _vendor.transform.parent;
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+                fog.RegisterProp(renderer, root.position);
+        }
 
         public TycoonPlatform(Transform parent, Vector3 ground, string name, int buildPrice,
             int productPrice, Color color, StationIcon productIcon, bool arsenal = false)

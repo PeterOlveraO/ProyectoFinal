@@ -44,15 +44,34 @@ namespace Game.Player
         int _burstDamage;
 
         public Vector3 LastAimDirection => _lastAim;
-        public int Damage => (RoundManager.Instance != null && RoundManager.Instance.HasRunPokemon ?
-            RoundManager.Instance.CombatStats.damage : damage) +
-            (RoundManager.Instance != null && RoundManager.Instance.Drinks != null &&
-             RoundManager.Instance.Drinks.Has(DrinkType.Power) ? 3 : 0);
+        public int Damage
+        {
+            get
+            {
+                var round = RoundManager.Instance;
+                int baseDamage = (round != null && round.HasRunPokemon ? round.CombatStats.damage : damage) +
+                    (round != null && round.Drinks != null && round.Drinks.Has(DrinkType.Power) ? 3 : 0);
+                var player = PlayerSphereController.Instance;
+                return player != null && player.RunEffects != null
+                    ? player.RunEffects.ModifyDamage(baseDamage) : baseDamage;
+            }
+        }
+
+        float CurrentInterval
+        {
+            get
+            {
+                var round = RoundManager.Instance;
+                float interval = ShotDefinitions.Interval(round != null ? round.Shots.Equipped : ShotType.Basic, fireInterval);
+                return round != null && round.Drinks != null && round.Drinks.Has(DrinkType.RapidFire)
+                    ? interval * .7f : interval;
+            }
+        }
 
         public void ResetRun()
         {
             CancelPendingShots();
-            _timer = fireInterval;
+            _timer = CurrentInterval;
             _lastAim = Vector3.forward;
         }
 
@@ -82,7 +101,7 @@ namespace Game.Player
             {
                 // Al volver a jugar, el primer toque dispara de inmediato.
                 CancelPendingShots();
-                _timer = fireInterval;
+                _timer = CurrentInterval;
                 return;
             }
 
@@ -90,14 +109,14 @@ namespace Game.Player
             if (player != null && !player.IsAlive)
             {
                 CancelPendingShots();
-                _timer = fireInterval;
+                _timer = CurrentInterval;
                 return;
             }
 
             if (!hasAim)
             {
                 CancelPendingShots();
-                _timer = fireInterval;
+                _timer = CurrentInterval;
                 return;
             }
 
@@ -116,9 +135,7 @@ namespace Game.Player
                 }
                 return;
             }
-            var drinks = round != null ? round.Drinks : null;
-            float interval = drinks != null && drinks.Has(DrinkType.RapidFire) ? fireInterval * .7f : fireInterval;
-            if (_timer < interval) return;
+            if (_timer < CurrentInterval) return;
 
             _timer = 0f;
             Fire();
@@ -149,9 +166,12 @@ namespace Game.Player
             var round = RoundManager.Instance;
             var species = round != null ? round.RunSpecies : null;
             var element = PokemonElementResolver.Resolve(species != null ? species.id : null);
-            AttackProjectile.Spawn(origin, direction, projectileSpeed, range, shotDamage,
-                type == ShotType.Basic ? projectileColor : ShotDefinitions.Color(type),
-                type == ShotType.Piercing ? ShotDefinitions.MaxPiercingTargets : 1, element);
+            bool ballistics = round != null && round.Drinks != null && round.Drinks.Has(DrinkType.Ballistics);
+            float speed = ShotDefinitions.Speed(type, projectileSpeed) * (ballistics ? 1.25f : 1f);
+            float shotRange = ShotDefinitions.Range(type, range) * (ballistics ? 1.2f : 1f);
+            AttackProjectile.SpawnPattern(origin, direction, speed, shotRange,
+                type == ShotType.Precision ? shotDamage * 2 : shotDamage,
+                type == ShotType.Basic ? projectileColor : ShotDefinitions.Color(type), type, element);
             HitBurst.SpawnMuzzle(origin, element);
             Game.Audio.GameAudio.PlayShot(element);
         }

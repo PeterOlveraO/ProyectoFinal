@@ -8,6 +8,7 @@ using Game.Player.ProgressionCombat;
 using Game.Pokemon;
 using Game.Pokemon.Progression;
 using Game.Terrain;
+using Game.World;
 using UnityEngine;
 
 namespace Game.Rounds
@@ -104,6 +105,8 @@ namespace Game.Rounds
         bool _rewardsPaid;
         DrinkStations _drinks;
         ShotStations _shotStations;
+        EnemyDropSystem _drops;
+        WorldZoneController _zones;
         readonly ShotLoadout _shots = new ShotLoadout();
         CombatBalance _balance;
         PokemonInstance _runPokemon;
@@ -117,6 +120,8 @@ namespace Game.Rounds
         public DrinkStations Drinks => _drinks;
         public ShotStations ShotStations => _shotStations;
         public ShotLoadout Shots => _shots;
+        public EnemyDropSystem Drops => _drops;
+        public WorldZoneController Zones => _zones;
 
         public bool EquipShot(ShotType type) => false; // No inventory/free switching.
 
@@ -197,6 +202,13 @@ namespace Game.Rounds
             _drinks = GetComponent<DrinkStations>();
             if (GetComponent<ShotStations>() == null) gameObject.AddComponent<ShotStations>();
             _shotStations = GetComponent<ShotStations>();
+            _drops = GetComponent<EnemyDropSystem>();
+            if (_drops == null) _drops = gameObject.AddComponent<EnemyDropSystem>();
+            _drops.Bind(this);
+            _zones = GetComponent<WorldZoneController>();
+            if (_zones == null) _zones = gameObject.AddComponent<WorldZoneController>();
+            _zones.Bind(this);
+            _zones.Changed += NotifyZonesChanged;
 
             // Los valores del inspector tienen prioridad; solo se corrigen si quedaron raros.
             spawnRadiusMax = Mathf.Max(spawnRadiusMax, spawnRadiusMin + 1f);
@@ -205,8 +217,11 @@ namespace Game.Rounds
 
         void OnDestroy()
         {
+            if (_zones != null) _zones.Changed -= NotifyZonesChanged;
             if (Instance == this) Instance = null;
         }
+
+        void NotifyZonesChanged() => Changed?.Invoke();
 
         void Start()
         {
@@ -268,6 +283,9 @@ namespace Game.Rounds
                 return;
             }
             ClearEnemies();
+            if (_zones != null) _zones.StartRun();
+            _drops?.ResetRun();
+            PlayerSphereController.Instance?.RunEffects?.ResetRun();
             _drinks?.ResetRun();
             _shotStations?.ResetRun();
             _shots.ResetRun();
@@ -383,6 +401,9 @@ namespace Game.Rounds
 
         void ResetTemporaryStats()
         {
+            if (_zones != null) _zones.ResetRun();
+            _drops?.ResetRun();
+            PlayerSphereController.Instance?.RunEffects?.ResetRun();
             Array.Clear(_evLevels, 0, _evLevels.Length);
             _drinks?.ResetRun();
             _shotStations?.ResetRun();
@@ -411,12 +432,23 @@ namespace Game.Rounds
             TotalPointsEarned += amount;
         }
 
+        public bool CollectBonusPoints(int amount)
+        {
+            if (!GameFlow.Playing || !IsRunActive || amount <= 0 ||
+                PlayerSphereController.Instance == null || !PlayerSphereController.Instance.IsAlive) return false;
+            AddPoints(amount);
+            BonusDrops++;
+            Changed?.Invoke();
+            return true;
+        }
+
         void FinishRun()
         {
             if (!IsRunActive || _rewardsPaid) return;
             _phase = RoundPhase.GameOver;
             GameFlow.Over = true;
             GameFlow.Blocked = true;
+            ClearEnemies();
             ResetTemporaryStats();
             _rewardsPaid = PlayerEconomy.AddCoins(CoinsEarned);
             RewardSaveFailed = !_rewardsPaid;
@@ -511,12 +543,8 @@ namespace Game.Rounds
             AddPoints(pointsPerKill * rewardKills);
             CoinsEarned += coinsPerKill * rewardKills;
 
-            if (UnityEngine.Random.value < 0.30f)
-            {
-                BonusDrops++;
-                AddPoints(pointsPerKill * rewardKills);
-                HitBurst.Spawn(enemy.transform.position + Vector3.up, new Color(.4f, .8f, 1f), 8, .8f);
-            }
+            if (_drops != null)
+                _drops.NotifyDeath(enemy.transform.position, enemy.IsBoss, enemy.BonusDropPoints);
 
             PlayerEconomy.RegisterEnemyDefeated();
 
@@ -526,7 +554,7 @@ namespace Game.Rounds
         void SpawnEnemy(PlayerSphereController player)
         {
             int tier = TierForRound(Round);
-            Vector3 position = PickSpawnPosition(player.transform.position);
+            if (!TryPickSpawnPosition(player.transform.position, out Vector3 position)) return;
 
             var go = IsBossRound
                 ? EnemyTriangleFactory.Create(tier,
@@ -540,6 +568,7 @@ namespace Game.Rounds
             if (enemy != null)
             {
                 enemy.InitializeRound(tier, RoundDifficulty.Stats(Round, IsBossRound), IsBossRound);
+                enemy.BonusDropPoints = pointsPerKill * (IsBossRound ? NormalEnemyCount() : 1);
                 if (IsBossRound) _bossEnemy = enemy;
             }
 
@@ -550,12 +579,12 @@ namespace Game.Rounds
                            new Color(1f, 0.55f, 0.25f, 1f), 7, 0.7f);
         }
 
-        Vector3 PickSpawnPosition(Vector3 origin)
+        bool TryPickSpawnPosition(Vector3 origin, out Vector3 position)
         {
+            position = default;
             var terrain = WorldTerrain.Instance;
-            if (terrain == null || terrain.Map == null) return origin;
-
-            Vector3 fallback = origin;
+            if (terrain == null || terrain.Map == null) return false;
+            if (terrain.Traversal != null) terrain.Traversal.UpdateTarget(origin);
 
             for (int attempt = 0; attempt < 48; attempt++)
             {
@@ -565,30 +594,23 @@ namespace Game.Rounds
                 Vector3 candidate = origin + offset;
 
                 if (!TryGround(terrain, candidate, out Vector3 ground)) continue;
+                if (terrain.Traversal != null && !terrain.Traversal.IsReachable(ground)) continue;
 
-                // Guarda un destino válido por si ningún punto respeta el desnivel.
-                fallback = ground;
-
-                if (Mathf.Abs(ground.y - origin.y) <= maxSpawnHeightDelta) return ground;
+                if (Mathf.Abs(ground.y - origin.y) > maxSpawnHeightDelta) continue;
+                position = ground;
+                return true;
             }
 
-            return fallback;
+            // A failed search retries next interval without spending the wave budget.
+            return false;
         }
 
         static bool TryGround(WorldTerrain terrain, Vector3 worldPosition, out Vector3 ground)
         {
             ground = worldPosition;
 
-            var map = terrain.Map;
-            Vector3 local = worldPosition - terrain.transform.position;
-            int x = Mathf.FloorToInt(local.x / terrain.BlockSize);
-            int z = Mathf.FloorToInt(local.z / terrain.BlockSize);
-
-            if (!map.Contains(x, z)) return false;
-            if (terrain.IsLakeAtWorld(worldPosition)) return false;
-
-            ground = terrain.BlockTopCenter(x, z);
-            return true;
+            return terrain.TryGetWalkablePosition(worldPosition, out ground, .35f) &&
+                (terrain.Traversal == null || terrain.Traversal.CanOccupy(ground, .35f));
         }
 
         int CountAlive()

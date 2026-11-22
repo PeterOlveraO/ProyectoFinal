@@ -17,6 +17,7 @@ namespace Game.Pokemon
         [SerializeField, Min(0.2f)] float height = 1.65f;
 
         SpriteRenderer _renderer;
+        PokemonBillboardLayout _layout;
         PokemonVisuals.DirectionalAnimation _animation;
         Sprite _source;
         RoundManager _rounds;
@@ -60,15 +61,14 @@ namespace Game.Pokemon
             }
             if (_renderer == null)
             {
-                _renderer = PokemonVisuals.CreateBillboard(transform, "Pokemon Visual", sprite, height, false);
-                _renderer.transform.localPosition = new Vector3(0f, -0.5f + height * 0.5f, 0f);
+                _renderer = PokemonVisuals.CreateBillboard(transform, "Pokemon Visual", sprite, height,
+                                                           false, height * (2.25f / 1.35f), -0.5f);
+                _layout = _renderer.GetComponent<PokemonBillboardLayout>();
             }
             if (_source != sprite)
             {
                 _source = sprite;
-                float spriteHeight = sprite.rect.height / sprite.pixelsPerUnit;
-                float scale = spriteHeight > 0.0001f ? height / spriteHeight : 1f;
-                _renderer.transform.localScale = new Vector3(scale, scale, 1f);
+                _layout.Configure(_renderer, sprite, height, height * (2.25f / 1.35f), -0.5f);
                 _animation = new PokemonVisuals.DirectionalAnimation(_renderer, sprite);
             }
             _renderer.enabled = true;

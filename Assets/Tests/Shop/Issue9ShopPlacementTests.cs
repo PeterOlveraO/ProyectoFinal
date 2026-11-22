@@ -82,12 +82,15 @@ namespace Game.Rounds.Shop.Tests
         bool _previousOver;
         object _previousRoundInstance;
         object _previousPlayerInstance;
+        System.Func<int, bool> _previousZoneAccess;
 
         [SetUp]
         public void SetUp()
         {
             _previousBlocked = GameFlow.Blocked;
             _previousOver = GameFlow.Over;
+            _previousZoneAccess = WorldShopPlacement.IsZoneAccessible;
+            WorldShopPlacement.IsZoneAccessible = null;
             _previousRoundInstance = GetStaticBackingField(typeof(RoundManager), "Instance");
             _previousPlayerInstance = GetStaticBackingField(typeof(PlayerSphereController), "Instance");
             GameFlow.Blocked = false;
@@ -120,6 +123,7 @@ namespace Game.Rounds.Shop.Tests
             SetStaticBackingField(typeof(PlayerSphereController), "Instance", _previousPlayerInstance);
             GameFlow.Blocked = _previousBlocked;
             GameFlow.Over = _previousOver;
+            WorldShopPlacement.IsZoneAccessible = _previousZoneAccess;
         }
 
         [Test]
@@ -220,6 +224,22 @@ namespace Game.Rounds.Shop.Tests
             Assert.IsFalse(_drinks.Buy(0));
         }
 
+        [Test]
+        public void ClosedZoneHidesPerkAndPreventsBothTransactionsWithoutCharging()
+        {
+            WorldShopPlacement.IsZoneAccessible = _ => false;
+            Assert.AreEqual(-1, _drinks.NearbyOffer(_player.transform.position));
+            Assert.IsFalse(_drinks.Build(0));
+            Assert.IsFalse(_drinks.Buy(0));
+            Assert.AreEqual(StartingPoints, _round.Points);
+            WorldShopPlacement.IsZoneAccessible = _ => true;
+            Assert.IsTrue(_drinks.Build(0));
+            int afterBuild = _round.Points;
+            WorldShopPlacement.IsZoneAccessible = _ => false;
+            Assert.IsFalse(_drinks.Buy(0));
+            Assert.AreEqual(afterBuild, _round.Points);
+        }
+
         T AddInactive<T>(string name) where T : Component
         {
             var go = new GameObject(name);
@@ -280,10 +300,15 @@ namespace Game.Rounds.Shop.Tests
         }
 
         [Test]
-        public void RealTerrainSettingsProduceNineCompactDryConnectedPlatforms()
+        public void RealTerrainSettingsProduceFifteenReservedPlatformsInTheirAssignedRegions()
         {
-            var settings = AssetDatabase.LoadAssetAtPath<TerrainSettings>("Assets/Settings/TerrainSettings.asset");
-            Assert.IsNotNull(settings);
+            var source = AssetDatabase.LoadAssetAtPath<TerrainSettings>("Assets/Settings/TerrainSettings.asset");
+            Assert.IsNotNull(source);
+            var settings = Object.Instantiate(source);
+            _created.Add(settings);
+            settings.enableWorldZones = true;
+            settings.chunkSize = 16;
+            settings.chunksX = settings.chunksZ = 16;
             var go = new GameObject("RealSettingsTycoonPlacement");
             go.SetActive(false);
             _created.Add(go);
@@ -291,25 +316,62 @@ namespace Game.Rounds.Shop.Tests
             SetField(terrain, "settings", settings);
             var map = HeightMapGenerator.Generate(settings);
             SetField(terrain, "_map", map);
-            var drinks = WorldShopPlacement.FindPositions(terrain, 5, 0x51A7);
-            var shots = WorldShopPlacement.FindPositions(terrain, 4, 104729, drinks);
+            var drinks = WorldShopPlacement.FindDrinkPositions(terrain);
+            var shots = WorldShopPlacement.FindShotPositions(terrain, drinks);
             var all = new List<Vector3>(drinks);
             all.AddRange(shots);
-            Assert.AreEqual(9, all.Count);
-            bool[,] reachable = FindReachable(terrain, map.Width / 2, map.Depth / 2);
-            foreach (Vector3 point in all)
+            Assert.AreEqual(15, all.Count);
+            var layout = new WorldZoneLayout(map.Width, map.Depth, terrain.BlockSize, terrain.transform.position);
+            for (int i = 0; i < all.Count; i++)
             {
+                Vector3 point = all[i];
+                bool shot = i >= drinks.Length;
+                int offer = shot ? i - drinks.Length : i;
+                int zone = shot ? ShotStations.OfferZone(offer) : DrinkStations.OfferZone(offer);
                 Vector3 local = point - terrain.transform.position;
                 int x = Mathf.FloorToInt(local.x / terrain.BlockSize);
                 int z = Mathf.FloorToInt(local.z / terrain.BlockSize);
-                Assert.IsTrue(reachable[x, z]);
+                Assert.AreEqual(zone, layout.ZoneAt(point));
                 Assert.IsFalse(terrain.IsLakeAtWorld(point));
-                Assert.Less(Vector3.Distance(point, terrain.SpawnPosition), 12.01f);
-                Assert.AreEqual(settings.flatLevel * settings.stepHeight, point.y);
+                Assert.IsTrue(WorldShopPlacement.IsReservedForShop(terrain, point, 0));
+                for (int dz = -1; dz <= 1; dz++)
+                for (int dx = -1; dx <= 1; dx++)
+                    Assert.AreEqual(map.Get(x, z), map.Get(x + dx, z + dz), "each pad needs a flat footprint");
             }
             for (int i = 0; i < all.Count; i++)
             for (int j = 0; j < i; j++)
                 Assert.GreaterOrEqual(Vector3.Distance(all[i], all[j]), 4.5f);
+        }
+
+        [Test]
+        public void DisabledWorldZonesKeepAllFifteenVendorsInsideTheReservedCentralHub()
+        {
+            var settings = ScriptableObject.CreateInstance<TerrainSettings>();
+            settings.enableWorldZones = false;
+            _created.Add(settings);
+            var go = new GameObject("ExpandedLegacyHub");
+            go.SetActive(false);
+            _created.Add(go);
+            var terrain = go.AddComponent<WorldTerrain>();
+            SetField(terrain, "settings", settings);
+            var map = new HeightMap(41, 41);
+            for (int z = 0; z < 41; z++)
+            for (int x = 0; x < 41; x++) map.Set(x, z, 1);
+            SetField(terrain, "_map", map);
+            var drinks = WorldShopPlacement.FindDrinkPositions(terrain);
+            var shots = WorldShopPlacement.FindShotPositions(terrain, drinks);
+            var positions = new List<Vector3>(drinks);
+            positions.AddRange(shots);
+            Assert.AreEqual(15, positions.Count);
+            for (int i = 0; i < positions.Count; i++)
+            {
+                Assert.LessOrEqual(Vector3.Distance(positions[i], terrain.SpawnPosition), 12.01f);
+                Assert.IsTrue(WorldShopPlacement.IsReservedForShop(terrain, positions[i], 0));
+                for (int j = 0; j < i; j++)
+                    Assert.GreaterOrEqual(Vector3.Distance(positions[i], positions[j]), 4.5f);
+            }
+            Assert.IsFalse(WorldShopPlacement.IsReservedForShop(terrain, terrain.SpawnPosition + Vector3.right * 18, 0));
+            Assert.IsTrue(WorldShopPlacement.IsReservedForShop(terrain, terrain.SpawnPosition + Vector3.right * 18, 4));
         }
 
         [Test]

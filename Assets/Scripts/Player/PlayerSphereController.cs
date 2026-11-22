@@ -34,6 +34,7 @@ namespace Game.Player
         [SerializeField] VirtualJoystick joystick;
 
         CharacterController _controller;
+        PlayerRunEffects _runEffects;
         float _verticalSpeed;
         Vector3 _lastSafePosition;
         bool _hasSafePosition;
@@ -43,15 +44,20 @@ namespace Game.Player
         bool _alive = true;
 
         public static PlayerSphereController Instance { get; private set; }
+        public PlayerRunEffects RunEffects => _runEffects;
+        public int TeleportRevision { get; private set; }
 
         public int MaxHealth => (RoundManager.Instance != null && RoundManager.Instance.HasRunPokemon ?
             RoundManager.Instance.CombatStats.maxHealth : maxHealth) + (Drinks != null && Drinks.Has(DrinkType.Vitality) ? 50 : 0);
         DrinkStations Drinks => RoundManager.Instance != null ? RoundManager.Instance.Drinks : null;
         public float MovementSpeed => (RoundManager.Instance != null && RoundManager.Instance.HasRunPokemon ?
-            RoundManager.Instance.CombatStats.movementSpeed : moveSpeed) * (Drinks != null && Drinks.Has(DrinkType.Sprint) ? 1.3f : 1f);
+            RoundManager.Instance.CombatStats.movementSpeed : moveSpeed) *
+            (Drinks != null && Drinks.Has(DrinkType.Sprint) ? 1.3f : 1f) *
+            (_runEffects != null ? _runEffects.MovementMultiplier : 1f);
         public float DamageReduction => Mathf.Min(RoundManager.Instance != null ? RoundManager.Instance.MaxDamageReduction : .65f,
             (RoundManager.Instance != null && RoundManager.Instance.HasRunPokemon ? RoundManager.Instance.CombatStats.damageReduction : 0f) +
-            (Drinks != null && Drinks.Has(DrinkType.Armor) ? .25f : 0f));
+            (Drinks != null && Drinks.Has(DrinkType.Armor) ? .25f : 0f) +
+            (_runEffects != null ? _runEffects.DamageReductionBonus : 0f));
 
         /// <summary>Vida actual redondeada hacia arriba (0 solo cuando está derrotado).</summary>
         public int Health => Mathf.Clamp(Mathf.CeilToInt(_health), 0, MaxHealth);
@@ -69,6 +75,9 @@ namespace Game.Player
         {
             Instance = this;
             _controller = GetComponent<CharacterController>();
+            _runEffects = GetComponent<PlayerRunEffects>();
+            if (_runEffects == null) _runEffects = gameObject.AddComponent<PlayerRunEffects>();
+            _runEffects.Bind(this);
             _health = MaxHealth;
         }
 
@@ -114,7 +123,7 @@ namespace Game.Player
             _verticalSpeed -= gravity * Time.deltaTime;
 
             Vector3 velocity = move * MovementSpeed + Vector3.up * _verticalSpeed;
-            _controller.Move(velocity * Time.deltaTime);
+            MoveOnTerrain(velocity * Time.deltaTime);
 
             // Guarda el último punto pisado fuera del agua: ahí vuelve si cae a un lago.
             var terrain = WorldTerrain.Instance;
@@ -123,6 +132,30 @@ namespace Game.Player
                 _lastSafePosition = transform.position;
                 _hasSafePosition = true;
             }
+        }
+
+        void MoveOnTerrain(Vector3 displacement)
+        {
+            var terrain = WorldTerrain.Instance;
+            Vector3 previous = transform.position;
+            if (terrain != null && terrain.Traversal != null)
+            {
+                var traversal = terrain.Traversal;
+                if (!traversal.CanTraverse(previous, previous + displacement, _controller.radius))
+                {
+                    var alongX = new Vector3(displacement.x, displacement.y, 0);
+                    var alongZ = new Vector3(0, displacement.y, displacement.z);
+                    displacement = traversal.CanTraverse(previous, previous + alongX, _controller.radius) ? alongX :
+                        traversal.CanTraverse(previous, previous + alongZ, _controller.radius) ? alongZ :
+                        Vector3.up * displacement.y;
+                }
+            }
+            _controller.Move(displacement);
+            // PhysX may slide sideways; validate its final footprint as well as the requested segment.
+            if (terrain != null && terrain.Traversal != null &&
+                !terrain.Traversal.CanOccupy(transform.position, _controller.radius))
+                Teleport(previous);
+
         }
 
         // ---------------------------------------------------------------- Vida
@@ -137,6 +170,7 @@ namespace Game.Player
             if (IsProtected) return;
 
             _health -= amount * (1f - DamageReduction);
+            if (_runEffects != null) _runEffects.NotifyDamaged();
             if (_health <= 0f)
             {
                 _health = 0f;
@@ -146,6 +180,11 @@ namespace Game.Player
 
         /// <summary>Cura al jugador (se usará al empezar una ronda nueva).</summary>
         public void Heal(int amount)
+        {
+            Heal((float)amount);
+        }
+
+        public void Heal(float amount)
         {
             if (!_alive || amount <= 0) return;
             _health = Mathf.Min(MaxHealth, _health + amount);
@@ -211,6 +250,7 @@ namespace Game.Player
             // El CharacterController ignora cambios de posición mientras está activo.
             _controller.enabled = false;
             transform.position = position;
+            TeleportRevision++;
             _controller.enabled = true;
             _verticalSpeed = 0f;
         }

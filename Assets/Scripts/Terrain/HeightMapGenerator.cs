@@ -106,6 +106,7 @@ namespace Game.Terrain
             }
 
             CarveLakes(map, settings, rng, centerX, centerZ, zone1Radius);
+            if (settings.enableWorldZones) WorldZoneTerrainPreparation.Apply(map, settings);
             return map;
         }
 

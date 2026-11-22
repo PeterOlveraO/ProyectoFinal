@@ -8,27 +8,35 @@ using UnityEngine;
 
 namespace Game.Rounds
 {
-    public enum DrinkType { Power, Vitality, Sprint, Armor, RapidFire }
+    public enum DrinkType { Power, Vitality, Sprint, Armor, RapidFire, Ballistics, Recovery, Reserve }
 
-    /// <summary>Five buildable perk machines in the tycoon hub. One perk per type/run.</summary>
+    /// <summary>Eight buildable perk machines. One perk per type/run.</summary>
     [DefaultExecutionOrder(0)]
     [DisallowMultipleComponent]
     public sealed class DrinkStations : MonoBehaviour
     {
-        public static readonly string[] Names = { "FUERZA", "VITALIDAD", "SPRINT", "ESCUDO", "RÁFAGA" };
+        public const int OfferCount = 8;
+        public static readonly string[] Names = { "FUERZA", "VITALIDAD", "SPRINT", "ESCUDO", "RÁFAGA",
+            "BALÍSTICA", "RECUPERACIÓN", "RESERVA" };
         // Coste por partida (no se guarda como moneda persistente).
-        public static readonly int[] Prices = { 100, 140, 90, 160, 180 };
-        public static readonly int[] BuildPrices = { 100, 120, 100, 140, 160 };
+        public static readonly int[] Prices = { 100, 140, 90, 160, 180, 180, 220, 240 };
+        public static readonly int[] BuildPrices = { 100, 120, 100, 140, 160, 140, 180, 200 };
         static readonly Color[] Colors =
         {
             new Color(1f, .28f, .22f), new Color(.35f, 1f, .45f),
-            new Color(.3f, .8f, 1f), new Color(.65f, .55f, 1f), new Color(1f, .8f, .25f)
+            new Color(.3f, .8f, 1f), new Color(.65f, .55f, 1f), new Color(1f, .8f, .25f),
+            new Color(.3f, .95f, .85f), new Color(.7f, 1f, .55f), new Color(.95f, .65f, 1f)
         };
+        static readonly StationIcon[] Icons = { StationIcon.Power, StationIcon.Vitality, StationIcon.Sprint,
+            StationIcon.Armor, StationIcon.RapidFire, StationIcon.Ballistics, StationIcon.Recovery, StationIcon.Reserve };
+        static readonly int[] Zones = { 1, 1, 2, 4, 5, 3, 5, 9 };
+        public static int OfferZone(int index) => index >= 0 && index < OfferCount ? Zones[index] : 0;
+        public static StationIcon OfferIcon(int index) => Icons[index];
 
-        readonly Transform[] _stands = new Transform[5];
-        readonly bool[] _purchased = new bool[5];
-        readonly TycoonUnlocks _construction = new TycoonUnlocks(5);
-        readonly TycoonPlatform[] _platforms = new TycoonPlatform[5];
+        readonly Transform[] _stands = new Transform[OfferCount];
+        readonly bool[] _purchased = new bool[OfferCount];
+        readonly TycoonUnlocks _construction = new TycoonUnlocks(OfferCount);
+        readonly TycoonPlatform[] _platforms = new TycoonPlatform[OfferCount];
         IReadOnlyList<Vector3> _positions = Array.AsReadOnly(new Vector3[0]);
         WorldTerrain _terrain;
 
@@ -43,15 +51,14 @@ namespace Game.Rounds
             _terrain = WorldTerrain.Instance;
             if (_terrain == null || _terrain.Map == null)
             {
-                Debug.LogError("[DrinkStations] No hay un WorldTerrain generado; no se pudieron colocar los cinco puestos.", this);
+                Debug.LogError("[DrinkStations] No hay un WorldTerrain generado; no se pudieron colocar los puestos.", this);
                 return;
             }
 
             Vector3[] positions;
             try
             {
-                // First five sectors in the shared spawn hub; arsenals reserve these afterwards.
-                positions = WorldShopPlacement.FindPositions(_terrain, _stands.Length, 0x51A7);
+                positions = WorldShopPlacement.FindDrinkPositions(_terrain);
             }
             catch (InvalidOperationException exception)
             {
@@ -67,7 +74,8 @@ namespace Game.Rounds
         void CreateStand(int index, Vector3 ground)
         {
             var platform = new TycoonPlatform(transform, ground, Names[index],
-                BuildPrices[index], Prices[index], Colors[index], (StationIcon)((int)StationIcon.Power + index));
+                BuildPrices[index], Prices[index], Colors[index], Icons[index]);
+            platform.SetZone(OfferZone(index));
             _platforms[index] = platform;
             _stands[index] = platform.Vendor;
 
@@ -83,6 +91,7 @@ namespace Game.Rounds
             renderer.color = Color.white;
             renderer.sortingOrder = 12;
             bottle.AddComponent<BillboardSprite>().SetContinuous(true);
+            platform.RegisterFog(WorldTerrain.Instance != null ? WorldTerrain.Instance.ZoneFog : null);
         }
 
         public bool Has(DrinkType type) => (int)type >= 0 && (int)type < _purchased.Length && _purchased[(int)type];
@@ -118,6 +127,7 @@ namespace Game.Rounds
             float best = 3.2f * 3.2f;
             for (int i = 0; i < _stands.Length; i++)
             {
+                if (!WorldShopPlacement.CanAccessZone(OfferZone(i))) continue;
                 if (_stands[i] == null) continue;
                 Vector3 ground = i < _positions.Count ? _positions[i] : _stands[i].position;
                 Vector3 delta = ground - position;

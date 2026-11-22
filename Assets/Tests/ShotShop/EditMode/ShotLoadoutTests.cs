@@ -22,6 +22,9 @@ namespace Game.ShotShop.Tests
         [TestCase(ShotType.Burst, 140)]
         [TestCase(ShotType.Fan, 200)]
         [TestCase(ShotType.Piercing, 280)]
+        [TestCase(ShotType.Precision, 260)]
+        [TestCase(ShotType.Boomerang, 280)]
+        [TestCase(ShotType.Explosive, 320)]
         public void PurchaseSpendsExactRunPointsAndEquips(ShotType type, int expectedPrice)
         {
             var shots = new ShotLoadout();

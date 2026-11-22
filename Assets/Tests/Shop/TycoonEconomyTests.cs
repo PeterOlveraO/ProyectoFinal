@@ -27,18 +27,24 @@ namespace Game.Rounds.Shop.Tests
         [TestCase(2, 190, 2)]
         [TestCase(3, 300, 2)]
         [TestCase(4, 340, 2)]
+        [TestCase(5, 320, 2)]
+        [TestCase(6, 400, 3)]
+        [TestCase(7, 440, 3)]
         public void PerksBudgetBothStructureAndProduct(int index, int combined, int round)
         {
             Assert.AreEqual(combined, DrinkStations.BuildPrices[index] + DrinkStations.Prices[index]);
             Assert.AreEqual(round, RunEconomy.RoundsToAfford(combined));
             int[] previous = { 30, 45, 35, 45, 60 };
-            Assert.Greater(DrinkStations.Prices[index], previous[index]);
+            if (index < previous.Length) Assert.Greater(DrinkStations.Prices[index], previous[index]);
         }
 
         [TestCase(0, 250, 2)]
         [TestCase(1, 350, 2)]
         [TestCase(2, 480, 3)]
         [TestCase(3, 160, 1)]
+        [TestCase(4, 440, 3)]
+        [TestCase(5, 480, 3)]
+        [TestCase(6, 540, 3)]
         public void ShotsBudgetBothStructureAndProduct(int offer, int combined, int round)
         {
             Assert.AreEqual(combined, ShotStations.BuildPrice(offer) + ShotDefinitions.Price(ShotStations.OfferType(offer)));
@@ -61,10 +67,10 @@ namespace Game.Rounds.Shop.Tests
         public void AdvancedBudgetStillRequiresChoicesAndRepeatedShotsStillCost()
         {
             int total = 0;
-            for (int i = 0; i < 5; i++) total += DrinkStations.BuildPrices[i] + DrinkStations.Prices[i];
-            for (int i = 0; i < 4; i++) total += ShotStations.BuildPrice(i) + ShotDefinitions.Price(ShotStations.OfferType(i));
-            Assert.AreEqual(2530, total);
-            Assert.AreEqual(8, RunEconomy.RoundsToAfford(total));
+            for (int i = 0; i < DrinkStations.OfferCount; i++) total += DrinkStations.BuildPrices[i] + DrinkStations.Prices[i];
+            for (int i = 0; i < ShotStations.OfferCount; i++) total += ShotStations.BuildPrice(i) + ShotDefinitions.Price(ShotStations.OfferType(i));
+            Assert.AreEqual(5150, total);
+            Assert.AreEqual(12, RunEconomy.RoundsToAfford(total));
             int evTotal = 0;
             for (int level = 0; level < 10; level++)
             {
@@ -72,7 +78,7 @@ namespace Game.Rounds.Shop.Tests
                 evTotal += RunEconomy.EVPrice(level);
             }
             Assert.AreEqual(2600, evTotal);
-            Assert.AreEqual(12, RunEconomy.RoundsToAfford(total + evTotal));
+            Assert.AreEqual(15, RunEconomy.RoundsToAfford(total + evTotal));
             int points = RunEconomy.DefaultCumulativeIncome(10);
             var shots = new ShotLoadout();
             System.Func<int, bool> spend = price =>

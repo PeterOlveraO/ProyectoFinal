@@ -33,6 +33,12 @@ namespace Game.UI
         Button _shotButton;
         TMPro.TMP_Text _shotLabel;
         int _nearbyShot = -1;
+        UnityEngine.UI.Button _zoneButton;
+        TMPro.TMP_Text _zoneLabel;
+        int _nearbyZone = -1;
+        readonly TMPro.TMP_Text[] _effectLabels = new TMPro.TMP_Text[DropDefinitions.EffectCount];
+        readonly int[] _effectSeconds = { -1, -1, -1, -1 };
+        static readonly string[] EffectNames = { "DAÑO", "PASO", "DEF", "CURA" };
 
         CanvasGroup _banner;
         TMPro.TMP_Text _bannerTitle;
@@ -98,6 +104,8 @@ namespace Game.UI
             UpdateGameOver(round, gameOver);
             UpdateDrink(round, player, playing && !gameOver && (menu == null || !menu.IsPaused));
             UpdateShotOffer(round, player, showHud && GameFlow.Playing);
+            UpdateEffects(player);
+            UpdateZoneOffer(round, player, showHud && GameFlow.Playing);
         }
 
         // ------------------------------------------------------------- Construcción
@@ -125,6 +133,8 @@ namespace Game.UI
             BuildBanner(root);
             BuildDrinkButton(root);
             BuildShotShop(root);
+            BuildEffects(root);
+            BuildZoneButton(root);
 
             // La pantalla de derrota vive en su propio Canvas por encima de todo el HUD.
             _overlay = UIFactory.CreateCanvas("UI_GameOver", 120);
@@ -190,6 +200,69 @@ namespace Game.UI
                                                UIFactory.Cream, TextAnchor.MiddleLeft);
             UIFactory.Place(_bonusLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
                             new Vector2(18f, -156f), new Vector2(402f, 28f));
+        }
+
+        void BuildEffects(Transform parent)
+        {
+            var strip = UIFactory.CreateRect("TemporaryEffects", parent);
+            UIFactory.Place(strip, new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(20, -226), new Vector2(438, 38));
+            for (int i = 0; i < _effectLabels.Length; i++)
+            {
+                var slot = UIFactory.CreateRect("Effect" + i, strip);
+                UIFactory.Place(slot, new Vector2(0, 1), new Vector2(0, 1),
+                    new Vector2(i * 111, 0), new Vector2(105, 38));
+                var background = UIFactory.CreateImage("Background", slot, RetroUiArt.Frame,
+                    UIFactory.Panel, false, true);
+                UIFactory.Stretch(background.rectTransform);
+                _effectLabels[i] = UIFactory.CreateText("Timer", slot, "", 19,
+                    DropDefinitions.Color((TemporaryEffect)i));
+                UIFactory.Stretch(_effectLabels[i].rectTransform, 3);
+                slot.gameObject.SetActive(false);
+            }
+        }
+
+        void BuildZoneButton(Transform parent)
+        {
+            _zoneButton = UIFactory.CreateButton(parent, "BuyZone", "", UIFactory.Sun,
+                new Vector2(650, 100), BuyZone, 28);
+            UIFactory.Place((RectTransform)_zoneButton.transform, new Vector2(.5f, 0), new Vector2(.5f, 0),
+                new Vector2(0, 35), new Vector2(650, 100));
+            _zoneLabel = _zoneButton.GetComponentInChildren<TMPro.TMP_Text>();
+            _zoneButton.gameObject.SetActive(false);
+        }
+
+        void UpdateZoneOffer(RoundManager round, PlayerSphereController player, bool playing)
+        {
+            if (_zoneButton == null) return;
+            var zones = round != null ? round.Zones : null;
+            _nearbyZone = playing && round != null && round.IsRunActive && player != null && player.IsAlive &&
+                zones != null && _nearbyDrink < 0 && _nearbyShot < 0 ? zones.NearbyOffer(player.transform.position) : -1;
+            _zoneButton.gameObject.SetActive(_nearbyZone >= 2);
+            if (_nearbyZone < 2) return;
+            _zoneLabel.text = "ABRIR ZONA " + _nearbyZone + " · " + zones.Cost(_nearbyZone) + " PUNTOS";
+            _zoneButton.interactable = zones.CanBuy(_nearbyZone);
+            StyleShopOffer(_zoneButton, _zoneLabel, UIFactory.Sun);
+        }
+
+        void BuyZone()
+        {
+            var round = RoundManager.Instance;
+            if (round != null && round.Zones != null) round.Zones.Buy(_nearbyZone);
+        }
+
+        void UpdateEffects(PlayerSphereController player)
+        {
+            var effects = player != null ? player.RunEffects : null;
+            for (int i = 0; i < _effectLabels.Length; i++)
+            {
+                if (_effectLabels[i] == null) continue;
+                int seconds = effects != null ? Mathf.CeilToInt(effects.Remaining((TemporaryEffect)i)) : 0;
+                if (_effectSeconds[i] == seconds) continue;
+                _effectSeconds[i] = seconds;
+                _effectLabels[i].transform.parent.gameObject.SetActive(seconds > 0);
+                if (seconds > 0) _effectLabels[i].text = EffectNames[i] + " " + seconds + "s";
+            }
         }
 
         void BuildDrinkButton(Transform parent)
@@ -385,7 +458,9 @@ namespace Game.UI
             _enemiesLabel.text = round.EnemiesDefeatedThisRound + " / " + round.EnemiesThisRound;
             _pointsLabel.text = "PUNTOS " + round.Points;
             _coinsLabel.text = "PREMIO +" + round.CoinsEarned;
-            _bonusLabel.text = round.BonusDrops > 0 ? "BONUS x" + round.BonusDrops : "";
+            _bonusLabel.text = round.Zones != null && round.Zones.Enabled
+                ? "ZONAS " + round.Zones.UnlockedCount + "/9 · BONUS x" + round.BonusDrops
+                : round.BonusDrops > 0 ? "BONUS x" + round.BonusDrops : "";
         }
 
         void UpdateBanner(RoundManager round, bool playing)

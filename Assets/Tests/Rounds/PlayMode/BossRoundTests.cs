@@ -7,6 +7,7 @@ using Game.Enemies;
 using Game.Player;
 using Game.Pokemon;
 using Game.Rounds;
+using Game.Terrain;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -20,6 +21,8 @@ namespace Game.Tests.Rounds
         readonly Dictionary<string, int?> _prefs = new Dictionary<string, int?>();
         RoundManager _round;
         PlayerSphereController _player;
+        TerrainSettings _terrainSettings;
+        Material _terrainMaterial;
         bool _blocked, _over;
         Random.State _random;
 
@@ -41,12 +44,27 @@ namespace Game.Tests.Rounds
                 _prefs[key] = PlayerPrefs.HasKey(key) ? (int?)PlayerPrefs.GetInt(key) : null;
             GameFlow.Blocked = false;
             GameFlow.Over = false;
+            var world = Create("BossFixtureTerrain");
+            world.SetActive(false);
+            _terrainSettings = ScriptableObject.CreateInstance<TerrainSettings>();
+            _terrainMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            _terrainSettings.terrainMaterial = _terrainMaterial;
+            _terrainSettings.chunkSize = 16;
+            _terrainSettings.chunksX = _terrainSettings.chunksZ = 4;
+            _terrainSettings.flatRadius = 1000f;
+            _terrainSettings.flatLevel = 1;
+            _terrainSettings.lakeCount = 0;
+            _terrainSettings.loadRadius = 0;
+            var terrain = world.AddComponent<WorldTerrain>();
+            Set(terrain, "settings", _terrainSettings);
+            world.SetActive(true);
             _round = Create("RoundTest").AddComponent<RoundManager>();
             _round.enabled = false; // manually drive lifecycle, no input or progression saves
             _round.Drinks.enabled = false;
             _round.ShotStations.enabled = false;
             _player = Create("PlayerTest").AddComponent<PlayerSphereController>();
             _player.enabled = false;
+            _player.transform.position = terrain.SpawnPosition;
         }
 
         GameObject Create(string name)
@@ -64,6 +82,8 @@ namespace Game.Tests.Rounds
             foreach (var burst in Object.FindObjectsByType<HitBurst>()) Object.Destroy(burst.gameObject);
             foreach (var go in _objects) if (go != null) Object.Destroy(go);
             yield return null;
+            if (_terrainSettings != null) Object.Destroy(_terrainSettings);
+            if (_terrainMaterial != null) Object.Destroy(_terrainMaterial);
             foreach (var pref in _prefs)
                 if (pref.Value.HasValue) PlayerPrefs.SetInt(pref.Key, pref.Value.Value);
                 else PlayerPrefs.DeleteKey(pref.Key);
@@ -107,7 +127,7 @@ namespace Game.Tests.Rounds
             _round.NotifyEnemyKilled(boss);
             Assert.AreEqual(earned, _round.Points, "duplicate death must not pay twice");
             Assert.AreEqual(1, _round.EnemiesDefeatedThisRound);
-            Assert.That(earned, Is.EqualTo(280).Or.EqualTo(560), "28 replaced kills, optional equivalent bonus");
+            Assert.AreEqual(280, earned, "28 replaced kills; ground pickups never award points on death");
             Assert.AreEqual(28, _round.CoinsEarned);
             Call(_round, "Update");
             Assert.AreEqual(RoundManager.RoundPhase.Clearing, _round.Phase);
@@ -158,7 +178,7 @@ namespace Game.Tests.Rounds
             var normal = Create("ContactNormal").AddComponent<EnemyTriangle>();
             normal.InitializeRound(1, RoundDifficulty.Stats(1), false);
             yield return null;
-            // No terrain in this fixture; drive contact directly instead of Update's movement.
+            // Drive contact directly to isolate damage/protection from pursuit.
             Assert.Greater(Time.deltaTime, 0f);
             float health = _player.Health01 * _player.MaxHealth;
             Call(boss, "ApplyContact", _player);
@@ -227,6 +247,26 @@ namespace Game.Tests.Rounds
             Call(_round, "StartRound", round);
             Assert.AreEqual(total, _round.EnemiesThisRound);
             Assert.AreEqual(alive, Call(_round, "MaxAliveForRound"));
+        }
+
+        [UnityTest]
+        public IEnumerator FailedSpawnSearchNeverUsesPlayerPositionOrConsumesWaveBudget()
+        {
+            Call(_round, "StartRound", 1);
+            Call(_round, "BeginFighting");
+            Set(_round, "spawnRadiusMin", 1000f);
+            Set(_round, "spawnRadiusMax", 1001f);
+            Call(_round, "Update");
+            Assert.AreEqual(0, EnemyTriangle.All.Count);
+            Assert.AreEqual(0, _round.AliveCount);
+            Assert.AreEqual(0, typeof(RoundManager).GetField("_spawnedThisRound", Private).GetValue(_round));
+            Set(_round, "spawnRadiusMin", 10f);
+            Set(_round, "spawnRadiusMax", 17f);
+            Set(_round, "_spawnTimer", 100f);
+            Call(_round, "Update");
+            Assert.AreEqual(1, EnemyTriangle.All.Count, "Failed attempts remain available for a later retry.");
+            Assert.Greater(Vector3.Distance(EnemyTriangle.All[0].transform.position, _player.transform.position), 9f);
+            yield return null;
         }
 
         [UnityTest]

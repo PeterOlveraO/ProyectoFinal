@@ -67,6 +67,7 @@ namespace Game.Terrain
             var renderer = gameObject.AddComponent<MeshRenderer>();
             renderer.sharedMaterials = _materials;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            if (terrain.ZoneFog != null) terrain.ZoneFog.RegisterSurface(renderer);
         }
 
         static void Quad(List<Vector3> v, List<Vector3> n, List<int> t,

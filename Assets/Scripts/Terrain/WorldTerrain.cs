@@ -35,6 +35,9 @@ namespace Game.Terrain
 
         public TerrainSettings Settings => settings;
         public HeightMap Map => _map;
+        /// <summary>Shared collision/navigation. Null for legacy worlds and fixtures.</summary>
+        public WorldTraversal Traversal { get; private set; }
+        public WorldZoneFog ZoneFog { get; private set; }
         public int ChunkCount => _chunks.Length;
         public int ActiveChunkCount => _activeCount;
         public float ChunkWorldSize => settings.chunkSize * settings.blockSize;
@@ -86,6 +89,7 @@ namespace Game.Terrain
 
         void Update()
         {
+            if (Traversal != null && player != null) Traversal.UpdateTarget(player.position);
             if (settings.loadRadius <= 0)
             {
                 if (_activeCount != _chunks.Length) SetAllActive();
@@ -146,6 +150,7 @@ namespace Game.Terrain
         {
             surfacePosition = default;
             if (_map == null || float.IsNaN(clearance) || float.IsInfinity(clearance)) return false;
+            if (Traversal != null && !Traversal.CanOccupyGeography(worldPosition, Mathf.Max(0f, clearance))) return false;
             Vector3 local = worldPosition - transform.position;
             float bx = local.x / settings.blockSize;
             float bz = local.z / settings.blockSize;
@@ -180,11 +185,46 @@ namespace Game.Terrain
             return _chunks[chunkZ * settings.chunksX + chunkX];
         }
 
+        /// <summary>
+        /// Call after WorldDecorator builds its static capsule colliders. Uses serialized
+        /// capsule geometry, so inactive/unloaded chunks still contribute correct bounds.
+        /// Navigation and swept queries then use spatial buckets without Physics calls.
+        /// </summary>
+        public void RebuildTraversalObstacles()
+        {
+            if (Traversal == null) return;
+            var capsules = GetComponentsInChildren<CapsuleCollider>(true);
+            var bounds = new System.Collections.Generic.List<Bounds>(capsules.Length);
+            foreach (var capsule in capsules)
+            {
+                if (capsule == null || capsule.isTrigger || !capsule.enabled) continue;
+                Vector3 size = Vector3.one * (capsule.radius * 2f);
+                size[capsule.direction] = Mathf.Max(capsule.height, capsule.radius * 2f);
+                // The generated trunk capsules are upright; transform the local box
+                // conservatively as well for deliberately rotated decorative trunks.
+                Vector3 ex = capsule.transform.TransformVector(Vector3.right * size.x * .5f);
+                Vector3 ey = capsule.transform.TransformVector(Vector3.up * size.y * .5f);
+                Vector3 ez = capsule.transform.TransformVector(Vector3.forward * size.z * .5f);
+                Vector3 extents = new Vector3(Mathf.Abs(ex.x) + Mathf.Abs(ey.x) + Mathf.Abs(ez.x),
+                    Mathf.Abs(ex.y) + Mathf.Abs(ey.y) + Mathf.Abs(ez.y),
+                    Mathf.Abs(ex.z) + Mathf.Abs(ey.z) + Mathf.Abs(ez.z));
+                bounds.Add(new Bounds(capsule.transform.TransformPoint(capsule.center), extents * 2f));
+            }
+            Traversal.RebuildObstacles(bounds);
+            if (player != null) Traversal.UpdateTarget(player.position);
+        }
+
         // ---------------------------------------------------------- Generación
 
         void Generate()
         {
             _map = HeightMapGenerator.Generate(settings);
+            if (settings.enableWorldZones)
+            {
+                Traversal = new WorldTraversal(_map, settings, transform.position);
+                ZoneFog = gameObject.AddComponent<WorldZoneFog>();
+                ZoneFog.Initialize(this);
+            }
             _materials = TerrainMaterials.Create(settings);
 
             int count = settings.chunksX * settings.chunksZ;
@@ -215,6 +255,7 @@ namespace Game.Terrain
                     var chunkRenderer = go.AddComponent<MeshRenderer>();
                     chunkRenderer.sharedMaterials = _materials;
                     go.AddComponent<MeshCollider>().sharedMesh = mesh;
+                    if (ZoneFog != null) ZoneFog.RegisterSurface(chunkRenderer);
 
                     // La carga por radio ya limita los chunks. No apagar su renderer con un
                     // segundo frustum: en iOS la cámara puede actualizarse después del culler.
@@ -226,6 +267,7 @@ namespace Game.Terrain
             }
 
             CreateLakes();
+            if (Traversal != null) WorldMountainBoundary.Create(this);
 
             if (GetComponent<VisibilityCuller>() == null) gameObject.AddComponent<VisibilityCuller>();
 
@@ -254,7 +296,9 @@ namespace Game.Terrain
                     rimY - settings.stepHeight * 0.25f);
                 _lakeMeshes.Add(mesh);
                 water.AddComponent<MeshFilter>().sharedMesh = mesh;
-                water.AddComponent<MeshRenderer>().sharedMaterial = _waterMaterial;
+                var waterRenderer = water.AddComponent<MeshRenderer>();
+                waterRenderer.sharedMaterial = _waterMaterial;
+                if (ZoneFog != null) ZoneFog.RegisterSurface(waterRenderer);
 
                 // Siempre activos, también si el chunk vecino se descarga. No dependen
                 // de OnTriggerEnter ni de conocer el controlador concreto del jugador.

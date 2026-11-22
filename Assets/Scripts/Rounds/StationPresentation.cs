@@ -8,6 +8,9 @@ namespace Game.Rounds
     {
         GameObject _sign;
         float _nextCheck;
+        int _zone = 1;
+
+        public void SetZone(int zone) => _zone = zone;
 
         public void Initialize(GameObject sign)
         {
@@ -21,7 +24,8 @@ namespace Game.Rounds
             _nextCheck = Time.unscaledTime + .15f;
             var player = PlayerSphereController.Instance;
             var rounds = RoundManager.Instance;
-            bool show = player != null && rounds != null && rounds.IsRunActive &&
+            bool show = WorldShopPlacement.CanAccessZone(_zone) &&
+                player != null && rounds != null && rounds.IsRunActive &&
                 (player.transform.position - transform.position).sqrMagnitude < 5.2f * 5.2f;
             if (_sign.activeSelf != show) _sign.SetActive(show);
         }

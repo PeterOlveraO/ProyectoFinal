@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Game.Rendering;
+using Game.Rounds;
 using Game.Terrain;
 using UnityEngine;
 
@@ -41,6 +42,7 @@ namespace Game.Pokemon
         }
 
         readonly List<Occupied> _placed = new List<Occupied>();
+        readonly List<Bounds> _blockingBounds = new List<Bounds>();
         readonly List<Vector3> _groveCenters = new List<Vector3>();
         System.Random _random;
         Vector3 _activeGroveCenter;
@@ -57,6 +59,7 @@ namespace Game.Pokemon
 
             _random = new System.Random(unchecked(terrain.Settings.seed * 7919 + 101));
             _placed.Clear();
+            _blockingBounds.Clear();
             ConfigureWater(terrain);
             LakeShoreline.Create(terrain);
             CardinalPathOverlay.Create(terrain);
@@ -66,9 +69,13 @@ namespace Game.Pokemon
 
             // Cohortes de una misma silueta por claro, en vez de sortear todas las formas
             // en cada celda. Los centros nacen solo sobre suelo plano y fuera de reservas.
-            PlaceGroup(terrain, root, CatalogTrees(), canopyTrees, 12f, 76f);
-            PlaceGroup(terrain, root, CatalogShrubs(), shrubs, 12f, 76f);
-            PlaceGroup(terrain, root, CatalogPlants(), groundPlants, 12f, 76f);
+            float extent = DecorationExtent(terrain);
+            float density = terrain.Settings.enableWorldZones
+                ? terrain.Map.Width * terrain.Map.Depth / (160f * 160f) : 1f;
+            PlaceGroup(terrain, root, CatalogTrees(), Mathf.RoundToInt(canopyTrees * density), 12f, extent);
+            PlaceGroup(terrain, root, CatalogShrubs(), Mathf.RoundToInt(shrubs * density), 12f, extent);
+            PlaceGroup(terrain, root, CatalogPlants(), Mathf.RoundToInt(groundPlants * density), 12f, extent);
+            if (terrain.Traversal != null) terrain.Traversal.RebuildObstacles(_blockingBounds);
             Debug.Log($"[WorldDecorator] Colocados {_placed.Count} elementos; cantidades configuradas son máximos.");
         }
 
@@ -177,9 +184,12 @@ namespace Game.Pokemon
             {
                 Vector3 point = terrain.BlockTopCenter(x, z);
                 Vector3 offset = point - terrain.SpawnPosition;
-                if (offset.magnitude < 22f || offset.magnitude > 70f ||
+                if (offset.magnitude < 22f || offset.magnitude > DecorationExtent(terrain) ||
                     IsReserved(offset, tree.Clearance, spawnClearRadius,
                     terrain.Settings.rampWidth * terrain.BlockSize, terrain.Settings.rampHalfAngle) ||
+                    WorldShopPlacement.IsReservedForShop(terrain, point, tree.Clearance) ||
+                    (terrain.Traversal != null && terrain.Traversal.Layout.IsAccessCorridor(point, tree.Clearance)) ||
+                    !InsideDecoratedBounds(terrain, x, z, tree.Clearance) ||
                     !SuitableGround(terrain, x, z, tree)) continue;
                 candidates.Add(point);
             }
@@ -201,7 +211,7 @@ namespace Game.Pokemon
                 }
                 if (near) continue;
                 _groveCenters.Add(point);
-                if (_groveCenters.Count == 12) break;
+                if (_groveCenters.Count == (terrain.Settings.enableWorldZones ? 30 : 12)) break;
             }
         }
 
@@ -239,11 +249,15 @@ namespace Game.Pokemon
             go.transform.SetParent(chunk != null ? chunk.transform : root, true);
             go.transform.position = position;
             AddFloraCollider(go, profile);
+            if (profile.Kind != Kind.Plant)
+                _blockingBounds.Add(new Bounds(position + Vector3.up * (profile.ColliderHeight * .5f),
+                    new Vector3(profile.Footprint * 2, profile.ColliderHeight, profile.Footprint * 2)));
 
             var visual = new GameObject("Visual");
             visual.transform.SetParent(go.transform, false);
             var renderer = visual.AddComponent<SpriteRenderer>();
             renderer.sprite = sprite;
+            if (terrain.ZoneFog != null) terrain.ZoneFog.RegisterProp(renderer, position);
             float spriteHeight = sprite.rect.height / sprite.pixelsPerUnit;
             float spriteWidth = sprite.rect.width / sprite.pixelsPerUnit;
             float scale = Mathf.Min(profile.Height / spriteHeight, profile.Width / spriteWidth);
@@ -306,6 +320,9 @@ namespace Game.Pokemon
                 // Reserva tycoon: disco de radio >=15 MÁS huella visual, y cuatro corredores.
                 if (IsReserved(candidate - spawn, profile.Clearance, spawnClearRadius,
                     terrain.Settings.rampWidth * block, terrain.Settings.rampHalfAngle)) continue;
+                if (WorldShopPlacement.IsReservedForShop(terrain, candidate, profile.Clearance) ||
+                    (terrain.Traversal != null && terrain.Traversal.Layout.IsAccessCorridor(candidate, profile.Clearance)) ||
+                    !InsideDecoratedBounds(terrain, x, z, profile.Clearance)) continue;
                 if (!SuitableGround(terrain, x, z, profile)) continue;
                 bool close = false;
                 foreach (var other in _placed)
@@ -337,6 +354,20 @@ namespace Game.Pokemon
                         terrain.IsLakeAtWorld(terrain.BlockTopCenter(sx, sz))) return false;
                 }
             return true;
+        }
+
+        static float DecorationExtent(WorldTerrain terrain) =>
+            terrain.Settings.enableWorldZones
+                ? new Vector2(terrain.Map.Width, terrain.Map.Depth).magnitude * terrain.BlockSize * .5f - 4f
+                : 76f;
+
+        static bool InsideDecoratedBounds(WorldTerrain terrain, int x, int z, float clearance)
+        {
+            if (!terrain.Settings.enableWorldZones) return true;
+            float margin = (terrain.Traversal != null ? terrain.Traversal.Layout.MountainWidth : 16f) + clearance + 2f;
+            return x * terrain.BlockSize >= margin && z * terrain.BlockSize >= margin &&
+                (terrain.Map.Width - x - 1) * terrain.BlockSize >= margin &&
+                (terrain.Map.Depth - z - 1) * terrain.BlockSize >= margin;
         }
     }
 }
