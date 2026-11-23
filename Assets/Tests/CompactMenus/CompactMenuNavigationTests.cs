@@ -122,6 +122,179 @@ namespace Game.Tests.CompactMenus
         }
 
         [UnityTest]
+        public IEnumerator TestInputFocusAndBackRouteKeepTheRunPaused()
+        {
+            var events = UnityEngine.EventSystems.EventSystem.current == null
+                ? new GameObject("TestRewardsEventSystem", typeof(UnityEngine.EventSystems.EventSystem)) : null;
+            try
+            {
+                Click("MainMenu", "PlayButton");
+                string run = JsonUtility.ToJson(RoundManager.Instance.RunPokemon);
+                Game.Weather.WeatherController.Instance.SetWeather(Game.Weather.WeatherKind.Rain);
+                _menu.Pause();
+                Click("PauseMenu", "Tests");
+                AssertPaused("TestMenu");
+                int coins = PokemonCollection.Progression.Coins;
+                var input = CanvasRoot().Find("TestMenu").GetComponentInChildren<TMPro.TMP_InputField>();
+                UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(input.gameObject);
+                input.ActivateInputField();
+                yield return null;
+                Assert.IsTrue(input.isFocused);
+                input.text = "777";
+                Assert.IsTrue(GameFlow.Blocked, "Gameplay M/Space must stay gated while editing.");
+                // Update routes Escape and gamepad East through this exact navigation method.
+                Back();
+                AssertPaused("PauseMenu");
+                Assert.IsFalse(input.isFocused);
+                Assert.AreEqual(run, JsonUtility.ToJson(RoundManager.Instance.RunPokemon));
+                Click("PauseMenu", "Resume");
+                AssertRunning();
+                Assert.AreEqual(Game.Weather.WeatherKind.Rain, Game.Weather.WeatherController.Instance.Current);
+                var eventSystem = UnityEngine.EventSystems.EventSystem.current;
+                Assert.IsNull(eventSystem.currentSelectedGameObject, "Resume must release UI Submit focus.");
+                foreach (var button in CanvasRoot().Find("RunControls").GetComponentsInChildren<UnityEngine.UI.Button>(true))
+                {
+                    Assert.AreEqual(UnityEngine.UI.Navigation.Mode.None, button.navigation.mode);
+                    button.OnPointerDown(new UnityEngine.EventSystems.PointerEventData(eventSystem)
+                        { button = UnityEngine.EventSystems.PointerEventData.InputButton.Left });
+                    Assert.IsNull(eventSystem.currentSelectedGameObject, "HUD pointer-down must not capture Submit.");
+                    button.OnPointerUp(new UnityEngine.EventSystems.PointerEventData(eventSystem));
+                }
+                // The UI module dispatches Submit only to the currently selected object.
+                UnityEngine.EventSystems.ExecuteEvents.Execute(eventSystem.currentSelectedGameObject,
+                    new UnityEngine.EventSystems.BaseEventData(eventSystem), UnityEngine.EventSystems.ExecuteEvents.submitHandler);
+                AssertRunning();
+                Assert.AreEqual(coins, PokemonCollection.Progression.Coins, "Back/resume/Submit must not award coins.");
+                Assert.AreEqual(run, JsonUtility.ToJson(RoundManager.Instance.RunPokemon));
+                _menu.AbandonRun();
+                Assert.AreEqual(Game.Weather.WeatherKind.Sunny, Game.Weather.WeatherController.Instance.Current);
+            }
+            finally { if (events != null) Object.DestroyImmediate(events); }
+        }
+
+        [TestCase(Rarity.F)]
+        [TestCase(Rarity.A)]
+        [TestCase(Rarity.S)]
+        public void TestMenuAwardsChosenSpeciesToNormalCollectionWithoutChangingActiveRun(Rarity rarity)
+        {
+            Click("MainMenu", "PlayButton");
+            string run = JsonUtility.ToJson(RoundManager.Instance.RunPokemon);
+            string equipped = PokemonCollection.Equipped.instanceId;
+            _menu.Pause();
+            Click("PauseMenu", "Tests");
+            SelectTestSpecies("mew");
+            Click("TestMenu", "Rarity" + rarity);
+            Assert.AreEqual(1, PokemonCollection.Inventory.Count, "Selection alone must not award.");
+            Click("TestMenu", "GrantPokemon");
+            var granted = PokemonCollection.Inventory.Single(p => p.speciesId == "mew");
+            Assert.AreEqual(rarity, granted.rarity);
+            Assert.AreEqual(equipped, PokemonCollection.Equipped.instanceId);
+            Assert.AreEqual(run, JsonUtility.ToJson(RoundManager.Instance.RunPokemon));
+            AssertPaused("TestMenu");
+            Assert.AreEqual(granted.instanceId, ReloadProgression().Inventory.Single(p => p.speciesId == "mew").instanceId);
+            Back();
+            AssertPaused("PauseMenu");
+            Click("PauseMenu", "Resume");
+            AssertRunning();
+            Assert.AreEqual(run, JsonUtility.ToJson(RoundManager.Instance.RunPokemon));
+            _menu.AbandonRun();
+            Assert.IsTrue(PokemonCollection.Equip(granted.instanceId).success);
+            Click("MainMenu", "PlayButton");
+            Assert.AreEqual(granted.instanceId, RoundManager.Instance.RunPokemon.instanceId);
+        }
+
+        [Test]
+        public void MainTestMenuPersistsPresetsAndCustomCoinsAndReturnsToMain()
+        {
+            Click("MainMenu", "Tests");
+            AssertActive("TestMenu");
+            Assert.IsFalse(_menu.IsPlaying);
+            Assert.IsTrue(GameFlow.Blocked);
+            foreach (int amount in new[] { 100, 1000, 10000 }) Click("TestMenu", "Coins" + amount);
+            var input = CanvasRoot().Find("TestMenu").GetComponentInChildren<TMPro.TMP_InputField>();
+            input.text = "123";
+            Click("TestMenu", "GrantCoins");
+            Assert.AreEqual(11223, ReloadProgression().Coins);
+            foreach (string invalid in new[] { "", "0", "-2", "1.5", "2147483648" })
+            {
+                input.text = invalid;
+                Click("TestMenu", "GrantCoins");
+                Assert.AreEqual(11223, PokemonCollection.Progression.Coins, invalid);
+                StringAssert.Contains("positiva", TestFeedback());
+            }
+            Back();
+            AssertActive("MainMenu");
+            Assert.IsFalse(_menu.IsPlaying);
+            Click("MainMenu", "Tests");
+            Click("TestMenu", "Back");
+            AssertActive("MainMenu");
+        }
+
+        [Test]
+        public void TestMenuShowsFullCollectionAndStorageFailure()
+        {
+            Click("MainMenu", "Tests");
+            for (int i = 1; i < 10; i++) Click("TestMenu", "GrantPokemon");
+            Click("TestMenu", "GrantPokemon");
+            Assert.AreEqual(10, PokemonCollection.Inventory.Count);
+            StringAssert.Contains("Colección llena", TestFeedback());
+            Click("TestMenu", "Coins100");
+            Assert.AreEqual(100, ReloadProgression().Coins);
+            // Another session commits first: the live menu must report the CAS failure.
+            var otherSession = ReloadProgression();
+            Assert.IsTrue(otherSession.GrantForTesting(1000).success);
+            Click("TestMenu", "Coins100");
+            StringAssert.Contains("No se pudo guardar", TestFeedback());
+            Assert.IsFalse(PokemonCollection.Progression.IsReady);
+            Assert.AreEqual(1100, ReloadProgression().Coins);
+            Assert.AreEqual(10, ReloadProgression().Inventory.Count);
+            Assert.IsFalse(CanvasRoot().Find("TestMenu").GetComponentsInChildren<UnityEngine.UI.Button>()
+                .Single(b => b.name == "GrantPokemon").interactable);
+            Click("TestMenu", "Back");
+            AssertActive("MainMenu");
+        }
+
+        [Test]
+        public void TestMenuCannotBypassStarterChoice()
+        {
+            var progression = new ProgressionService(
+                new AtomicProgressionStore(Path.Combine(_directory, "new-save.json")),
+                JsonUtility.FromJson<SpeciesCatalog>(Resources.Load<TextAsset>("PokemonProgression/catalog").text),
+                JsonUtility.FromJson<GachaConfig>(Resources.Load<TextAsset>("PokemonProgression/gacha").text));
+            Service.SetValue(null, progression);
+            _menu.ShowMainMenu();
+            AssertActive("StarterMenu");
+            Assert.IsFalse(CanvasRoot().Find("StarterMenu").GetComponentsInChildren<UnityEngine.UI.Button>()
+                .Any(b => b.name == "Tests"));
+            typeof(GameMenuController).GetMethod("OpenTests", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(_menu, null);
+            AssertActive("StarterMenu");
+            Assert.IsTrue(progression.NeedsStarter);
+            Assert.IsEmpty(progression.Inventory);
+            Click("StarterMenu", "ConfirmStarter");
+            Click("ResultMenu", "Continue");
+            Click("MainMenu", "Tests");
+            AssertActive("TestMenu");
+        }
+
+        void SelectTestSpecies(string id)
+        {
+            int index = PokemonCollection.Catalog.ToList().FindIndex(s => s.id == id);
+            Assert.GreaterOrEqual(index, 0);
+            for (int i = 0; i < index; i++) Click("TestMenu", "NextSpecies");
+        }
+
+        void Back() => typeof(GameMenuController).GetMethod("NavigateBack",
+            BindingFlags.Instance | BindingFlags.NonPublic).Invoke(_menu, null);
+
+        static string TestFeedback() => CanvasRoot().Find("TestMenu").GetComponentsInChildren<TMPro.TMP_Text>()
+            .Single(t => t.name == "Subtitle").text;
+
+        ProgressionService ReloadProgression() => new ProgressionService(
+            new AtomicProgressionStore(Path.Combine(_directory, "progression.json")),
+            JsonUtility.FromJson<SpeciesCatalog>(Resources.Load<TextAsset>("PokemonProgression/catalog").text),
+            JsonUtility.FromJson<GachaConfig>(Resources.Load<TextAsset>("PokemonProgression/gacha").text));
+
+        [UnityTest]
         public IEnumerator GachaPreviewsCycleWhilePausedWithoutSpendingOrDuplicatingSlots()
         {
             Click("MainMenu", "Gacha");

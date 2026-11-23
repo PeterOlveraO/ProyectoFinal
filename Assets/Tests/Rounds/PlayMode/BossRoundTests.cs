@@ -114,7 +114,7 @@ namespace Game.Tests.Rounds
             Assert.IsTrue(boss.IsBoss);
             Assert.AreEqual(216, boss.MaxHealth);
             Assert.AreEqual(39f, boss.ContactDamage);
-            Assert.AreEqual(3.12f, boss.Speed, .0001f);
+            Assert.AreEqual(3.12f * 1.5f, boss.Speed, .0001f);
             Assert.AreEqual("species_celebi", boss.GetComponentInChildren<SpriteRenderer>().sprite.name);
             for (int i = 0; i < 10; i++)
             {
@@ -146,7 +146,7 @@ namespace Game.Tests.Rounds
             Assert.IsFalse(EnemyTriangle.All[0].IsBoss);
             Assert.AreEqual(24, EnemyTriangle.All[0].Health);
             Assert.AreEqual(17.75f, EnemyTriangle.All[0].ContactDamage);
-            Assert.AreEqual(4.32f, EnemyTriangle.All[0].Speed, .0001f);
+            Assert.AreEqual(4.32f * 1.5f, EnemyTriangle.All[0].Speed, .0001f);
         }
 
         [UnityTest]
@@ -167,7 +167,7 @@ namespace Game.Tests.Rounds
             Call(_round, "Update");
             Assert.AreEqual(1, EnemyTriangle.All.Count);
             Assert.AreEqual(14, EnemyTriangle.All[0].Health);
-            Assert.AreEqual(3.92f, EnemyTriangle.All[0].Speed, .0001f);
+            Assert.AreEqual(3.92f * 1.5f, EnemyTriangle.All[0].Speed, .0001f);
             Assert.IsFalse(EnemyTriangle.All[0].IsBoss);
         }
 

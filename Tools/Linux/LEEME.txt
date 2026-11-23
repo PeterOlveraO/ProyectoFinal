@@ -1,0 +1,32 @@
+PKETER — Linux x86_64 (Manjaro)
+==============================
+
+Extrae la carpeta completa y abre Jugar.sh. No necesitas Unity ni Unity Hub.
+Desde una terminal en esta carpeta:
+  chmod +x Jugar.sh PKETER.x86_64
+  ./Jugar.sh
+
+Conserva PKETER_Data, UnityPlayer.so y el resto de los archivos junto al ejecutable.
+
+Controles
+  WASD o flechas: moverse.
+  Mantener Espacio: disparar al enemigo válido más cercano.
+  Clic izquierdo: apuntar y disparar hacia el cursor.
+  M: alternar soleado, nublado, neblina, lluvia, atardecer y noche.
+  Esc: pausa / volver.
+  R: regresar al punto inicial.
+
+Menú principal y pausa > PRUEBAS:
+añade monedas o Pokémon de clase F, A o S a la colección normal.
+Los cambios se guardan. El inventario conserva su capacidad habitual.
+
+Guardado
+  ~/.config/unity3d/DefaultCompany/ProyectoFinal/
+En el primer arranque, Jugar.sh importa tu progreso del Unity Hub Flatpak
+si existe y todavía no tienes un guardado nativo. Después el juego utiliza
+su guardado nativo. Una variable XDG_CONFIG_HOME explícita cambia esa ubicación.
+
+Si tu controlador gráfico no inicia el juego con la configuración predeterminada:
+  ./Jugar.sh -force-glcore
+Log del jugador:
+  ~/.config/unity3d/DefaultCompany/ProyectoFinal/Player.log

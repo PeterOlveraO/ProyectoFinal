@@ -1,0 +1,23 @@
+{
+    "name": "Game.Weather.PlayMode.Tests",
+    "rootNamespace": "Game.Weather.Tests",
+    "references": [
+        "Game.Runtime",
+        "Game.Terrain",
+        "Unity.InputSystem",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": ["nunit.framework.dll"],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

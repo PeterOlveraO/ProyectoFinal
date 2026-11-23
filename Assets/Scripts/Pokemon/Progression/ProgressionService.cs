@@ -146,6 +146,29 @@ namespace Game.Pokemon.Progression
                 var next = Clone(); next.equippedId = instanceId; return Commit(next);
             }
         }
+        /// <summary>Persistent test rewards use the normal inventory and one atomic wallet/inventory write.
+        /// A null species grants only coins; a species grants one independent instance. Never equips it.</summary>
+        public OperationResult GrantForTesting(int coins = 0, string speciesId = null, Rarity rarity = Rarity.F)
+        {
+            lock (sync)
+            {
+                if (state == null) return OperationResult.Fail("SaveUnavailable");
+                if (!state.starterChosen) return OperationResult.Fail("StarterRequired");
+                if (coins < 0 || (coins == 0 && speciesId == null)) return OperationResult.Fail("InvalidAmount");
+                if ((int)rarity < (int)Rarity.F || (int)rarity > (int)Rarity.S)
+                    return OperationResult.Fail("InvalidRarity");
+                if (speciesId != null && !catalog.species.Exists(s => s.id == speciesId))
+                    return OperationResult.Fail("InvalidSpecies");
+                if ((long)state.coins + coins > int.MaxValue) return OperationResult.Fail("CoinOverflow");
+                if (speciesId != null && state.inventory.Count >= InventoryCapacity)
+                    return OperationResult.Fail("InventoryFull");
+                var next = Clone();
+                var instance = speciesId == null ? null : Create(speciesId, rarity);
+                next.coins += coins;
+                if (instance != null) next.inventory.Add(instance);
+                return Commit(next, instance);
+            }
+        }
         public OperationResult Release(string instanceId)
         {
             lock (sync)

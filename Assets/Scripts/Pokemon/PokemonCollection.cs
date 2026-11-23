@@ -51,6 +51,8 @@ namespace Game.Pokemon
         public static OperationResult ChooseStarter(string speciesId) => Progression.ChooseStarter(speciesId);
         public static OperationResult Pull(string poolId, string requestId) => Progression.Pull(poolId, requestId);
         public static OperationResult Equip(string instanceId) => Progression.Equip(instanceId);
+        public static OperationResult GrantForTesting(int coins = 0, string speciesId = null, Rarity rarity = Rarity.F) =>
+            Progression.GrantForTesting(coins, speciesId, rarity);
         public static OperationResult Release(string instanceId) => Progression.Release(instanceId);
         public static int Count => Catalog.Count;
         public static int Selected

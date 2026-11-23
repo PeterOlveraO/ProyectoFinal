@@ -53,7 +53,7 @@ namespace Game.Player
         public float MovementSpeed => (RoundManager.Instance != null && RoundManager.Instance.HasRunPokemon ?
             RoundManager.Instance.CombatStats.movementSpeed : moveSpeed) *
             (Drinks != null && Drinks.Has(DrinkType.Sprint) ? 1.3f : 1f) *
-            (_runEffects != null ? _runEffects.MovementMultiplier : 1f);
+            (_runEffects != null ? _runEffects.MovementMultiplier : 1f) * GameplayPace.MovementMultiplier;
         public float DamageReduction => Mathf.Min(RoundManager.Instance != null ? RoundManager.Instance.MaxDamageReduction : .65f,
             (RoundManager.Instance != null && RoundManager.Instance.HasRunPokemon ? RoundManager.Instance.CombatStats.damageReduction : 0f) +
             (Drinks != null && Drinks.Has(DrinkType.Armor) ? .25f : 0f) +

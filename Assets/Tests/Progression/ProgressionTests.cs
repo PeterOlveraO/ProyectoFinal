@@ -221,6 +221,134 @@ namespace Game.Pokemon.Tests
             service.Inventory[0].speciesId = "mew";
             Assert.AreEqual("jolteon", service.Equipped.speciesId);
         }
+        [TestCase(Rarity.F, 0)]
+        [TestCase(Rarity.A, 15)]
+        [TestCase(Rarity.S, 31)]
+        public void TestRewardPersistsNormalIndependentInstanceAndCoinsWithoutEquipping(Rarity rarity, int iv)
+        {
+            var store = new MemoryStore();
+            var service = Open(store);
+            service.ChooseStarter("jolteon");
+            string equipped = service.Equipped.instanceId;
+            int notifications = 0;
+            service.Changed += () => notifications++;
+            var result = service.GrantForTesting(100, "mew", rarity);
+            Assert.IsTrue(result.success, result.error);
+            Assert.AreEqual(1, notifications, "A combined reward is one committed transaction.");
+            Assert.AreEqual("mew", result.instance.speciesId);
+            Assert.AreEqual(rarity, result.instance.rarity);
+            Assert.AreEqual(new StatBlock(iv, iv, iv, iv), result.instance.ivs);
+            Assert.AreEqual(0, result.instance.duplicateUpgradeLevel);
+            Assert.That((int)result.instance.nature, Is.InRange(0, 24));
+            string grantedId = result.instance.instanceId;
+            result.instance.speciesId = "charizard";
+            var reload = Open(store);
+            Assert.AreEqual(1100, reload.Coins);
+            Assert.AreEqual(equipped, reload.Equipped.instanceId);
+            Assert.AreEqual("mew", reload.Inventory.Single(p => p.instanceId == grantedId).speciesId);
+            Assert.IsFalse(reload.NeedsStarter);
+            var duplicate = reload.GrantForTesting(speciesId: "mew", rarity: rarity);
+            Assert.IsTrue(duplicate.success);
+            Assert.AreNotEqual(grantedId, duplicate.instance.instanceId);
+            Assert.AreEqual(3, Open(store).Inventory.Count);
+            Assert.IsTrue(reload.Equip(grantedId).success, "Granted Pokémon use normal collection selection.");
+            Assert.AreEqual(grantedId, Open(store).Equipped.instanceId);
+        }
+        [Test] public void TestRewardAcceptsEveryCatalogSpecies()
+        {
+            var service = Open(new MemoryStore());
+            service.ChooseStarter("jolteon");
+            foreach (var species in catalog.species)
+            {
+                var result = service.GrantForTesting(speciesId: species.id);
+                Assert.IsTrue(result.success, species.id + ": " + result.error);
+                Assert.AreEqual(species.id, result.instance.speciesId);
+                Assert.IsTrue(service.Release(result.instance.instanceId).success);
+            }
+        }
+        [Test] public void TestRewardsRequireStarterAndNeverConsumeTheInitialChoice()
+        {
+            var store = new MemoryStore();
+            var service = Open(store);
+            string before = store.data;
+            Assert.AreEqual("StarterRequired", service.GrantForTesting(100).error);
+            Assert.AreEqual("StarterRequired", service.GrantForTesting(speciesId: "mew").error);
+            Assert.AreEqual(before, store.data);
+            Assert.IsTrue(service.NeedsStarter);
+            Assert.IsEmpty(service.Inventory);
+            Assert.IsTrue(service.ChooseStarter("blastoise").success);
+            Assert.IsTrue(service.GrantForTesting(100).success);
+            Assert.AreEqual("blastoise", Open(store).Equipped.speciesId);
+        }
+        [Test] public void InvalidTestRewardsDoNotWriteOrNotify()
+        {
+            var store = new MemoryStore();
+            var service = Open(store);
+            service.ChooseStarter("jolteon");
+            string before = store.data;
+            int notifications = 0;
+            service.Changed += () => notifications++;
+            Assert.AreEqual("InvalidAmount", service.GrantForTesting().error);
+            Assert.AreEqual("InvalidAmount", service.GrantForTesting(-1, "mew").error);
+            Assert.AreEqual("InvalidSpecies", service.GrantForTesting(100, "unknown").error);
+            Assert.AreEqual("InvalidSpecies", service.GrantForTesting(100, "").error);
+            Assert.AreEqual("InvalidRarity", service.GrantForTesting(100, "mew", (Rarity)3).error);
+            Assert.AreEqual("InvalidRarity", service.GrantForTesting(100, "mew", (Rarity)(-1)).error);
+            Assert.AreEqual("CoinOverflow", service.GrantForTesting(int.MaxValue, "mew").error);
+            Assert.AreEqual(before, store.data);
+            Assert.AreEqual(0, notifications);
+            Assert.IsTrue(service.IsReady, "Validation errors must not poison the save.");
+        }
+        [Test] public void FullTestCollectionRejectsTheWholeRewardButStillAllowsCoins()
+        {
+            var store = new MemoryStore();
+            var service = Open(store, 0);
+            service.ChooseStarter("jolteon");
+            for (int i = 1; i < 10; i++)
+                Assert.IsTrue(service.GrantForTesting(speciesId: "mew", rarity: Rarity.S).success);
+            string before = store.data;
+            Assert.AreEqual("InventoryFull", service.GrantForTesting(1000, "mew").error);
+            Assert.AreEqual(before, store.data);
+            foreach (int amount in new[] { 100, 1000, 10000, 123 })
+                Assert.IsTrue(service.GrantForTesting(amount).success);
+            var reload = Open(store);
+            Assert.AreEqual(11223, reload.Coins);
+            Assert.AreEqual(10, reload.Inventory.Count);
+            Assert.AreEqual("jolteon", reload.Equipped.speciesId);
+        }
+        [Test] public void TestRewardStorageFailureIsAtomicAndFailsClosed()
+        {
+            var store = new MemoryStore();
+            var service = Open(store);
+            service.ChooseStarter("jolteon");
+            string before = store.data;
+            int notifications = 0;
+            service.Changed += () => notifications++;
+            store.fail = true;
+            Assert.AreEqual("PersistenceFailure", service.GrantForTesting(1000, "mew", Rarity.S).error);
+            Assert.AreEqual(before, store.data);
+            Assert.AreEqual(0, notifications);
+            Assert.IsFalse(service.IsReady);
+            Assert.AreEqual("SaveUnavailable", service.GrantForTesting(100).error);
+            store.fail = false;
+            var reload = Open(store);
+            Assert.AreEqual(1000, reload.Coins);
+            Assert.AreEqual(1, reload.Inventory.Count);
+            Assert.AreEqual("jolteon", reload.Equipped.speciesId);
+        }
+        [Test] public void StaleTestSessionCannotOverwriteAnotherReward()
+        {
+            var store = new MemoryStore();
+            var service = Open(store);
+            service.ChooseStarter("jolteon");
+            var stale = Open(store);
+            Assert.IsTrue(service.GrantForTesting(1000, "mew", Rarity.S).success);
+            string committed = store.data;
+            Assert.AreEqual("PersistenceFailure", stale.GrantForTesting(100, "charizard").error);
+            Assert.AreEqual(committed, store.data);
+            Assert.AreEqual(2000, Open(store).Coins);
+            Assert.AreEqual(2, Open(store).Inventory.Count);
+        }
         [Test] public void RarityInitializesAllFourIndependentIVFields()
         {
             foreach (Rarity rarity in Enum.GetValues(typeof(Rarity)))

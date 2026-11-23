@@ -1,11 +1,12 @@
-# iOS regression/build gate
+# iOS + Linux regression/build gate
 
 The single workflow `.github/workflows/ios-build.yml` runs on branch pushes
 (except `main`) and manual dispatch. It deliberately has no `pull_request`
 trigger, so pushing a PR branch does not start duplicate builds.
 
-Dependency chain: **unity-tests → unity-export → xcode-ipa**. Test failure,
-missing XML, skipped/inconclusive cases or incomplete discovery blocks export.
+Dependency chains: **unity-tests → unity-export → xcode-ipa** and
+**unity-tests → linux-build**. Test failure, missing XML, skipped/inconclusive
+cases or incomplete discovery blocks both builds.
 XML and logs are uploaded with `always()`, including the gate diagnostic if
 Unity/license setup fails.
 
@@ -118,3 +119,25 @@ These checks do not prove signing, installation, rendering or touch-device
 behavior. The artifact remains **unsigned** and requires re-signing (e.g.
 AltStore/Sideloadly) or an Apple signing identity/profile. Physical iPhone smoke
 testing remains a manual release check.
+
+## Native Linux player
+
+`Game.EditorTools.CIBuild.BuildLinux` builds `Assets/Scenes/World.unity` for
+`StandaloneLinux64`, using Mono and a resizable 1280×720 window. Temporary player
+settings are restored after building. Default output:
+`Builds/Linux/PKETER/PKETER.x86_64`.
+
+The `PKETER-Linux-x86_64` artifact contains the complete `.tar.gz` package and
+SHA-256 checksum. Extract the entire archive and run `Jugar.sh`; Unity and Hub
+are not required. Keep `PKETER_Data`, `UnityPlayer.so` and the other bundled
+files beside the executable.
+
+Controls: WASD/arrows to move, hold Space for nearest-visible-target autofire,
+left mouse for cursor aim, M for six weather presets and Escape for pause.
+The PRUEBAS page in main/pause grants coins and F/A/S Pokémon to the normal save.
+Player/enemy movement and firing cadence are multiplied by 1.5 after existing
+stats and bonuses.
+
+`Jugar.sh` imports the Flatpak Hub save only when no native save exists.
+For native QA, set an isolated `XDG_CONFIG_HOME` so tests neither import nor
+modify the user's save. The launcher's `LEEME.txt` lists both save paths.

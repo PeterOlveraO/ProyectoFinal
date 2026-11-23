@@ -245,7 +245,7 @@ namespace Game.ShotShop.Tests
                 Assert.AreEqual(10, _attack.Damage, "combat stats + Power, not serialized base damage");
                 if (type == ShotType.Burst) { Tick(.12f, true, Vector3.forward); Tick(.12f, true, Vector3.forward); }
                 int before = Projectiles().Length;
-                float interval = ShotDefinitions.Interval(type, 1f) * .7f;
+                float interval = ShotDefinitions.Interval(type, 1f) * .7f / 1.5f;
                 Tick(interval - (type == ShotType.Burst ? .24f : 0f) - .01f, true, Vector3.forward);
                 Assert.AreEqual(before, Projectiles().Length);
                 Tick(.02f, true, Vector3.forward);
@@ -376,7 +376,7 @@ namespace Game.ShotShop.Tests
             Assert.IsTrue((bool)Call(projectile, "CheckHit"));
             Assert.AreEqual(10 - _attack.Damage * 2, first.Health);
             Assert.AreEqual(10, second.Health);
-            Tick(1.39f, true, Vector3.forward);
+            Tick(1.4f / 1.5f - .01f, true, Vector3.forward);
             Assert.AreEqual(1, Projectiles().Length);
             Tick(.02f, true, Vector3.forward);
             Assert.AreEqual(2, Projectiles().Length);

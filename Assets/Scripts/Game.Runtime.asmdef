@@ -7,6 +7,8 @@
         "Pokemon.Combat",
         "Unity.InputSystem",
         "Unity.Cinemachine",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime",
         "Unity.TextMeshPro",
         "UnityEngine.UI"
     ],

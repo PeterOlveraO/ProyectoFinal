@@ -24,7 +24,7 @@ namespace Game.Player
         [Tooltip("Zona muerta (0-1) para ignorar movimientos mínimos del dedo.")]
         [Range(0f, 0.5f)] [SerializeField] float deadZone = 0.12f;
 
-        [Tooltip("Mostrar también en el editor / PC (útil para probar con el ratón).")]
+        [Tooltip("Mostrar también en el editor (útil para probar con el ratón).")]
         [SerializeField] bool showInEditor;
 
         [Header("Aspecto")]
@@ -49,7 +49,7 @@ namespace Game.Player
 
         void Awake()
         {
-            if (!Application.isMobilePlatform && !showInEditor)
+            if (!Application.isMobilePlatform && !(Application.isEditor && showInEditor))
             {
                 gameObject.SetActive(false);
                 return;

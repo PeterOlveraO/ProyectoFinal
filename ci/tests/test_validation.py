@@ -230,16 +230,18 @@ class CheckoutAwareGateTests(unittest.TestCase):
         self.assertEqual(self.run_gate()[0], 0)
 
     def test_expansion_features_raise_existing_assembly_floors(self):
-        for relative, (mode, name, minimum) in validate_test_results.FEATURE_FLOORS.items():
+        for relative, floors in validate_test_results.FEATURE_FLOORS.items():
             with self.subTest(feature=relative):
                 feature = self.project / relative
                 feature.parent.mkdir(parents=True, exist_ok=True)
                 feature.write_text("// Feature regression fixture")
-                self.add_asmdef(name, f"{name}/{name}.asmdef")
+                for mode, name, minimum in floors:
+                    self.add_asmdef(name, f"{name}/{name}.asmdef")
                 self.write_results(validate_test_results.REQUIRED)
                 self.assertEqual(self.run_gate()[0], 1)
                 expected = validate_test_results.required_for_checkout(self.project)
-                self.assertEqual(expected[mode][name], minimum)
+                for mode, name, minimum in floors:
+                    self.assertEqual(expected[mode][name], minimum)
                 self.write_results(expected)
                 self.assertEqual(self.run_gate()[0], 0)
                 feature.unlink()

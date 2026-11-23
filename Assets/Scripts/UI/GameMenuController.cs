@@ -17,16 +17,17 @@ namespace Game.UI
     {
         const string VolumeKey = "pketer.volumen";
         const string QualityKey = "pketer.calidad";
-        enum ScreenId { None, Main, Pause, Settings, Collection, Skills, Starter, Gacha, Result, Release, Credits }
+        enum ScreenId { None, Main, Pause, Settings, Collection, Skills, Starter, Gacha, Result, Release, Credits, Tests }
         public static GameMenuController Instance { get; private set; }
         public bool IsPlaying { get; private set; }
         public bool IsPaused => IsPlaying && _screen != ScreenId.None;
 
         readonly Dictionary<ScreenId, MenuPage> _pages = new Dictionary<ScreenId, MenuPage>();
         RectTransform _canvas;
-        ScreenId _screen, _settingsOrigin, _skillsOrigin;
+        ScreenId _screen, _settingsOrigin, _skillsOrigin, _testsOrigin;
         CollectionView _collection;
         GachaView _gacha;
+        TestMenuView _tests;
         PokemonDetailsView _resultDetails;
         UnityEngine.UI.Image _resultPortrait;
         TMPro.TMP_Text _resultBadge;
@@ -50,6 +51,7 @@ namespace Game.UI
         {
             Instance = this;
             Game.Audio.GameAudio.EnsureExists(gameObject);
+            Game.Weather.WeatherController.EnsureExists(gameObject);
             _quality = Mathf.Clamp(PlayerPrefs.GetInt(QualityKey, QualitySettings.GetQualityLevel()),
                 0, Mathf.Max(0, QualitySettings.names.Length - 1));
             if (QualitySettings.names.Length > 0) QualitySettings.SetQualityLevel(_quality, true);
@@ -77,6 +79,11 @@ namespace Game.UI
             bool back = Keyboard.current?.escapeKey.wasPressedThisFrame == true ||
                 Gamepad.current?.buttonEast.wasPressedThisFrame == true;
             if (!back || GameFlow.Over) return;
+            NavigateBack();
+        }
+
+        void NavigateBack()
+        {
             switch (_screen)
             {
                 case ScreenId.None: Pause(); break;
@@ -88,6 +95,7 @@ namespace Game.UI
                 case ScreenId.Release: CancelRelease(); break;
                 case ScreenId.Result: CloseResult(); break;
                 case ScreenId.Skills: CloseSkills(); break;
+                case ScreenId.Tests: CloseTests(); break;
             }
         }
 
@@ -102,10 +110,12 @@ namespace Game.UI
         {
             if (_screen == ScreenId.Settings && next != ScreenId.Settings) PlayerPrefs.Save();
             _screen = next;
-            foreach (var entry in _pages) entry.Value.Root.gameObject.SetActive(entry.Key == next);
             bool blocked = next != ScreenId.None || GameFlow.Over;
             GameFlow.Blocked = blocked;
             Time.timeScale = blocked ? 0 : 1;
+            foreach (var entry in _pages) entry.Value.Root.gameObject.SetActive(entry.Key == next);
+            if (next == ScreenId.None && UnityEngine.EventSystems.EventSystem.current != null)
+                UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
             Game.Audio.GameAudio.SyncState();
             if (_pages.TryGetValue(next, out var page))
             {
@@ -120,6 +130,8 @@ namespace Game.UI
             IsPlaying = false;
             GameFlow.Over = false;
             RoundManager.Instance?.StopRun();
+            if (Game.Weather.WeatherController.Instance != null)
+                Game.Weather.WeatherController.Instance.ResetWeather();
             RefreshSnapshots();
             RefreshHero();
             if (!PokemonCollection.Progression.IsReady || PokemonCollection.NeedsStarter)
@@ -175,6 +187,35 @@ namespace Game.UI
             Show(ScreenId.Skills);
         }
         void CloseSkills() => Show(_skillsOrigin);
+        void OpenTests()
+        {
+            // Do not bypass the one-time starter choice, nor replace an active run's snapshot.
+            if ((_screen != ScreenId.Main && _screen != ScreenId.Pause) ||
+                !PokemonCollection.Progression.IsReady || PokemonCollection.NeedsStarter) return;
+            _testsOrigin = _screen;
+            RefreshTests();
+            _tests.SetFeedback("Colección normal · guardado automático.");
+            Show(ScreenId.Tests);
+        }
+        void CloseTests() => Show(_testsOrigin);
+        void RefreshTests() => _tests.Bind(_catalog, PlayerEconomy.Coins, _inventory.Count,
+            PokemonCollection.InventoryCapacity, PokemonCollection.Progression.IsReady && !_busy);
+        void GrantTestCoins(int amount) => GrantTestReward(amount);
+        void GrantTestPokemon(string speciesId, Rarity rarity) => GrantTestReward(0, speciesId, rarity);
+        void GrantTestReward(int coins, string speciesId = null, Rarity rarity = Rarity.F)
+        {
+            if (_busy || _screen != ScreenId.Tests) return;
+            _busy = true;
+            OperationResult result;
+            try { result = PokemonCollection.GrantForTesting(coins, speciesId, rarity); }
+            finally { _busy = false; }
+            RefreshSnapshots();
+            RefreshTests();
+            _tests.SetFeedback(result.success
+                ? result.instance == null ? $"+{coins:N0} monedas guardadas."
+                    : $"{Species(result.instance.speciesId)?.name} · clase {result.instance.rarity} añadido a la colección."
+                : ErrorMessage(result.error), !result.success);
+        }
         void QuitGame()
         {
             PlayerEconomy.Flush();
@@ -201,6 +242,7 @@ namespace Game.UI
             RefreshHero();
             if (_screen == ScreenId.Collection) RefreshCollection();
             if (_screen == ScreenId.Gacha) RefreshGacha();
+            if (_screen == ScreenId.Tests) RefreshTests();
         }
 
         void OpenCollection()
@@ -345,13 +387,17 @@ namespace Game.UI
             _canvas = UIFactory.CreateCanvas("UI_Menus", 100);
             var controls = UIFactory.SafeRoot(_canvas, "RunControls");
             var pause = CompactMenuArt.Button(controls, "PauseButton", "PAUSA", "Amber", Pause);
+            pause.navigation = new UnityEngine.UI.Navigation { mode = UnityEngine.UI.Navigation.Mode.None };
             _pauseButton = pause.gameObject;
             var skills = CompactMenuArt.Button(controls, "RunSkillsButton", "EV", "Blue", OpenSkills);
+            skills.navigation = new UnityEngine.UI.Navigation { mode = UnityEngine.UI.Navigation.Mode.None };
             _skillsButton = skills.gameObject;
             controls.gameObject.AddComponent<RunMenuControlsLayout>().Configure(pause, skills);
             BuildMain();
             BuildPause();
             BuildSettings();
+            _tests = TestMenuView.Create(_canvas, GrantTestCoins, GrantTestPokemon, CloseTests);
+            _pages.Add(ScreenId.Tests, _tests.Page);
             _pages.Add(ScreenId.Credits, new CreditsView(_canvas, ShowMainMenu).Page);
             _collection = new CollectionView(_canvas, SelectPokemon, EquipPokemon, AskRelease, OpenGacha, ShowMainMenu);
             _pages.Add(ScreenId.Collection, _collection.Page);
@@ -388,6 +434,7 @@ namespace Game.UI
             CompactMenuArt.Button(page.Body, "Gacha", "Gacha", "Blue", OpenGacha);
             CompactMenuArt.Button(page.Body, "Settings", "Ajustes", "Amber", OpenSettings);
             CompactMenuArt.Button(page.Body, "Credits", "Créditos", "Amber", () => Show(ScreenId.Credits));
+            CompactMenuArt.Button(page.Body, "Tests", "PRUEBAS", "Blue", OpenTests);
             CompactMenuArt.Button(page.Body, "Quit", "Salir", "Red", QuitGame);
         }
         void RefreshHero()
@@ -401,6 +448,7 @@ namespace Game.UI
             CompactMenuArt.Button(page.Body, "Resume", "CONTINUAR", "Green", Resume);
             CompactMenuArt.Button(page.Body, "Skills", "Mejoras EV", "Blue", OpenSkills);
             CompactMenuArt.Button(page.Body, "Settings", "Ajustes", "Amber", OpenSettings);
+            CompactMenuArt.Button(page.Body, "Tests", "PRUEBAS", "Blue", OpenTests);
             CompactMenuArt.Button(page.Body, "Abandon", "Salir de la partida", "Red", AbandonRun);
         }
         void BuildStarter()
@@ -553,6 +601,10 @@ namespace Game.UI
                 case "InsufficientCoins": return "No tienes suficientes monedas.";
                 case "LastInstance": return "No puedes liberar tu último Pokémon.";
                 case "StarterRequired": return "Elige primero tu Pokémon inicial.";
+                case "InvalidAmount": return "Escribe una cantidad entera positiva.";
+                case "CoinOverflow": return "La cantidad supera el saldo máximo de monedas.";
+                case "InvalidSpecies": return "Elige una especie del catálogo.";
+                case "InvalidRarity": return "Elige una clase F, A o S.";
                 case "PersistenceFailure":
                 case "SaveUnavailable": return "No se pudo guardar. Reinicia y revisa el almacenamiento.";
                 case "InstanceNotFound": return "Ese Pokémon ya no está en tu colección.";

@@ -1,0 +1,55 @@
+# Weather integration and verification
+
+Unity 6000.5.11f1 / URP 17.5. New runtime code belongs to `Game.Runtime`.
+
+```csharp
+// GameMenuController.Awake:
+Game.Weather.WeatherController.EnsureExists(gameObject);
+
+// ShowMainMenu (also covers abandoning a run), never Pause/Resume/StartRound:
+if (Game.Weather.WeatherController.Instance != null)
+    Game.Weather.WeatherController.Instance.ResetWeather();
+
+// HUD/test-menu API:
+var weather = Game.Weather.WeatherController.Instance;
+weather.Changed += Refresh; // Action, no parameters; unsubscribe when the HUD disables.
+string label = Game.Weather.WeatherController.DisplayName(weather.Current);
+weather.NextWeather(); // Programmatic selections while paused queue a target until resume.
+```
+
+`M` only cycles on a fresh key press during `GameFlow.Playing` with positive time scale
+and no selected TMP/legacy input field. Selection is session-only. A 2.4-second smooth
+blend retargets from the currently visible palette. There are no round or save-system
+subscriptions. Reset snaps to the original sunny lighting and clears rain, even in pause.
+
+## Rendering contract
+
+- Runtime global URP Volume: exposure, multiplication tint, saturation, zero contrast.
+  It affects both URP-lit terrain and unlit/default sprites, before ScreenSpaceOverlay UI.
+- Runtime camera post-processing/mask/update-mode changes are restored. Existing sun,
+  ambient and fog are restored on disable/destruction; no sun or shared profile is replaced.
+- Atmospheric exponential-squared fog is applied by URP Lit before the black unlit
+  WorldZoneFog surface. Graphics Settings use Custom fog stripping, retaining `FOG_EXP2`
+  for runtime weather even though World.unity starts without fog.
+- Local precipitation: one emitter, maximum 160 particles, no collision/shadows/depth
+  texture/noise texture, manually simulated only on gameplay ticks. Shader loaded directly
+  from `Resources/Weather/LocalRain` is included in builds. Closed rectangles are updated
+  only on access-mask/world changes. `Blend DstColor One` also preserves black when an
+  unlocked foreground drop projects over a closed background.
+- Disabled controller retains bounded native resources for re-enable; destruction disposes
+  its profile **and components**, runtime material, emitter/root, and camera data it created.
+
+## Tests supplied
+
+- `Game.Weather.EditMode.Tests`: six-state sequence/wrap, smooth endpoints, mid-blend
+  retargeting continuity, paused elapsed time, invalid/repeated input, reset and Spanish labels.
+- `Game.Weather.PlayMode.Tests`: actual Input System M edges/held key, blocked/game-over/
+  time-scale/text-input rejection, particle lifetime and position freeze (including real
+  frames at time scale 1), post-processing for unlit sprites, menu reset, singleton idempotency,
+  camera/light/fog/ambient restore, native resource cleanup, particle budget, unlock masks.
+- A GPU readback test draws the real rain shader: visible ground brightens, pure black
+  remains black, and the closed-zone fragment is discarded. It skips a Null graphics device.
+
+Run PlayMode tests in the runner's empty scene, not during the populated World play session.
+The owning session runs compilation/tests/captures/build; this module's author did not start
+or refresh Unity, run tests, enter Play mode or build.

@@ -51,9 +51,9 @@ namespace Game.UI
             float font = Mathf.Max(28, 14 / _lastScale);
             bool main = _kind == CompactMenuKind.Main;
             bool skills = _kind == CompactMenuKind.Skills;
-            int columns = main ? 3 : skills ? 2 : 1;
-            int rows = main || skills ? 2 : 4;
-            float width = Mathf.Min(_lastSize.x - margin * 2, main ? 1120 : skills ? 760 : 520);
+            int columns = main ? 4 : 2;
+            int rows = main || skills ? 2 : 3;
+            float width = Mathf.Min(_lastSize.x - margin * 2, main ? 1280 : skills ? 760 : 900);
             float bodyHeight = rows * button + (rows - 1) * gap;
             float footerHeight = skills ? button + gap : 0;
 

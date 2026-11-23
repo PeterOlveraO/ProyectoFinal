@@ -42,6 +42,7 @@ namespace Game.Player
         float _burstTimer;
         Vector3 _burstAim;
         int _burstDamage;
+        bool _hasInputFocus = true;
 
         public Vector3 LastAimDirection => _lastAim;
         public int Damage
@@ -62,7 +63,8 @@ namespace Game.Player
             get
             {
                 var round = RoundManager.Instance;
-                float interval = ShotDefinitions.Interval(round != null ? round.Shots.Equipped : ShotType.Basic, fireInterval);
+                float interval = ShotDefinitions.Interval(round != null ? round.Shots.Equipped : ShotType.Basic, fireInterval)
+                    / GameplayPace.FireRateMultiplier;
                 return round != null && round.Drinks != null && round.Drinks.Has(DrinkType.RapidFire)
                     ? interval * .7f : interval;
             }
@@ -83,13 +85,19 @@ namespace Game.Player
 
         void OnDisable() => CancelPendingShots();
 
+        void OnApplicationFocus(bool focused)
+        {
+            _hasInputFocus = focused;
+            if (!focused) CancelPendingShots();
+        }
+
         /// <summary>Asigna el joystick de ataque desde el bootstrap de la escena.</summary>
         public void SetJoystick(VirtualJoystick value) => joystick = value;
 
         void Update()
         {
             Vector3 worldDirection = Vector3.zero;
-            bool hasAim = GameFlow.Playing && TryReadAim(out worldDirection);
+            bool hasAim = GameFlow.Playing && _hasInputFocus && TryReadAim(out worldDirection);
             TickAttack(Time.deltaTime, hasAim, worldDirection);
         }
 
@@ -131,7 +139,7 @@ namespace Game.Player
                     // At most one pulse per frame: never catch up with a large mobile-frame burst.
                     FireProjectile(_burstAim, _burstDamage, ShotType.Burst);
                     _burstRemaining--;
-                    _burstTimer = ShotDefinitions.BurstPulseInterval;
+                    _burstTimer = ShotDefinitions.BurstPulseInterval / GameplayPace.FireRateMultiplier;
                 }
                 return;
             }
@@ -157,7 +165,7 @@ namespace Game.Player
             _burstAim = _lastAim;
             _burstDamage = shotDamage;
             _burstRemaining = 2;
-            _burstTimer = ShotDefinitions.BurstPulseInterval;
+            _burstTimer = ShotDefinitions.BurstPulseInterval / GameplayPace.FireRateMultiplier;
         }
 
         void FireProjectile(Vector3 direction, int shotDamage, ShotType type)
@@ -198,6 +206,21 @@ namespace Game.Player
             // Nunca interpretar un toque o un ratón emulado como apuntado en móvil.
             // En equipos táctiles de escritorio tampoco se convierte un dedo en cursor.
             if (!CanUseMouseAim(Application.isMobilePlatform, HasActiveTouch())) return false;
+
+            if (!_hasInputFocus) return false;
+            var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+            if (selected != null && (selected.GetComponent<TMPro.TMP_InputField>() != null ||
+                selected.GetComponent<UnityEngine.UI.InputField>() != null)) return false;
+
+            if (Keyboard.current?.spaceKey.isPressed == true)
+            {
+                var round = RoundManager.Instance;
+                var type = round != null ? round.Shots.Equipped : ShotType.Basic;
+                bool ballistics = round != null && round.Drinks != null && round.Drinks.Has(DrinkType.Ballistics);
+                float aimRange = ShotDefinitions.Range(type, range) * (ballistics ? 1.2f : 1f);
+                return AutoAimTargeting.TryDirection(transform.position + Vector3.up * muzzleHeight,
+                    aimRange, out worldDirection);
+            }
 
             // Alternativa de escritorio: disparar hacia el cursor.
             var mouse = Mouse.current;

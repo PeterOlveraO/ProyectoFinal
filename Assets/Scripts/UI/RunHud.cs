@@ -3,6 +3,7 @@ using Game.Core;
 using Game.Economy;
 using Game.Player;
 using Game.Rounds;
+using Game.Weather;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -30,6 +31,8 @@ namespace Game.UI
         TMPro.TMP_Text _drinkLabel;
         int _nearbyDrink = -1;
         TMPro.TMP_Text _equippedShotLabel;
+        TMPro.TMP_Text _weatherLabel;
+        WeatherController _weather;
         Button _shotButton;
         TMPro.TMP_Text _shotLabel;
         int _nearbyShot = -1;
@@ -67,6 +70,9 @@ namespace Game.UI
             _round = RoundManager.Instance;
             if (_round != null) _round.Changed += MarkNumbersDirty;
             PlayerEconomy.Changed += MarkNumbersDirty;
+            _weather = WeatherController.Instance;
+            if (_weather != null) _weather.Changed += UpdateWeather;
+            UpdateWeather();
         }
 
         void MarkNumbersDirty() => _numbersDirty = true;
@@ -75,6 +81,7 @@ namespace Game.UI
         {
             if (_round != null) _round.Changed -= MarkNumbersDirty;
             PlayerEconomy.Changed -= MarkNumbersDirty;
+            if (_weather != null) _weather.Changed -= UpdateWeather;
             if (_root != null) Destroy(_root.gameObject);
             if (_overlay != null) Destroy(_overlay.gameObject);
         }
@@ -133,8 +140,12 @@ namespace Game.UI
             BuildBanner(root);
             BuildDrinkButton(root);
             BuildShotShop(root);
+            BuildWeather(root);
             BuildEffects(root);
             BuildZoneButton(root);
+            // Space is a combat control: clicking a vendor must never capture UI Submit.
+            foreach (var offer in new[] { _drinkButton, _shotButton, _zoneButton })
+                offer.navigation = new Navigation { mode = Navigation.Mode.None };
 
             // La pantalla de derrota vive en su propio Canvas por encima de todo el HUD.
             _overlay = UIFactory.CreateCanvas("UI_GameOver", 120);
@@ -348,6 +359,34 @@ namespace Game.UI
             if (_equippedShotLabel == null) return;
             var equipped = round != null ? round.Shots.Equipped : ShotType.Basic;
             _equippedShotLabel.text = "DISPARO · " + ShotDefinitions.Name(equipped);
+        }
+
+        void BuildWeather(Transform parent)
+        {
+            var panel = UIFactory.CreateRect("WeatherStatus", parent);
+            bool desktop = !Application.isMobilePlatform;
+            UIFactory.Place(panel, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
+                new Vector2(0f, -78f), new Vector2(500f, desktop ? 70f : 40f));
+            var background = UIFactory.CreateImage("Background", panel, RetroUiArt.Frame,
+                UIFactory.Panel, false, true);
+            UIFactory.Stretch(background.rectTransform);
+            _weatherLabel = UIFactory.CreateText("Weather", panel, "", 20, UIFactory.Cream);
+            UIFactory.Place(_weatherLabel.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
+                new Vector2(0f, -4f), new Vector2(476f, 30f));
+            if (desktop)
+            {
+                var hint = UIFactory.CreateText("DesktopControls", panel, "ESPACIO · DISPARO AUTOMÁTICO", 18, UIFactory.Muted);
+                UIFactory.Place(hint.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
+                    new Vector2(0f, -34f), new Vector2(476f, 30f));
+            }
+        }
+
+        void UpdateWeather()
+        {
+            if (_weatherLabel == null) return;
+            _weatherLabel.text = "CLIMA · " +
+                WeatherController.DisplayName(_weather != null ? _weather.Current : WeatherKind.Sunny).ToUpperInvariant() +
+                (Application.isMobilePlatform ? "" : "  [M]");
         }
 
         void UpdateShotOffer(RoundManager round, PlayerSphereController player, bool playing)

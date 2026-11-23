@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -20,6 +21,51 @@ namespace Game.EditorTools
         static readonly string[] Scenes = { "Assets/Scenes/World.unity" };
 
         const string BundleId = "com.peterolvera.proyectofinal";
+
+        /// <summary>Native Linux player; the packaged launcher needs no Editor or Unity Hub.</summary>
+        public static void BuildLinux()
+        {
+            string path = GetArgument("-customBuildPath") ?? "Builds/Linux/PKETER/PKETER.x86_64";
+            path = Path.Combine(Path.HasExtension(path) ? Path.GetDirectoryName(path) : path, "PKETER.x86_64");
+            var backend = PlayerSettings.GetScriptingBackend(NamedBuildTarget.Standalone);
+            int width = PlayerSettings.defaultScreenWidth, height = PlayerSettings.defaultScreenHeight;
+            bool resizable = PlayerSettings.resizableWindow;
+            var fullscreen = PlayerSettings.fullScreenMode;
+            BuildReport report;
+            try
+            {
+                PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
+                PlayerSettings.defaultScreenWidth = 1280;
+                PlayerSettings.defaultScreenHeight = 720;
+                PlayerSettings.resizableWindow = true;
+                PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+                report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+                {
+                    scenes = Scenes,
+                    locationPathName = path,
+                    target = BuildTarget.StandaloneLinux64,
+                    options = BuildOptions.None
+                });
+            }
+            finally
+            {
+                PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, backend);
+                PlayerSettings.defaultScreenWidth = width;
+                PlayerSettings.defaultScreenHeight = height;
+                PlayerSettings.resizableWindow = resizable;
+                PlayerSettings.fullScreenMode = fullscreen;
+            }
+            ReportSummary(report.summary);
+            if (report.summary.result != BuildResult.Succeeded)
+                throw new BuildFailedException("Linux: " + report.summary.result);
+            string directory = Path.GetDirectoryName(path);
+            File.Copy("Tools/Linux/Jugar.sh", Path.Combine(directory, "Jugar.sh"), true);
+            File.Copy("Tools/Linux/LEEME.txt", Path.Combine(directory, "LEEME.txt"), true);
+            File.WriteAllText(Path.Combine(directory, "build-info.txt"),
+                "Unity " + Application.unityVersion + "\nLinux x86_64 / Mono\n" +
+                "Built UTC: " + DateTime.UtcNow.ToString("O") + "\n");
+            if (Application.isBatchMode) EditorApplication.Exit(0);
+        }
 
         /// <summary>Exporta el proyecto de Xcode para iOS (el .ipa se genera después con xcodebuild).</summary>
         public static void BuildIOS()

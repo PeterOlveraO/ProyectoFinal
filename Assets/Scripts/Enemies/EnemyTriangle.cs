@@ -68,7 +68,7 @@ namespace Game.Enemies
         public int Zone { get; private set; }
         public int MaxHealth => maxHealth;
         public int Health => _health;
-        public float Speed => _speed;
+        public float Speed => _speed * GameplayPace.MovementMultiplier;
         public float ContactDamage => _contactDamage;
         public bool IsBoss { get; private set; }
         internal int BonusDropPoints { get; set; }
@@ -214,7 +214,7 @@ namespace Game.Enemies
                 if (direction.sqrMagnitude < .0001f) return;
             }
             transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
-            Move(direction, _speed * Time.deltaTime);
+            Move(direction, Speed * Time.deltaTime);
         }
 
         // Called only after Update's distance/height checks.

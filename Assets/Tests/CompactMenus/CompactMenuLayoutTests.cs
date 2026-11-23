@@ -33,10 +33,14 @@ namespace Game.Tests.CompactMenus
             {
                 var page = new MenuPage(_canvas, kind.ToString(), "MEJORAS EV",
                     "250 PT · Solo esta partida", kind);
-                int count = kind == CompactMenuKind.Main ? 6 : 4;
-                for (int i = 0; i < count; i++)
+                var labels = kind == CompactMenuKind.Main
+                    ? new[] { "JUGAR", "Colección", "Gacha", "Ajustes", "Créditos", "PRUEBAS", "Salir" }
+                    : kind == CompactMenuKind.Pause
+                        ? new[] { "CONTINUAR", "Mejoras EV", "Ajustes", "PRUEBAS", "Salir de la partida" }
+                        : new[] { "SALUD\n10/10 · MÁX.", "ATAQUE\n10/10 · MÁX.", "DEFENSA\n10/10 · MÁX.", "VELOCIDAD\n10/10 · MÁX." };
+                for (int i = 0; i < labels.Length; i++)
                     CompactMenuArt.Button(page.Body, "Button" + i,
-                        kind == CompactMenuKind.Skills ? "VELOCIDAD\n10/10 · MÁX." : "Colección",
+                        labels[i],
                         "Blue", () => { });
                 if (kind == CompactMenuKind.Skills) page.Action("Back", "Volver", UIFactory.Sun, () => { });
                 page.Root.gameObject.SetActive(true);
@@ -81,6 +85,66 @@ namespace Game.Tests.CompactMenus
                 Assert.AreEqual(0, shield.color.a);
                 Object.DestroyImmediate(page.Root.gameObject);
             }
+        }
+
+        [Test]
+        public void TestRewardsUseAScrollViewportAndOriginalFrames()
+        {
+            _canvas = UIFactory.CreateCanvas("TestRewardsLayout", 0);
+            _canvas.GetComponent<UnityEngine.UI.CanvasScaler>().enabled = false;
+            var canvas = _canvas.GetComponent<Canvas>();
+            canvas.scaleFactor = Mathf.Sqrt(568f / 1920 * 320f / 1080);
+            var view = TestMenuView.Create(_canvas, _ => { }, (_, __) => { }, () => { });
+            var catalog = JsonUtility.FromJson<Game.Pokemon.Progression.SpeciesCatalog>(
+                Resources.Load<TextAsset>("PokemonProgression/catalog").text);
+            view.Bind(catalog.species, 10000, 10, 10, true);
+            view.Page.Root.gameObject.SetActive(true);
+            var safe = (RectTransform)view.Page.Root.Find("SafeArea");
+            safe.GetComponent<SafeAreaLayout>().enabled = false;
+            UIFactory.Place(safe, new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero,
+                new Vector2(504 / canvas.scaleFactor, 304 / canvas.scaleFactor));
+            view.RefreshLayout();
+            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(view.Page.Root);
+            Canvas.ForceUpdateCanvases();
+            AssertInside(safe, (RectTransform)view.Page.Body.parent);
+            AssertInside(safe, view.Page.Footer);
+            Assert.Greater(view.Page.Body.rect.height * canvas.scaleFactor, 48);
+            var scroll = view.GetComponentInChildren<UnityEngine.UI.ScrollRect>();
+            Assert.NotNull(scroll.viewport.GetComponent<UnityEngine.UI.RectMask2D>());
+            Assert.AreSame(scroll.viewport, scroll.content.parent);
+            Assert.Greater(scroll.content.rect.height, scroll.viewport.rect.height);
+            Assert.IsFalse(scroll.horizontal);
+            foreach (var selectable in view.GetComponentsInChildren<UnityEngine.UI.Selectable>())
+                Assert.GreaterOrEqual(((RectTransform)selectable.transform).rect.height * canvas.scaleFactor, 47.99f);
+            foreach (var text in view.GetComponentsInChildren<TMPro.TMP_Text>())
+            {
+                Assert.GreaterOrEqual(text.fontSize * canvas.scaleFactor, 13.99f);
+                text.ForceMeshUpdate();
+                Assert.IsFalse(text.isTextOverflowing, text.name);
+            }
+            foreach (var button in view.GetComponentsInChildren<UnityEngine.UI.Button>())
+            {
+                Assert.NotNull(button.image.sprite);
+                Assert.AreEqual(UnityEngine.UI.Image.Type.Sliced, button.image.type);
+            }
+            Assert.IsTrue(view.Page.Root.Find("Background").GetComponent<UnityEngine.UI.Image>().raycastTarget);
+        }
+
+        [TestCase("100", true, 100)]
+        [TestCase(" 123 ", true, 123)]
+        [TestCase("2147483647", true, int.MaxValue)]
+        [TestCase("2147483648", false, 0)]
+        [TestCase("", false, 0)]
+        [TestCase(null, false, 0)]
+        [TestCase("0", false, 0)]
+        [TestCase("-1", false, 0)]
+        [TestCase("1.5", false, 0)]
+        [TestCase("1e3", false, 0)]
+        [TestCase("+100", false, 0)]
+        public void CustomTestCoinsRequireAPositiveInteger(string text, bool valid, int expected)
+        {
+            Assert.AreEqual(valid, TestMenuView.TryParseAmount(text, out int amount));
+            if (valid) Assert.AreEqual(expected, amount);
         }
 
         [Test]

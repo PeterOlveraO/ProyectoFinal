@@ -33,12 +33,20 @@ CONDITIONAL = {
     "Game.Rounds.PlayMode.Tests": ("playmode", 24),
     "Game.CompactMenus.Tests": ("playmode", 11),
     "Game.WorldZones.PlayMode.Tests": ("playmode", 13),
+    "Game.Weather.EditMode.Tests": ("editmode", 12),
+    "Game.Weather.PlayMode.Tests": ("playmode", 16),
 }
 
 # Features added to existing baseline assemblies must also be discovered.
 FEATURE_FLOORS = {
-    "Assets/Tests/EditMode/WorldTraversalTests.cs": ("editmode", "Game.Terrain.Tests", 44),
-    "Assets/Tests/PlayMode/DropRuntimeTests.cs": ("playmode", "Game.Runtime.PlayMode.Tests", 64),
+    "Assets/Tests/EditMode/WorldTraversalTests.cs": [("editmode", "Game.Terrain.Tests", 44)],
+    "Assets/Tests/PlayMode/DropRuntimeTests.cs": [("playmode", "Game.Runtime.PlayMode.Tests", 64)],
+    "Assets/Tests/PlayMode/DesktopCombatTests.cs": [("playmode", "Game.Runtime.PlayMode.Tests", 70)],
+    "Assets/Scripts/Combat/AutoAimTargeting.cs": [("playmode", "Game.Rounds.PlayMode.Tests", 25)],
+    "Assets/Scripts/UI/TestMenuView.cs": [
+        ("playmode", "Game.CompactMenus.Tests", 30),
+        ("editmode", "Pokemon.Progression.Tests", 25),
+    ],
 }
 
 
@@ -63,9 +71,10 @@ def required_for_checkout(project):
         if name in CONDITIONAL:
             mode, minimum = CONDITIONAL[name]
             required[mode][name] = minimum
-    for relative, (mode, name, minimum) in FEATURE_FLOORS.items():
+    for relative, floors in FEATURE_FLOORS.items():
         if (Path(project) / relative).is_file():
-            required[mode][name] = max(required[mode].get(name, 0), minimum)
+            for mode, name, minimum in floors:
+                required[mode][name] = max(required[mode].get(name, 0), minimum)
     return required
 
 

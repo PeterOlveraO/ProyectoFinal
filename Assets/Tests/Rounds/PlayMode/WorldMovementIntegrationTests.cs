@@ -189,5 +189,20 @@ namespace Game.Tests.Rounds
             Assert.Less(projectile.transform.position.x, 44f);
             Assert.IsFalse(projectile.gameObject.activeSelf);
         }
+
+        [Test]
+        public void AutoAimCannotAcquireAnEnemyAcrossALockedTerritory()
+        {
+            _enemyRoot = new GameObject("LockedAimTarget");
+            Assert.IsTrue(_terrain.TryGetWalkablePosition(new Vector3(45.5f, 0, 32.5f), out var ground));
+            _enemyRoot.transform.position = ground;
+            _enemyRoot.AddComponent<EnemyTriangle>().Initialize(1, 1);
+            Physics.SyncTransforms();
+            Vector3 origin = new Vector3(43, ground.y + .62f, 32.5f);
+            Assert.IsFalse(AutoAimTargeting.TryDirection(origin, 18, out _));
+            Assert.IsTrue(_access.TryUnlock(3, _ => true));
+            Assert.IsTrue(AutoAimTargeting.TryDirection(origin, 18, out var direction));
+            Assert.Less(Vector3.Distance(direction, Vector3.right), .001f);
+        }
     }
 }
