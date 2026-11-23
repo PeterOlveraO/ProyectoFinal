@@ -162,6 +162,97 @@ namespace Game.Tests.CompactMenus
             AssertInside(scroll.viewport, (RectTransform)scroll.content.Find("GrantPokemon"));
         }
 
+        [TestCase(1920, 1080, 0, 0, false)]
+        [TestCase(1280, 720, 0, 0, false)]
+        [TestCase(1440, 1080, 0, 0, false)]
+        [TestCase(1024, 768, 0, 0, false)]
+        [TestCase(568, 320, 32, 16, true)]
+        public void CompactCreditsKeepAuthorLogosAndBackReadable(
+            int width, int height, int side, int bottom, bool needsScroll)
+        {
+            _canvas = UIFactory.CreateCanvas("CreditsLayout", 0);
+            _canvas.GetComponent<UnityEngine.UI.CanvasScaler>().enabled = false;
+            var canvas = _canvas.GetComponent<Canvas>();
+            canvas.scaleFactor = Mathf.Sqrt(width / 1920f * height / 1080f);
+            int backCalls = 0;
+            var page = new CreditsView(_canvas, () => backCalls++).Page;
+            page.Root.gameObject.SetActive(true);
+            var safe = (RectTransform)page.Root.Find("SafeArea");
+            safe.GetComponent<SafeAreaLayout>().enabled = false;
+            UIFactory.Place(safe, new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero,
+                new Vector2((width - side * 2) / canvas.scaleFactor, (height - bottom) / canvas.scaleFactor));
+            var layout = page.Root.GetComponent<CompactMenuLayout>();
+            Assert.NotNull(layout);
+            Assert.IsNull(page.Root.GetComponent<MenuPageLayout>());
+            layout.RefreshLayout();
+            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(page.Footer);
+            Canvas.ForceUpdateCanvases();
+
+            var panel = (RectTransform)page.Body.parent;
+            AssertInside(safe, panel);
+            Assert.Less(panel.rect.width * panel.rect.height / (safe.rect.width * safe.rect.height), .5f);
+            Assert.IsNull(page.Root.Find("Background"));
+            Assert.IsTrue(page.Root.Find("InputShield").GetComponent<UnityEngine.UI.Image>().raycastTarget);
+            Assert.IsFalse(page.Wallet.gameObject.activeSelf);
+            var scroll = page.Root.GetComponentInChildren<UnityEngine.UI.ScrollRect>();
+            Assert.IsFalse(scroll.horizontal);
+            Assert.NotNull(scroll.viewport.GetComponent<UnityEngine.UI.RectMask2D>());
+            Assert.AreSame(scroll.viewport, scroll.content.parent);
+            var author = scroll.content.Find("Author").GetComponent<TMPro.TMP_Text>();
+            Assert.AreEqual("Pedro Olvera Ochoa", author.text);
+            AssertInside(scroll.viewport, author.rectTransform);
+            Assert.AreEqual(needsScroll, scroll.verticalScrollbar.gameObject.activeSelf);
+            Assert.IsFalse(scroll.verticalScrollbar.interactable, "The indicator must not steal Back focus.");
+            if (needsScroll) Assert.Greater(scroll.content.rect.height, scroll.viewport.rect.height);
+            else Assert.LessOrEqual(scroll.content.rect.height, scroll.viewport.rect.height + .1f);
+
+            var institutions = scroll.content.Find("Institutions");
+            string[] cards = { "University", "Faculty" };
+            string[] logos = { "Credits/UAT", "Credits/FIT" };
+            string[] names = { "Universidad Autónoma de Tamaulipas", "Facultad de Ingeniería Tampico" };
+            for (int i = 0; i < cards.Length; i++)
+            {
+                if (needsScroll && i == 1)
+                {
+                    scroll.verticalNormalizedPosition = 0;
+                    Canvas.ForceUpdateCanvases();
+                }
+                var card = institutions.Find(cards[i]);
+                var logo = card.Find("LogoBacking/Logo").GetComponent<UnityEngine.UI.Image>();
+                Assert.NotNull(logo.sprite);
+                Assert.AreSame(Resources.Load<Sprite>(logos[i]), logo.sprite);
+                Assert.IsTrue(logo.preserveAspect);
+                Assert.IsTrue(logo.enabled && logo.gameObject.activeInHierarchy);
+                Assert.Greater(logo.rectTransform.rect.width * canvas.scaleFactor, 30);
+                Assert.Greater(logo.rectTransform.rect.height * canvas.scaleFactor, 30);
+                AssertInside(scroll.viewport, logo.rectTransform);
+                var name = card.Find("InstitutionName").GetComponent<TMPro.TMP_Text>();
+                Assert.AreEqual(names[i], name.text);
+                AssertInside(scroll.viewport, name.rectTransform);
+            }
+            foreach (var text in page.Root.GetComponentsInChildren<TMPro.TMP_Text>())
+            {
+                Assert.GreaterOrEqual(text.fontSize * canvas.scaleFactor, 13.99f);
+                text.ForceMeshUpdate();
+                Assert.IsFalse(text.isTextOverflowing, text.name);
+            }
+            var back = page.Footer.Find("Back").GetComponent<UnityEngine.UI.Button>();
+            AssertInside(safe, (RectTransform)back.transform);
+            Assert.GreaterOrEqual(((RectTransform)back.transform).rect.height * canvas.scaleFactor, 47.99f);
+            Assert.AreSame(Resources.Load<Sprite>("UI/CompactMenus/Green"), back.image.sprite);
+            Assert.AreEqual(UnityEngine.UI.Image.Type.Sliced, back.image.type);
+            var events = UnityEngine.EventSystems.EventSystem.current == null
+                ? new GameObject("CreditsEvents", typeof(UnityEngine.EventSystems.EventSystem)) : null;
+            try
+            {
+                page.Focus();
+                Assert.AreSame(back.gameObject, UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject);
+                back.onClick.Invoke();
+                Assert.AreEqual(1, backCalls);
+            }
+            finally { if (events != null) Object.DestroyImmediate(events); }
+        }
+
         [TestCase("100", true, 100)]
         [TestCase(" 123 ", true, 123)]
         [TestCase("2147483647", true, int.MaxValue)]

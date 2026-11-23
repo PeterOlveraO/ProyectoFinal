@@ -42,6 +42,10 @@ FEATURE_FLOORS = {
     "Assets/Tests/EditMode/WorldTraversalTests.cs": [("editmode", "Game.Terrain.Tests", 44)],
     "Assets/Tests/PlayMode/DropRuntimeTests.cs": [("playmode", "Game.Runtime.PlayMode.Tests", 64)],
     "Assets/Tests/PlayMode/DesktopCombatTests.cs": [("playmode", "Game.Runtime.PlayMode.Tests", 73)],
+    "Assets/Tests/PlayMode/DesktopInteractionTests.cs": [("playmode", "Game.Runtime.PlayMode.Tests", 88)],
+    "Assets/Tests/DirectionalSprites/PokemonMaterialTests.cs": [("editmode", "Game.DirectionalSprites.Tests", 20)],
+    "Assets/Tests/Weather/PlayMode/PokemonFogRenderingTests.cs": [("playmode", "Game.Weather.PlayMode.Tests", 38)],
+    "Assets/Scripts/UI/CreditsView.cs": [("playmode", "Game.CompactMenus.Tests", 38)],
     "Assets/Scripts/Combat/AutoAimTargeting.cs": [("playmode", "Game.Rounds.PlayMode.Tests", 25)],
     "Assets/Scripts/UI/TestMenuView.cs": [
         ("playmode", "Game.CompactMenus.Tests", 33),

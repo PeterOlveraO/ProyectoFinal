@@ -139,7 +139,7 @@ namespace Game.UI
                 : $"{_catalog[_speciesIndex].name}\n{_speciesIndex + 1}/{_catalog.Count}";
             for (int i = 0; i < _rarities.Length; i++)
             {
-                var text = _rarities[i].GetComponentInChildren<TMPro.TMP_Text>();
+                var text = _rarities[i].GetComponentInChildren<TMPro.TMP_Text>(true);
                 text.text = i == (int)_rarity ? $"[{(Rarity)i}]" : ((Rarity)i).ToString();
                 text.color = i == (int)_rarity ? UIFactory.Sun : UIFactory.Cream;
             }

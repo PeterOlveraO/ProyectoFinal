@@ -26,8 +26,8 @@ namespace Game.Tests.Rounds
                 var before = RoundDifficulty.Stats(round - 1);
                 var after = RoundDifficulty.Stats(round);
                 Assert.Greater(after.health, before.health);
-                if (before.speed < 4.6f) Assert.Greater(after.speed, before.speed);
-                else Assert.AreEqual(4.6f, after.speed);
+                if (before.speed < RoundDifficulty.MaxSpeed) Assert.Greater(after.speed, before.speed);
+                else Assert.AreEqual(RoundDifficulty.MaxSpeed, after.speed);
                 Assert.Greater(after.contactDamage, before.contactDamage);
             }
         }
@@ -39,15 +39,15 @@ namespace Game.Tests.Rounds
         {
             var stats = RoundDifficulty.Stats(round);
             Assert.AreEqual(200, stats.health);
-            Assert.AreEqual(4.6f, stats.speed);
+            Assert.AreEqual(10f, stats.speed);
             Assert.AreEqual(35f, stats.contactDamage);
         }
 
         [TestCase(1, 14, 14f, 3.92f)]
-        [TestCase(6, 24, 17.75f, 4.32f)]
-        [TestCase(9, 30, 20f, 4.56f)]
-        [TestCase(10, 32, 20.75f, 4.6f)]
-        public void NormalStatsIncreaseOnlyTheStartingValues(int round, int health, float damage, float speed)
+        [TestCase(6, 24, 17.75f, 5.92f)]
+        [TestCase(9, 30, 20f, 7.12f)]
+        [TestCase(10, 32, 20.75f, 7.52f)]
+        public void NormalStatsKeepHealthAndDamageWhileSpeedClosesTheGap(int round, int health, float damage, float speed)
         {
             var normal = RoundDifficulty.Stats(round);
             Assert.AreEqual(health, normal.health);
@@ -55,11 +55,11 @@ namespace Game.Tests.Rounds
             Assert.AreEqual(speed, normal.speed, .0001f);
         }
 
-        [TestCase(5, 216, 39f, 3.12f)]
-        [TestCase(10, 336, 50.25f, 3.52f)]
-        [TestCase(25, 696, 84f, 4.6f)]
-        [TestCase(1000, 2400, 105f, 4.6f)]
-        public void BossStatsKeepTheirOriginalCurve(int round, int health, float damage, float speed)
+        [TestCase(5, 216, 39f, 4.4f)]
+        [TestCase(10, 336, 50.25f, 6.4f)]
+        [TestCase(25, 696, 84f, 10f)]
+        [TestCase(1000, 2400, 105f, 10f)]
+        public void BossStatsKeepHealthAndDamageAndGainSpeedEveryRound(int round, int health, float damage, float speed)
         {
             var boss = RoundDifficulty.Stats(round, true);
             Assert.AreEqual(health, boss.health);

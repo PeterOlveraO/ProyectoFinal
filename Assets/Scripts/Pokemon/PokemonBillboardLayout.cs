@@ -23,6 +23,8 @@ namespace Game.Pokemon
                               float footHeight = 0f)
         {
             spriteRenderer = renderer;
+            // Borrow the Resources asset; texture/tint overrides belong to SpriteRenderer.
+            spriteRenderer.sharedMaterial = PokemonSpriteMaterial.Shared;
             family = PokemonSpriteMetrics.Find(sourceSprite.name);
             sourceBounds = PokemonSpriteMetrics.Source(sourceSprite);
             groundOffset = footHeight;

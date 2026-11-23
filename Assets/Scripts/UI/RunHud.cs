@@ -3,8 +3,9 @@ using Game.Core;
 using Game.Economy;
 using Game.Player;
 using Game.Rounds;
-using Game.Weather;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace Game.UI
@@ -30,15 +31,13 @@ namespace Game.UI
         Button _drinkButton;
         TMPro.TMP_Text _drinkLabel;
         int _nearbyDrink = -1;
-        TMPro.TMP_Text _equippedShotLabel;
-        TMPro.TMP_Text _weatherLabel;
-        WeatherController _weather;
         Button _shotButton;
         TMPro.TMP_Text _shotLabel;
         int _nearbyShot = -1;
         UnityEngine.UI.Button _zoneButton;
         TMPro.TMP_Text _zoneLabel;
         int _nearbyZone = -1;
+        int _lastInteractionFrame = -1;
         readonly TMPro.TMP_Text[] _effectLabels = new TMPro.TMP_Text[DropDefinitions.EffectCount];
         readonly int[] _effectSeconds = { -1, -1, -1, -1 };
         static readonly string[] EffectNames = { "DAÑO", "PASO", "DEF", "CURA" };
@@ -70,9 +69,6 @@ namespace Game.UI
             _round = RoundManager.Instance;
             if (_round != null) _round.Changed += MarkNumbersDirty;
             PlayerEconomy.Changed += MarkNumbersDirty;
-            _weather = WeatherController.Instance;
-            if (_weather != null) _weather.Changed += UpdateWeather;
-            UpdateWeather();
         }
 
         void MarkNumbersDirty() => _numbersDirty = true;
@@ -81,7 +77,6 @@ namespace Game.UI
         {
             if (_round != null) _round.Changed -= MarkNumbersDirty;
             PlayerEconomy.Changed -= MarkNumbersDirty;
-            if (_weather != null) _weather.Changed -= UpdateWeather;
             if (_root != null) Destroy(_root.gameObject);
             if (_overlay != null) Destroy(_overlay.gameObject);
         }
@@ -103,16 +98,16 @@ namespace Game.UI
             if (_numbersDirty)
             {
                 UpdateNumbers(round, player);
-                UpdateShotLoadout(round);
                 _numbersDirty = false;
             }
             UpdateBanner(round, showHud);
             UpdateFlash();
             UpdateGameOver(round, gameOver);
-            UpdateDrink(round, player, playing && !gameOver && (menu == null || !menu.IsPaused));
+            UpdateDrink(round, player, showHud && GameFlow.Playing);
             UpdateShotOffer(round, player, showHud && GameFlow.Playing);
             UpdateEffects(player);
             UpdateZoneOffer(round, player, showHud && GameFlow.Playing);
+            UpdateInteraction(round, player, showHud);
         }
 
         // ------------------------------------------------------------- Construcción
@@ -140,7 +135,6 @@ namespace Game.UI
             BuildBanner(root);
             BuildDrinkButton(root);
             BuildShotShop(root);
-            BuildWeather(root);
             BuildEffects(root);
             BuildZoneButton(root);
             // Space is a combat control: clicking a vendor must never capture UI Submit.
@@ -258,6 +252,7 @@ namespace Game.UI
 
         void BuyZone()
         {
+            if (!BeginInteraction()) return;
             var round = RoundManager.Instance;
             if (round != null && round.Zones != null) round.Zones.Buy(_nearbyZone);
         }
@@ -289,7 +284,7 @@ namespace Game.UI
         void UpdateDrink(RoundManager round, PlayerSphereController player, bool playing)
         {
             var stations = round != null ? round.Drinks : null;
-            _nearbyDrink = playing && player != null && stations != null && round.Phase != RoundManager.RoundPhase.Idle
+            _nearbyDrink = playing && player != null && player.IsAlive && stations != null && round.IsRunActive
                 ? stations.NearbyOffer(player.transform.position) : -1;
             if (_drinkButton == null) return;
             _drinkButton.gameObject.SetActive(_nearbyDrink >= 0);
@@ -326,6 +321,7 @@ namespace Game.UI
 
         void BuyDrink()
         {
+            if (!BeginInteraction()) return;
             var stations = RoundManager.Instance?.Drinks;
             if (stations == null) return;
             if (stations.IsBuilt(_nearbyDrink)) stations.Buy(_nearbyDrink);
@@ -334,17 +330,6 @@ namespace Game.UI
 
         void BuildShotShop(Transform parent)
         {
-            // Top-center loadout, away from the top-left status and bottom-corner sticks.
-            var panel = UIFactory.CreateRect("ShotLoadout", parent);
-            UIFactory.Place(panel, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -20f), new Vector2(500f, 52f));
-            var background = UIFactory.CreateImage("Background", panel, RetroUiArt.Frame,
-                UIFactory.Panel, false, true);
-            UIFactory.Stretch(background.rectTransform);
-            _equippedShotLabel = UIFactory.CreateText("EquippedShot", panel, "DISPARO · BÁSICO", 22, UIFactory.Cream);
-            UIFactory.Place(_equippedShotLabel.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -7f), new Vector2(476f, 38f));
-
             // Separate vertical slot above the drink offer (35..135), never over it.
             _shotButton = UIFactory.CreateButton(parent, "BuyShot", "", UIFactory.CardViolet,
                 new Vector2(650f, 110f), BuyShot, 28);
@@ -352,41 +337,6 @@ namespace Game.UI
                 new Vector2(0f, 155f), new Vector2(650f, 110f));
             _shotLabel = _shotButton.GetComponentInChildren<TMPro.TMP_Text>();
             _shotButton.gameObject.SetActive(false);
-        }
-
-        void UpdateShotLoadout(RoundManager round)
-        {
-            if (_equippedShotLabel == null) return;
-            var equipped = round != null ? round.Shots.Equipped : ShotType.Basic;
-            _equippedShotLabel.text = "DISPARO · " + ShotDefinitions.Name(equipped);
-        }
-
-        void BuildWeather(Transform parent)
-        {
-            var panel = UIFactory.CreateRect("WeatherStatus", parent);
-            bool desktop = !Application.isMobilePlatform;
-            UIFactory.Place(panel, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -78f), new Vector2(500f, desktop ? 70f : 40f));
-            var background = UIFactory.CreateImage("Background", panel, RetroUiArt.Frame,
-                UIFactory.Panel, false, true);
-            UIFactory.Stretch(background.rectTransform);
-            _weatherLabel = UIFactory.CreateText("Weather", panel, "", 20, UIFactory.Cream);
-            UIFactory.Place(_weatherLabel.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -4f), new Vector2(476f, 30f));
-            if (desktop)
-            {
-                var hint = UIFactory.CreateText("DesktopControls", panel, "ESPACIO · DISPARO AUTOMÁTICO", 18, UIFactory.Muted);
-                UIFactory.Place(hint.rectTransform, new Vector2(.5f, 1f), new Vector2(.5f, 1f),
-                    new Vector2(0f, -34f), new Vector2(476f, 30f));
-            }
-        }
-
-        void UpdateWeather()
-        {
-            if (_weatherLabel == null) return;
-            _weatherLabel.text = "CLIMA · " +
-                WeatherController.DisplayName(_weather != null ? _weather.Current : WeatherKind.Sunny).ToUpperInvariant() +
-                (Application.isMobilePlatform ? "" : "  [M]");
         }
 
         void UpdateShotOffer(RoundManager round, PlayerSphereController player, bool playing)
@@ -414,10 +364,61 @@ namespace Game.UI
 
         void BuyShot()
         {
+            if (!BeginInteraction()) return;
             var round = RoundManager.Instance;
             if (round == null || round.ShotStations == null) return;
             if (round.ShotStations.IsBuilt(_nearbyShot)) round.BuyShot(_nearbyShot);
             else round.ShotStations.Build(_nearbyShot);
+        }
+
+        bool BeginInteraction()
+        {
+            if (!GameFlow.Playing || Time.timeScale <= 0f || _lastInteractionFrame == Time.frameCount)
+                return false;
+            // A click and E in the same frame must not both charge the player.
+            _lastInteractionFrame = Time.frameCount;
+            return true;
+        }
+
+        void UpdateInteraction(RoundManager round, PlayerSphereController player, bool showHud)
+        {
+            if (!showHud || !GameFlow.Playing || Time.timeScale <= 0f ||
+                round == null || !round.IsRunActive || player == null || !player.IsAlive) return;
+
+            // Both station buttons remain clickable. E belongs only to the nearest visible offer.
+            Button offer = null;
+            TMPro.TMP_Text label = null;
+            float drinkDistance = float.PositiveInfinity;
+            if (_nearbyDrink >= 0)
+            {
+                offer = _drinkButton;
+                label = _drinkLabel;
+                drinkDistance = PlanarDistance(player.transform.position, round.Drinks.Positions[_nearbyDrink]);
+            }
+            if (_nearbyShot >= 0 && PlanarDistance(player.transform.position,
+                    round.ShotStations.Positions[_nearbyShot]) < drinkDistance)
+            {
+                offer = _shotButton;
+                label = _shotLabel;
+            }
+            if (offer == null && _nearbyZone >= 2)
+            {
+                offer = _zoneButton;
+                label = _zoneLabel;
+            }
+            if (offer == null || !offer.IsActive() || !offer.IsInteractable()) return;
+            if (!Application.isMobilePlatform) label.text = "[E] " + label.text;
+            var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+            if (selected != null && (selected.GetComponentInParent<TMPro.TMP_InputField>() != null ||
+                selected.GetComponentInParent<InputField>() != null)) return;
+            if (Keyboard.current?.eKey.wasPressedThisFrame == true) offer.onClick.Invoke();
+        }
+
+        static float PlanarDistance(Vector3 from, Vector3 to)
+        {
+            Vector3 delta = from - to;
+            delta.y = 0f;
+            return delta.sqrMagnitude;
         }
 
         void BuildBanner(Transform parent)

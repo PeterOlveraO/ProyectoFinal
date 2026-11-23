@@ -12,11 +12,16 @@ Controles
   WASD o flechas: moverse.
   Mantener Espacio: disparar al enemigo válido más cercano.
   Clic izquierdo: apuntar y disparar hacia el cursor.
+  E: construir, comprar o abrir la zona cercana indicada con [E].
+     Una pulsación realiza una acción; suelta y vuelve a pulsar para la siguiente.
   Clima automático: cambia cada 60 segundos de partida; se detiene en pausa.
   M: adelantar el cambio y reiniciar el intervalo de 60 segundos.
      Ciclo: soleado, nublado, neblina, lluvia, atardecer y noche.
   Esc: pausa / volver.
   R: regresar al punto inicial.
+
+Los enemigos y jefes ganan 0,6 unidades/segundo por ronda superada,
+hasta 15 unidades/segundo. El HUD no muestra carteles de clima ni disparo equipado.
 
 Menú principal y pausa > PRUEBAS:
 añade monedas o Pokémon de clase F, A o S a la colección normal.

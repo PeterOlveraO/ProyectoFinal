@@ -10,17 +10,20 @@ namespace Game.Rounds
         public const int BossEvery = 5;
         public const int BossHealthMultiplier = 12;
         public const float BossDamageMultiplier = 3f;
+        public const float SpeedPerRound = .4f;
+        public const float MaxSpeed = 10f;
 
         public static bool IsBoss(int round) => round > 0 && round % BossEvery == 0;
 
         public static EnemyRoundStats Stats(int round, bool boss = false)
         {
             double step = Math.Max(0d, (double)round - 1d);
-            // +40% to normal starting stats only; bosses retain their original curve.
+            // Keep the opening round approachable, then close the gap with upgraded Pokémon.
+            // GameplayPace applies the shared x1.5 multiplier after these base stats.
             return new EnemyRoundStats
             {
                 health = (int)Math.Min(200d, (boss ? 10d : 14d) + 2d * step) * (boss ? BossHealthMultiplier : 1),
-                speed = (float)Math.Min(4.6d, (boss ? 2.8d : 3.92d) + .08d * step),
+                speed = (float)Math.Min(MaxSpeed, (boss ? 2.8d : 3.92d) + SpeedPerRound * step),
                 contactDamage = (float)Math.Min(35d, (boss ? 10d : 14d) + .75d * step) * (boss ? BossDamageMultiplier : 1f)
             };
         }

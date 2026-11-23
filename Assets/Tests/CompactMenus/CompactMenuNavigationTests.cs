@@ -116,7 +116,7 @@ namespace Game.Tests.CompactMenus
             var texts = CanvasRoot().Find("CreditsMenu").GetComponentsInChildren<TMPro.TMP_Text>();
             Assert.IsTrue(texts.Any(t => t.text == "Universidad Autónoma de Tamaulipas"));
             Assert.IsTrue(texts.Any(t => t.text == "Facultad de Ingeniería Tampico"));
-            Assert.IsTrue(texts.Any(t => t.text == "Pedro Olvera"));
+            Assert.IsTrue(texts.Any(t => t.text == "Pedro Olvera Ochoa"));
             Click("CreditsMenu", "Back");
             AssertActive("MainMenu");
         }
