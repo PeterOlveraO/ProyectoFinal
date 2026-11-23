@@ -17,6 +17,9 @@ namespace Game.UI
     {
         const string VolumeKey = "pketer.volumen";
         const string QualityKey = "pketer.calidad";
+        const string FullscreenKey = "pketer.linux.fullscreen";
+        const string WindowWidthKey = "pketer.linux.windowWidth";
+        const string WindowHeightKey = "pketer.linux.windowHeight";
         enum ScreenId { None, Main, Pause, Settings, Collection, Skills, Starter, Gacha, Result, Release, Credits, Tests }
         public static GameMenuController Instance { get; private set; }
         public bool IsPlaying { get; private set; }
@@ -40,6 +43,9 @@ namespace Game.UI
         bool _busy, _starterResult;
         string _message = "", _pullRequest, _releaseTarget;
         int _quality;
+        bool _fullscreen, _fullscreenPending;
+        int _windowWidth = 1280, _windowHeight = 720;
+        TMPro.TMP_Text _fullscreenValue;
         UnityEngine.UI.Slider _volumeSlider, _musicSlider, _effectsSlider;
         TMPro.TMP_Text _volumeValue, _musicValue, _effectsValue, _qualityValue, _starterInfo, _releaseInfo;
         UnityEngine.UI.Button _starterConfirm;
@@ -55,6 +61,7 @@ namespace Game.UI
             _quality = Mathf.Clamp(PlayerPrefs.GetInt(QualityKey, QualitySettings.GetQualityLevel()),
                 0, Mathf.Max(0, QualitySettings.names.Length - 1));
             if (QualitySettings.names.Length > 0) QualitySettings.SetQualityLevel(_quality, true);
+            InitializeLinuxDisplay();
             RefreshSnapshots();
             Build();
             PokemonCollection.Changed += OnCollectionChanged;
@@ -73,6 +80,7 @@ namespace Game.UI
 
         void Update()
         {
+            UpdateLinuxDisplay();
             bool controls = IsPlaying && _screen == ScreenId.None && !GameFlow.Over;
             if (_pauseButton.activeSelf != controls) _pauseButton.SetActive(controls);
             if (_skillsButton.activeSelf != controls) _skillsButton.SetActive(controls);
@@ -80,6 +88,66 @@ namespace Game.UI
                 Gamepad.current?.buttonEast.wasPressedThisFrame == true;
             if (!back || GameFlow.Over) return;
             NavigateBack();
+        }
+
+        static bool IsLinuxPlayer => Application.platform == RuntimePlatform.LinuxPlayer;
+
+        void InitializeLinuxDisplay()
+        {
+            if (!IsLinuxPlayer) return;
+            _windowWidth = Mathf.Max(640, PlayerPrefs.GetInt(WindowWidthKey, 1280));
+            _windowHeight = Mathf.Max(360, PlayerPrefs.GetInt(WindowHeightKey, 720));
+            _fullscreen = Screen.fullScreen;
+            if (PlayerPrefs.HasKey(FullscreenKey))
+            {
+                bool saved = PlayerPrefs.GetInt(FullscreenKey) != 0;
+                if (saved != _fullscreen) SetLinuxFullscreen(saved);
+            }
+        }
+
+        void UpdateLinuxDisplay()
+        {
+            if (!IsLinuxPlayer) return;
+            // Unity applies display changes at the end of a frame. Keep the requested
+            // state until it arrives, then also follow native window-manager switches.
+            if (Screen.fullScreen == _fullscreen) _fullscreenPending = false;
+            else if (!_fullscreenPending)
+            {
+                _fullscreen = Screen.fullScreen;
+                PlayerPrefs.SetInt(FullscreenKey, _fullscreen ? 1 : 0);
+                PlayerPrefs.Save();
+                RefreshFullscreenLabel();
+            }
+            if (Keyboard.current?.f11Key.wasPressedThisFrame == true)
+                SetLinuxFullscreen(!_fullscreen);
+        }
+
+        void SetLinuxFullscreen(bool fullscreen)
+        {
+            if (!IsLinuxPlayer) return;
+            if (fullscreen && !Screen.fullScreen && !_fullscreenPending)
+            {
+                _windowWidth = Screen.width;
+                _windowHeight = Screen.height;
+                PlayerPrefs.SetInt(WindowWidthKey, _windowWidth);
+                PlayerPrefs.SetInt(WindowHeightKey, _windowHeight);
+            }
+            var desktop = Screen.currentResolution;
+            int width = fullscreen ? desktop.width : Mathf.Min(_windowWidth, desktop.width);
+            int height = fullscreen ? desktop.height : Mathf.Min(_windowHeight, desktop.height);
+            _fullscreen = fullscreen;
+            _fullscreenPending = true;
+            Screen.SetResolution(width, height,
+                fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed);
+            PlayerPrefs.SetInt(FullscreenKey, fullscreen ? 1 : 0);
+            PlayerPrefs.Save();
+            RefreshFullscreenLabel();
+        }
+
+        void RefreshFullscreenLabel()
+        {
+            if (_fullscreenValue != null)
+                _fullscreenValue.text = "Pantalla completa\n" + (_fullscreen ? "SÍ" : "NO") + " · F11";
         }
 
         void NavigateBack()
@@ -535,6 +603,14 @@ namespace Game.UI
                 RefreshSettings();
             });
             _qualityValue = quality.GetComponentInChildren<TMPro.TMP_Text>();
+            if (IsLinuxPlayer)
+            {
+                UIFactory.Label(visualStack, "DisplayTitle", "Pantalla", 28, UIFactory.Cream, 44);
+                var fullscreen = StackButton(visualStack, "Fullscreen", "", UIFactory.Sky,
+                    () => SetLinuxFullscreen(!_fullscreen));
+                _fullscreenValue = fullscreen.GetComponentInChildren<TMPro.TMP_Text>();
+                RefreshFullscreenLabel();
+            }
             page.Action("Back", "Volver", UIFactory.Sun, CloseSettings);
             RefreshSettings();
         }

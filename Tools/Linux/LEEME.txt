@@ -18,6 +18,8 @@ Controles
   M: adelantar el cambio y reiniciar el intervalo de 60 segundos.
      Ciclo: soleado, nublado, neblina, lluvia, atardecer y noche.
   Esc: pausa / volver.
+  F11: alternar pantalla completa sin bordes / ventana, también desde Ajustes.
+       Recuerda la preferencia y restaura el tamaño de ventana al salir.
   R: regresar al punto inicial.
 
 Los enemigos y jefes ganan 0,6 unidades/segundo por ronda superada,
