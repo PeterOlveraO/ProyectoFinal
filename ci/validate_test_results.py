@@ -34,17 +34,17 @@ CONDITIONAL = {
     "Game.CompactMenus.Tests": ("playmode", 11),
     "Game.WorldZones.PlayMode.Tests": ("playmode", 13),
     "Game.Weather.EditMode.Tests": ("editmode", 12),
-    "Game.Weather.PlayMode.Tests": ("playmode", 16),
+    "Game.Weather.PlayMode.Tests": ("playmode", 17),
 }
 
 # Features added to existing baseline assemblies must also be discovered.
 FEATURE_FLOORS = {
     "Assets/Tests/EditMode/WorldTraversalTests.cs": [("editmode", "Game.Terrain.Tests", 44)],
     "Assets/Tests/PlayMode/DropRuntimeTests.cs": [("playmode", "Game.Runtime.PlayMode.Tests", 64)],
-    "Assets/Tests/PlayMode/DesktopCombatTests.cs": [("playmode", "Game.Runtime.PlayMode.Tests", 70)],
+    "Assets/Tests/PlayMode/DesktopCombatTests.cs": [("playmode", "Game.Runtime.PlayMode.Tests", 73)],
     "Assets/Scripts/Combat/AutoAimTargeting.cs": [("playmode", "Game.Rounds.PlayMode.Tests", 25)],
     "Assets/Scripts/UI/TestMenuView.cs": [
-        ("playmode", "Game.CompactMenus.Tests", 30),
+        ("playmode", "Game.CompactMenus.Tests", 33),
         ("editmode", "Pokemon.Progression.Tests", 25),
     ],
 }

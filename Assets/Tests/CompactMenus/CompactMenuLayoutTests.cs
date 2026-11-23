@@ -87,33 +87,59 @@ namespace Game.Tests.CompactMenus
             }
         }
 
-        [Test]
-        public void TestRewardsUseAScrollViewportAndOriginalFrames()
+        [TestCase(1920, 1080, 0, 0, false)]
+        [TestCase(1280, 720, 0, 0, false)]
+        [TestCase(1440, 1080, 0, 0, false)]
+        [TestCase(568, 320, 32, 16, true)]
+        public void TestRewardsFitNormalScreensAndScrollOnSmallScreens(
+            int width, int height, int side, int bottom, bool needsScroll)
         {
             _canvas = UIFactory.CreateCanvas("TestRewardsLayout", 0);
             _canvas.GetComponent<UnityEngine.UI.CanvasScaler>().enabled = false;
             var canvas = _canvas.GetComponent<Canvas>();
-            canvas.scaleFactor = Mathf.Sqrt(568f / 1920 * 320f / 1080);
+            canvas.scaleFactor = Mathf.Sqrt(width / 1920f * height / 1080f);
             var view = TestMenuView.Create(_canvas, _ => { }, (_, __) => { }, () => { });
             var catalog = JsonUtility.FromJson<Game.Pokemon.Progression.SpeciesCatalog>(
                 Resources.Load<TextAsset>("PokemonProgression/catalog").text);
             view.Bind(catalog.species, 10000, 10, 10, true);
+            view.SetFeedback("No se pudo guardar. Reinicia y revisa el almacenamiento.", true);
             view.Page.Root.gameObject.SetActive(true);
             var safe = (RectTransform)view.Page.Root.Find("SafeArea");
             safe.GetComponent<SafeAreaLayout>().enabled = false;
             UIFactory.Place(safe, new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero,
-                new Vector2(504 / canvas.scaleFactor, 304 / canvas.scaleFactor));
+                new Vector2((width - side * 2) / canvas.scaleFactor, (height - bottom) / canvas.scaleFactor));
             view.RefreshLayout();
             UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(view.Page.Root);
             Canvas.ForceUpdateCanvases();
             AssertInside(safe, (RectTransform)view.Page.Body.parent);
+            Assert.LessOrEqual(((RectTransform)view.Page.Body.parent).rect.width, 1120.1f);
+            Assert.LessOrEqual(((RectTransform)view.Page.Body.parent).rect.height, 760.1f);
             AssertInside(safe, view.Page.Footer);
             Assert.Greater(view.Page.Body.rect.height * canvas.scaleFactor, 48);
             var scroll = view.GetComponentInChildren<UnityEngine.UI.ScrollRect>();
             Assert.NotNull(scroll.viewport.GetComponent<UnityEngine.UI.RectMask2D>());
             Assert.AreSame(scroll.viewport, scroll.content.parent);
-            Assert.Greater(scroll.content.rect.height, scroll.viewport.rect.height);
+            Assert.NotNull(scroll.verticalScrollbar);
+            Assert.AreEqual(needsScroll, scroll.verticalScrollbar.gameObject.activeSelf,
+                "Show a scroll indicator only when the form does not fit.");
+            if (needsScroll)
+                Assert.Greater(scroll.content.rect.height, scroll.viewport.rect.height);
+            else
+            {
+                Assert.LessOrEqual(scroll.content.rect.height, scroll.viewport.rect.height + .1f);
+                foreach (var button in scroll.content.GetComponentsInChildren<UnityEngine.UI.Button>())
+                    AssertInside(scroll.viewport, (RectTransform)button.transform);
+            }
             Assert.IsFalse(scroll.horizontal);
+            var selector = (RectTransform)scroll.content.Find("SpeciesSelector");
+            var previous = (RectTransform)selector.Find("PreviousSpecies");
+            var next = (RectTransform)selector.Find("NextSpecies");
+            var species = (RectTransform)selector.Find("SpeciesName");
+            float arrowWidth = Mathf.Max(64, 48 / canvas.scaleFactor);
+            Assert.AreEqual(arrowWidth, previous.rect.width, .1f);
+            Assert.AreEqual(arrowWidth, next.rect.width, .1f);
+            Assert.Greater(species.rect.width, previous.rect.width * 2,
+                "The species name must receive the spare width, not the arrows.");
             foreach (var selectable in view.GetComponentsInChildren<UnityEngine.UI.Selectable>())
                 Assert.GreaterOrEqual(((RectTransform)selectable.transform).rect.height * canvas.scaleFactor, 47.99f);
             foreach (var text in view.GetComponentsInChildren<TMPro.TMP_Text>())
@@ -128,6 +154,12 @@ namespace Game.Tests.CompactMenus
                 Assert.AreEqual(UnityEngine.UI.Image.Type.Sliced, button.image.type);
             }
             Assert.IsTrue(view.Page.Root.Find("Background").GetComponent<UnityEngine.UI.Image>().raycastTarget);
+            if (needsScroll)
+            {
+                scroll.verticalNormalizedPosition = 0;
+                Canvas.ForceUpdateCanvases();
+            }
+            AssertInside(scroll.viewport, (RectTransform)scroll.content.Find("GrantPokemon"));
         }
 
         [TestCase("100", true, 100)]

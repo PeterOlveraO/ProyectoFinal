@@ -34,7 +34,6 @@ namespace Game.Weather
         UniversalAdditionalCameraData _cameraData;
         bool _previousPostProcessing, _ownsEnvironment;
         LayerMask _previousVolumeMask;
-        VolumeFrameworkUpdateMode _previousUpdateMode;
         float _cameraRetryAt;
 
         public static WeatherController Instance { get; private set; }
@@ -73,6 +72,7 @@ namespace Game.Weather
         {
             if (Instance != null && Instance != this) { enabled = false; return; }
             Instance = this;
+            RenderPipelineManager.activeRenderPipelineCreated += OnRenderPipelineCreated;
             if (_runtimeRoot == null) CreateResources();
             _environment.Capture();
             _ownsEnvironment = true;
@@ -148,6 +148,7 @@ namespace Game.Weather
             bool wasTransitioning = IsTransitioning;
             _transition.Advance(deltaTime, true);
             if (wasTransitioning) ApplyVisuals();
+            else RefreshCameraVolumeStack();
             // Camera.main is a tagged lookup. Refresh at most once per second for camera swaps;
             // actor/world references use their existing singletons, never global renderer scans.
             if (Time.unscaledTime >= _cameraRetryAt)
@@ -186,6 +187,26 @@ namespace Game.Weather
             _grade.colorFilter.value = style.Filter;
             _grade.saturation.value = style.Saturation;
             _environment.Apply(style);
+            RefreshCameraVolumeStack();
+        }
+
+        void OnRenderPipelineCreated()
+        {
+            if (_ownsEnvironment) RefreshCameraVolumeStack();
+        }
+
+        void RefreshCameraVolumeStack()
+        {
+            // URP 17.5 CameraExtensions.UpdateVolumeStack rejects calls before Initialize
+            // (UUM-91000). Awake/Start may precede pipeline creation, including in batchmode.
+            if (!VolumeManager.instance.isInitialized || _camera == null || _cameraData == null) return;
+            // Preserve the borrowed camera's update mode. Explicitly refresh manual stacks
+            // instead of switching to EveryFrame and later triggering an unsafe setter on cleanup.
+            if (_cameraData.requiresVolumeFrameworkUpdate) return;
+            // Match URP.UpdateVolumeFramework after a pipeline/quality-level recreation.
+            if (_cameraData.volumeStack != null && !_cameraData.volumeStack.isValid)
+                _camera.DestroyVolumeStack(_cameraData);
+            _camera.UpdateVolumeStack(_cameraData);
         }
 
         void BindCamera(Camera camera)
@@ -201,10 +222,9 @@ namespace Game.Weather
             }
             _previousPostProcessing = _cameraData.renderPostProcessing;
             _previousVolumeMask = _cameraData.volumeLayerMask;
-            _previousUpdateMode = camera.GetVolumeFrameworkUpdateMode();
             _cameraData.renderPostProcessing = true;
             _cameraData.volumeLayerMask = _previousVolumeMask | (1 << _runtimeRoot.layer);
-            camera.SetVolumeFrameworkUpdateMode(VolumeFrameworkUpdateMode.EveryFrame);
+            RefreshCameraVolumeStack();
         }
 
         void RestoreCamera()
@@ -213,7 +233,9 @@ namespace Game.Weather
             {
                 _cameraData.renderPostProcessing = _previousPostProcessing;
                 _cameraData.volumeLayerMask = _previousVolumeMask;
-                if (_camera != null) _camera.SetVolumeFrameworkUpdateMode(_previousUpdateMode);
+                // An initialized manual stack must reflect the restored mask and disabled volume.
+                // Before initialization no stack was modified; URP creates it at first render.
+                RefreshCameraVolumeStack();
             }
             _cameraData = null;
             _camera = null;
@@ -221,13 +243,13 @@ namespace Game.Weather
 
         void OnDisable()
         {
+            RenderPipelineManager.activeRenderPipelineCreated -= OnRenderPipelineCreated;
             if (Instance == this) Instance = null;
             if (!_ownsEnvironment) return;
             _ownsEnvironment = false;
             _environment.Restore();
             if (_volume != null) _volume.enabled = false;
-            // ViaScripting restoration can refresh the camera's volume stack immediately.
-            // Unregister our volume first so that stack cannot retain the weather grade.
+            // Unregister our volume before refreshing any borrowed manual volume stack.
             RestoreCamera();
             _rain?.SetVisible(false);
         }

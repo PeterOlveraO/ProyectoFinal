@@ -24,12 +24,14 @@ namespace Game.Combat
                 if (Mathf.Abs(axis.y) > 1.9f) continue;
                 axis.y = 0;
                 float distance = axis.sqrMagnitude;
-                if (distance < .0001f || distance > best) continue;
+                if (distance > best) continue;
                 if (terrain != null && terrain.Traversal != null &&
                     !terrain.Traversal.CanProjectileTraverse(origin, target, .1f)) continue;
                 if (!HasLineOfSight(origin, target)) continue;
                 best = distance;
-                direction = axis.normalized;
+                // Overlapping feet have no horizontal axis; the muzzle's .55 offset is
+                // still within the projectile's .60 hit radius. Keep all guards above.
+                direction = distance < .0001f ? Vector3.forward : axis.normalized;
             }
             return direction.sqrMagnitude > 0;
         }

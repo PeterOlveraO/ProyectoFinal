@@ -26,11 +26,18 @@ subscriptions. Reset snaps to the original sunny lighting and clears rain, even 
 
 - Runtime global URP Volume: exposure, multiplication tint, saturation, zero contrast.
   It affects both URP-lit terrain and unlit/default sprites, before ScreenSpaceOverlay UI.
-- Runtime camera post-processing/mask/update-mode changes are restored. Existing sun,
+- Runtime camera post-processing/mask changes are restored; its update mode is preserved.
+  Manual volume stacks refresh only after `VolumeManager.isInitialized`, including via
+  `activeRenderPipelineCreated` when the controller is enabled before the first render.
+  Disabling weather unregisters its Volume and refreshes a borrowed manual stack with
+  the original mask. The pipeline callback is unsubscribed on disable/destruction.
+  Existing sun,
   ambient and fog are restored on disable/destruction; no sun or shared profile is replaced.
 - Atmospheric exponential-squared fog is applied by URP Lit before the black unlit
   WorldZoneFog surface. Graphics Settings use Custom fog stripping, retaining `FOG_EXP2`
   for runtime weather even though World.unity starts without fog.
+  Fog density is `0.022`: the distant orthographic gameplay camera made `0.034` obscure
+  almost the whole terrain in native-player QA.
 - Local precipitation: one emitter, maximum 160 particles, no collision/shadows/depth
   texture/noise texture, manually simulated only on gameplay ticks. Shader loaded directly
   from `Resources/Weather/LocalRain` is included in builds. Closed rectangles are updated
@@ -51,5 +58,46 @@ subscriptions. Reset snaps to the original sunny lighting and clears rain, even 
   remains black, and the closed-zone fragment is discarded. It skips a Null graphics device.
 
 Run PlayMode tests in the runner's empty scene, not during the populated World play session.
+
+### Deterministic batchmode input and first render
+
+CI run `45100814541` passed EditMode but exposed six keyboard failures and an early URP
+initialization error in the initially empty PlayMode scene.
+
+- The fixture clones/restores `InputSystem.settings` instead of editing the project asset.
+  It selects Manual updates, `IgnoreFocus`, routes editor input to the player, and restores
+  `Application.runInBackground` and the previous keyboard in `finally`.
+  **Settings ownership:** `InputManager.settings` (package 1.20, lines 190–194) destroys the
+  outgoing object when its flags equal `HideAndDontSave`. An empty batchmode scene can
+  supply exactly that temporary original; `Instantiate` also copies those flags. The
+  fixture temporarily protects that original with `DontSave`, gives the clone `DontSave`,
+  reinstalls the original **by reference**, then restores its exact flags. Only a detached
+  clone is destroyed. Setup/teardown assert both liveness and reference identity, preventing
+  the first passing test from leaving destroyed settings for every later fixture
+  (observed in PlayMode job `286a423ad3004354b8680f05718744d7`).
+- Every injected state advances **explicitly** with `InputUpdateType.Manual`. The typed
+  `InputSystem.Update(InputUpdateType)` is internal in package 1.20, so this test-only
+  adapter resolves that verified overload by reflection. The public parameterless overload
+  chooses `InputManager.defaultUpdateType`, which can select Editor state based on focus.
+- `ButtonControl.wasPressedThisFrame` initializes its edge history lazily. The fixture first
+  samples a released M and completes another input frame. Assertions check update type,
+  queued button state and every expected press edge, in addition to the original weather
+  sequence, held-key, blocker and event-count assertions.
+- The ViaScripting cleanup test renders a 16×16 target for one frame and asserts
+  `VolumeManager.isInitialized` **before** calling the setter. It then verifies that the
+  runtime preserves that mode, updates the actual cached stack with weather, and restores
+  the stack's original exposure on disable. A separate synchronous regression starts with
+  the serialized camera mode already set to ViaScripting and creates/destroys weather in
+  the same frame, so it can exercise cleanup before the first render. No unexpected logs
+  are suppressed.
+
+Source references (installed packages):
+`InputSystem/Runtime/InputManager.cs` (`defaultUpdateType` and focus routing),
+`InputSystem/Runtime/InputSystem.cs` (typed `Update`),
+`InputSystem/Runtime/Controls/ButtonControl.cs` (lazy frame-press tracking);
+URP `Runtime/UniversalAdditionalCameraData.cs` (`CameraExtensions.UpdateVolumeStack`,
+UUM-91000 initialization guard) and `Runtime/UniversalRenderPipeline.cs`
+(`UpdateVolumeFramework`, first-render creation of manual stacks).
+
 The owning session runs compilation/tests/captures/build; this module's author did not start
 or refresh Unity, run tests, enter Play mode or build.

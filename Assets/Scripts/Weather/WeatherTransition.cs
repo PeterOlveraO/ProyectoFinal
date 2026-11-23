@@ -35,7 +35,7 @@ namespace Game.Weather
                         .74f, new Color(.9f, .95f, 1f), .96f, .009f, new Color(.60f, .69f, .76f));
                 case WeatherKind.Fog:
                     return new WeatherStyle(.02f, -27f, new Color(.93f, .98f, 1f),
-                        .83f, Color.white, 1f, .034f, new Color(.69f, .78f, .80f));
+                        .83f, Color.white, 1f, .022f, new Color(.69f, .78f, .80f));
                 case WeatherKind.Rain:
                     return new WeatherStyle(-.32f, -20f, new Color(.78f, .88f, 1f),
                         .72f, new Color(.86f, .92f, 1f), .95f, .018f, new Color(.40f, .52f, .63f), 1f);

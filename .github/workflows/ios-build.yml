@@ -140,7 +140,7 @@ jobs:
           file "$PLAYER" | grep -q 'ELF 64-bit.*x86-64'
           echo "${{ github.sha }}" > "$DIRECTORY/commit.txt"
           mkdir -p artifacts/linux
-          tar -C "$DIRECTORY" -czf artifacts/linux/PKETER-Linux-x86_64.tar.gz .
+          tar -C "$DIRECTORY" --exclude='*DoNotShip*' -czf artifacts/linux/PKETER-Linux-x86_64.tar.gz .
           sha256sum artifacts/linux/PKETER-Linux-x86_64.tar.gz | sed 's|artifacts/linux/||' > artifacts/linux/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:

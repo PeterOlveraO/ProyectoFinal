@@ -26,7 +26,11 @@ namespace Game.Weather.Tests
         Light _sun, _originalSun;
         Keyboard _keyboard, _previousKeyboard;
         WeatherController _weather;
-        bool _blocked, _over;
+        InputSettings _originalInputSettings, _testInputSettings;
+        HideFlags _originalInputSettingsFlags;
+        System.Action<InputUpdateType> _updateInput;
+        RenderTexture _cameraTarget;
+        bool _blocked, _over, _runInBackground, _mWasDown;
         float _timeScale;
 
         [SetUp]
@@ -38,6 +42,33 @@ namespace Game.Weather.Tests
             _blocked = GameFlow.Blocked;
             _over = GameFlow.Over;
             _timeScale = Time.timeScale;
+            _runInBackground = Application.runInBackground;
+            _originalInputSettings = InputSystem.settings;
+            Assert.That(_originalInputSettings != null, Is.True, "The fixture requires live InputSystem settings.");
+            _originalInputSettingsFlags = _originalInputSettings.hideFlags;
+            _testInputSettings = Object.Instantiate(_originalInputSettings);
+            // InputManager.settings destroys outgoing HideAndDontSave settings. Empty
+            // batchmode runs use such a temporary original, and Instantiate copies its flags.
+            // Keep both objects fixture-owned during the swap; restore the original flags later.
+            _testInputSettings.hideFlags = HideFlags.DontSave;
+            _testInputSettings.updateMode = InputSettings.UpdateMode.ProcessEventsManually;
+            _testInputSettings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+#if UNITY_EDITOR
+            _testInputSettings.editorInputBehaviorInPlayMode =
+                InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+#endif
+            if (_originalInputSettingsFlags == HideFlags.HideAndDontSave)
+                _originalInputSettings.hideFlags = HideFlags.DontSave;
+            InputSystem.settings = _testInputSettings;
+            Assert.That(_originalInputSettings != null, Is.True, "Installing the test settings must not destroy the original.");
+            Assert.That(ReferenceEquals(InputSystem.settings, _testInputSettings), Is.True);
+            Application.runInBackground = true;
+            // In Input System 1.20 the typed Update overload is internal. Use that exact
+            // package API in this fixture rather than the focus-dependent public Update().
+            var update = typeof(InputSystem).GetMethod("Update", BindingFlags.Static |
+                BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(InputUpdateType) }, null);
+            Assert.That(update, Is.Not.Null, "Input System's typed test update API changed.");
+            _updateInput = (System.Action<InputUpdateType>)update.CreateDelegate(typeof(System.Action<InputUpdateType>));
             _originalSun = RenderSettings.sun;
             _originalEnvironment.Capture();
             GameFlow.Blocked = GameFlow.Over = false;
@@ -61,23 +92,66 @@ namespace Game.Weather.Tests
             _previousKeyboard = Keyboard.current;
             _keyboard = InputSystem.AddDevice<Keyboard>();
             _keyboard.MakeCurrent();
+            _mWasDown = false;
+            // ButtonControl initializes edge tracking lazily. Start tracking while released,
+            // then complete a second input frame before testing even the first M press.
+            InputSystem.QueueStateEvent(_keyboard, new KeyboardState());
+            UpdateInputFrame();
+            Assert.That(_keyboard.mKey.wasPressedThisFrame, Is.False);
+            UpdateInputFrame();
         }
 
         [TearDown]
         public void TearDown()
         {
-            // Restoring globals is immediate in OnDisable; owned native resources destroy at end of frame.
-            if (_weather != null) Object.DestroyImmediate(_weather.gameObject);
-            for (int i = _objects.Count - 1; i >= 0; i--)
-                if (_objects[i] != null) Object.DestroyImmediate(_objects[i]);
-            _objects.Clear();
-            _originalEnvironment.Restore();
-            RenderSettings.sun = _originalSun;
-            if (_keyboard != null && _keyboard.added) InputSystem.RemoveDevice(_keyboard);
-            if (_previousKeyboard != null && _previousKeyboard.added) _previousKeyboard.MakeCurrent();
-            GameFlow.Blocked = _blocked;
-            GameFlow.Over = _over;
-            Time.timeScale = _timeScale;
+            try
+            {
+                // Restoring globals is immediate in OnDisable; owned native resources destroy at end of frame.
+                if (_weather != null) Object.DestroyImmediate(_weather.gameObject);
+                for (int i = _objects.Count - 1; i >= 0; i--)
+                    if (_objects[i] != null) Object.DestroyImmediate(_objects[i]);
+                _objects.Clear();
+                if (_cameraTarget != null)
+                {
+                    _cameraTarget.Release();
+                    Object.DestroyImmediate(_cameraTarget);
+                    _cameraTarget = null;
+                }
+                _originalEnvironment.Restore();
+                RenderSettings.sun = _originalSun;
+            }
+            finally
+            {
+                if (_keyboard != null && _keyboard.added) InputSystem.RemoveDevice(_keyboard);
+                if (_previousKeyboard != null && _previousKeyboard.added) _previousKeyboard.MakeCurrent();
+                try { RestoreInputSettings(); }
+                finally
+                {
+                    Application.runInBackground = _runInBackground;
+                    GameFlow.Blocked = _blocked;
+                    GameFlow.Over = _over;
+                    Time.timeScale = _timeScale;
+                }
+            }
+        }
+
+        void RestoreInputSettings()
+        {
+            if (_originalInputSettings != null)
+            {
+                InputSystem.settings = _originalInputSettings;
+                _originalInputSettings.hideFlags = _originalInputSettingsFlags;
+            }
+            bool restored = _originalInputSettings != null &&
+                ReferenceEquals(InputSystem.settings, _originalInputSettings);
+            // Never poison subsequent fixtures by destroying settings still installed globally,
+            // even if an unrelated failure prevented the expected restoration.
+            if (_testInputSettings != null && !ReferenceEquals(InputSystem.settings, _testInputSettings))
+                Object.DestroyImmediate(_testInputSettings);
+            _testInputSettings = null;
+            Assert.That(restored, Is.True, "TearDown must reinstall the exact live original settings before releasing its clone.");
+            Assert.That(InputSystem.settings != null, Is.True, "The next fixture must receive live InputSettings.");
+            Assert.That(InputSystem.settings.hideFlags, Is.EqualTo(_originalInputSettingsFlags));
         }
 
         WeatherController StartWeather()
@@ -113,7 +187,7 @@ namespace Game.Weather.Tests
                 KeyState(false);
                 KeyState(true);
                 Assert.That(_weather.Current, Is.EqualTo(kind));
-                // A subsequent Input System update with M still down is not another press.
+                // A subsequent explicit input frame with M still down is not another press.
                 KeyState(true);
                 Assert.That(_weather.Current, Is.EqualTo(kind));
             }
@@ -258,10 +332,19 @@ namespace Game.Weather.Tests
         [UnityTest]
         public IEnumerator DisableRestoresBorrowedCameraAndSunAndDestroyReleasesOwnedNativeObjects()
         {
-            var data = _camera.gameObject.AddComponent<UniversalAdditionalCameraData>();
+            // A fresh empty batchmode scene can run synchronous tests before the first URP
+            // render. Render a small target for one frame, without relying on a Game View.
+            _cameraTarget = new RenderTexture(16, 16, 16);
+            _cameraTarget.Create();
+            _camera.targetTexture = _cameraTarget;
+            yield return null;
+            Assert.That(VolumeManager.instance.isInitialized, Is.True,
+                "The render pipeline must initialize before testing the ViaScripting setter.");
+            var data = _camera.GetUniversalAdditionalCameraData();
             data.renderPostProcessing = false;
             data.volumeLayerMask = 1 << 4;
             _camera.SetVolumeFrameworkUpdateMode(VolumeFrameworkUpdateMode.ViaScripting);
+            float originalExposure = data.volumeStack.GetComponent<ColorAdjustments>().postExposure.value;
             Quaternion rotation = _sun.transform.rotation;
             Color color = _sun.color;
             Color ambient = RenderSettings.ambientLight;
@@ -269,6 +352,11 @@ namespace Game.Weather.Tests
             StartWeather();
             _weather.SetWeather(WeatherKind.Sunset);
             _weather.Advance(3f);
+            Assert.That(_camera.GetVolumeFrameworkUpdateMode(), Is.EqualTo(VolumeFrameworkUpdateMode.ViaScripting),
+                "Weather must preserve a borrowed camera's update mode even while active.");
+            Assert.That(data.volumeStack.GetComponent<ColorAdjustments>().postExposure.value,
+                Is.EqualTo(_weather.VisualState.Exposure).Within(.0001f),
+                "Manual camera stacks must actually receive the weather grade.");
             var volume = _weather.GetComponentInChildren<Volume>();
             var profile = Field<VolumeProfile>(_weather, "_profile");
             var grade = profile.components[0];
@@ -279,6 +367,8 @@ namespace Game.Weather.Tests
             Assert.That(data.renderPostProcessing, Is.False);
             Assert.That((int)data.volumeLayerMask, Is.EqualTo(1 << 4));
             Assert.That(_camera.GetVolumeFrameworkUpdateMode(), Is.EqualTo(VolumeFrameworkUpdateMode.ViaScripting));
+            Assert.That(data.volumeStack.GetComponent<ColorAdjustments>().postExposure.value,
+                Is.EqualTo(originalExposure).Within(.0001f), "Cleanup must also remove the grade from the cached stack.");
             Assert.That(volume.enabled, Is.False);
             Assert.That(_sun.intensity, Is.EqualTo(1.3f));
             Assert.That(_sun.color, Is.EqualTo(color));
@@ -302,6 +392,28 @@ namespace Game.Weather.Tests
             Assert.That(_sun != null && data != null, Is.True, "Never destroy borrowed scene objects.");
             Assert.That(_sun.color, Is.EqualTo(color));
             Assert.That(data.renderPostProcessing, Is.False);
+        }
+
+        [Test]
+        public void BorrowedManualCameraKeepsItsModeWhenWeatherIsCreatedAndDestroyedInOneFrame()
+        {
+            var data = _camera.gameObject.AddComponent<UniversalAdditionalCameraData>();
+            data.renderPostProcessing = false;
+            data.volumeLayerMask = 1 << 4;
+            // Reproduce a camera deserialized as ViaScripting before any render. Calling
+            // the public setter here would itself cause UUM-91000, before weather is tested.
+            var modeField = typeof(UniversalAdditionalCameraData).GetField("m_VolumeFrameworkUpdateModeOption", Private);
+            Assert.That(modeField, Is.Not.Null, "URP's serialized camera update-mode field changed.");
+            modeField.SetValue(data, VolumeFrameworkUpdateMode.ViaScripting);
+            StartWeather();
+            Assert.That(_camera.GetVolumeFrameworkUpdateMode(), Is.EqualTo(VolumeFrameworkUpdateMode.ViaScripting));
+            Assert.That(data.renderPostProcessing, Is.True);
+            Object.DestroyImmediate(_weather);
+            Assert.That(WeatherController.Instance, Is.Null);
+            Assert.That(data != null, Is.True);
+            Assert.That(_camera.GetVolumeFrameworkUpdateMode(), Is.EqualTo(VolumeFrameworkUpdateMode.ViaScripting));
+            Assert.That(data.renderPostProcessing, Is.False);
+            Assert.That((int)data.volumeLayerMask, Is.EqualTo(1 << 4));
         }
 
         [UnityTest]
@@ -426,8 +538,20 @@ namespace Game.Weather.Tests
         void KeyState(bool pressed)
         {
             InputSystem.QueueStateEvent(_keyboard, pressed ? new KeyboardState(Key.M) : new KeyboardState());
-            InputSystem.Update();
+            UpdateInputFrame();
+            _keyboard.MakeCurrent();
+            Assert.That(_keyboard.mKey.isPressed, Is.EqualTo(pressed), "The queued keyboard state must reach the player buffer.");
+            Assert.That(_keyboard.mKey.wasPressedThisFrame, Is.EqualTo(pressed && !_mWasDown),
+                "A press edge is required exactly once, including the first injected press.");
             _weather.ReadInput();
+            _mWasDown = pressed;
+        }
+
+        void UpdateInputFrame()
+        {
+            _updateInput(InputUpdateType.Manual);
+            Assert.That(InputState.currentUpdateType, Is.EqualTo(InputUpdateType.Manual),
+                "Batchmode must not silently route this test's input frame to Editor state.");
         }
 
         GameObject Create(string name, params System.Type[] components)

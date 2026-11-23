@@ -4,7 +4,10 @@ using Game.Combat;
 using Game.Core;
 using Game.Enemies;
 using Game.Player;
+using Game.Pokemon;
+using Game.Pokemon.Progression;
 using Game.Rounds;
+using Game.Terrain;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -18,6 +21,11 @@ namespace Game.Tests.PlayMode
     {
         const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
         readonly List<GameObject> _owned = new List<GameObject>();
+        readonly List<Object> _assets = new List<Object>();
+        static readonly FieldInfo CollectionService = typeof(PokemonCollection).GetField("service",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        object _previousService;
+        bool _replacedService;
         Keyboard _keyboard, _previousKeyboard;
         Mouse _mouse, _previousMouse;
         PlayerAttack _attack;
@@ -83,6 +91,11 @@ namespace Game.Tests.PlayMode
             for (int i = _owned.Count - 1; i >= 0; i--)
                 if (_owned[i] != null) Object.DestroyImmediate(_owned[i]);
             _owned.Clear();
+            foreach (var asset in _assets)
+                if (asset != null) Object.DestroyImmediate(asset);
+            _assets.Clear();
+            if (_replacedService) CollectionService.SetValue(null, _previousService);
+            _replacedService = false;
             InputSystem.RemoveDevice(_keyboard); InputSystem.RemoveDevice(_mouse);
             if (_previousKeyboard != null && _previousKeyboard.added) _previousKeyboard.MakeCurrent();
             if (_previousMouse != null && _previousMouse.added) _previousMouse.MakeCurrent();
@@ -122,6 +135,139 @@ namespace Game.Tests.PlayMode
             Assert.IsFalse(Aim(out _));
             hidden.enabled = false;
             Assert.IsFalse(Aim(out _));
+        }
+
+        sealed class MemoryStore : IProgressionStore
+        {
+            string _data;
+            public string Read() => _data;
+            public void Write(string expected, string next)
+            {
+                Assert.AreEqual(expected, _data);
+                _data = next;
+            }
+        }
+
+        WorldTerrain ContactCombatWorld()
+        {
+            Assert.IsNull(WorldTerrain.Instance);
+            var settings = ScriptableObject.CreateInstance<TerrainSettings>();
+            _assets.Add(settings);
+            var material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            _assets.Add(material);
+            settings.terrainMaterial = material;
+            settings.chunksX = settings.chunksZ = 4;
+            settings.chunkSize = 16;
+            settings.flatRadius = 1000;
+            settings.flatLevel = 1;
+            settings.lakeCount = 0;
+            settings.enableWorldZones = true;
+            settings.loadRadius = 0;
+            var world = Create("DesktopContactWorld");
+            world.SetActive(false);
+            var terrain = world.AddComponent<WorldTerrain>();
+            typeof(WorldTerrain).GetField("settings", Private).SetValue(terrain, settings);
+            world.SetActive(true);
+            terrain.enabled = false;
+
+            var capsule = _attack.gameObject.AddComponent<CharacterController>();
+            capsule.height = 1;
+            capsule.radius = .5f;
+            capsule.center = Vector3.zero;
+            capsule.skinWidth = .02f;
+            capsule.stepOffset = .55f;
+            var player = _attack.gameObject.AddComponent<PlayerSphereController>();
+            player.enabled = false;
+            terrain.Player = player.transform;
+
+            var catalog = JsonUtility.FromJson<SpeciesCatalog>(Resources.Load<TextAsset>("PokemonProgression/catalog").text);
+            var config = JsonUtility.FromJson<GachaConfig>(Resources.Load<TextAsset>("PokemonProgression/gacha").text);
+            config.starterF = 1;
+            config.starterA = config.starterS = 0;
+            var progression = new ProgressionService(new MemoryStore(), catalog, config, random: new System.Random(123));
+            Assert.IsTrue(progression.ChooseStarter("jolteon").success);
+            _previousService = CollectionService.GetValue(null);
+            _replacedService = true;
+            CollectionService.SetValue(null, progression);
+            var round = Create("DesktopContactRound").AddComponent<RoundManager>();
+            round.enabled = false;
+            round.Drinks.enabled = false;
+            round.ShotStations.enabled = false;
+            round.StartRun();
+            Assert.IsTrue(round.IsRunActive, round.LastRunStartError);
+            Assert.AreEqual(Rarity.F, round.RunPokemon.rarity);
+            Assert.AreEqual("jolteon", round.RunPokemon.speciesId);
+            Assert.AreEqual(2, round.CombatStats.damage, "Use the real catalog, nature and combat conversion.");
+            Assert.AreEqual(round.CombatStats.damage, _attack.Damage);
+            Assert.AreEqual(terrain.SpawnPosition.y + .52f, player.transform.position.y, .001f);
+            Physics.SyncTransforms();
+            Assert.IsTrue(Physics.Raycast(terrain.SpawnPosition + Vector3.right * 2 + Vector3.up * 2,
+                Vector3.down, out var groundHit, 3, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore));
+            Assert.IsInstanceOf<MeshCollider>(groundHit.collider, "Exercise the generated ground collider.");
+            Assert.AreEqual(terrain.SpawnPosition.y, groundHit.point.y, .001f);
+            return terrain;
+        }
+
+        [TestCase(.8f)]
+        [TestCase(0f)]
+        public void HeldSpaceKillsContactEnemyInSevenRealHitsOnGeneratedTerrain(float distance)
+        {
+            var terrain = ContactCombatWorld();
+            var enemy = Enemy(terrain.SpawnPosition + Vector3.right * distance);
+            enemy.InitializeRound(1, RoundDifficulty.Stats(1), false);
+            Assert.AreEqual(14, enemy.Health);
+            Physics.SyncTransforms();
+            Space(true);
+            Assert.IsTrue(Aim(out var axis), "Contact/overlap must remain targetable.");
+            Assert.Less(Vector3.Distance(axis, distance == 0 ? Vector3.forward : Vector3.right), .0001f);
+
+            int hits = 0;
+            const float step = 1f / 60f;
+            // Same attack/projectile tick paths, with deterministic time and no unrelated spawning.
+            for (int frame = 0; frame < 360 && !enemy.IsDead; frame++)
+            {
+                int previous = enemy.Health;
+                Tick(step);
+                foreach (var projectile in Object.FindObjectsByType<AttackProjectile>())
+                    Call(projectile, "TickProjectile", step);
+                if (enemy.Health == previous) continue;
+                hits++;
+                Assert.AreEqual(2, previous - enemy.Health, "Each impact must apply the unmodified run damage.");
+                Assert.AreEqual(14 - hits * 2, enemy.Health);
+                Assert.AreEqual(hits == 7, enemy.IsDead);
+            }
+            Assert.AreEqual(7, hits);
+            Assert.IsTrue(enemy.IsDead);
+            Space(false);
+            Assert.IsFalse(Aim(out _));
+        }
+
+        [Test]
+        public void CoincidentAimStillChecksHeightTerritoryAndLineOfSight()
+        {
+            var terrain = ContactCombatWorld();
+            var enemy = Enemy(terrain.SpawnPosition);
+            Vector3 origin = _attack.transform.position + Vector3.up * .62f;
+            Assert.IsTrue(AutoAimTargeting.TryDirection(origin, 18, out var axis));
+            Assert.AreEqual(Vector3.forward, axis);
+
+            enemy.transform.position += Vector3.up * 5;
+            Assert.IsFalse(AutoAimTargeting.TryDirection(origin, 18, out _), "Overlap cannot bypass height.");
+            enemy.transform.position = terrain.SpawnPosition;
+            var blocker = Create("CoincidentBodyOccluder").AddComponent<BoxCollider>();
+            blocker.size = new Vector3(.2f, .1f, .2f);
+            blocker.transform.position = new Vector3(origin.x, origin.y - .25f, origin.z);
+            Physics.SyncTransforms();
+            Assert.IsFalse(AutoAimTargeting.TryDirection(origin, 18, out _), "The vertical body ray remains occluded.");
+            blocker.enabled = false;
+            Physics.SyncTransforms();
+            Assert.IsTrue(AutoAimTargeting.TryDirection(origin, 18, out _));
+
+            Rect locked = terrain.Traversal.Layout.Bounds(3);
+            var lockedFeet = new Vector3(locked.center.x, terrain.SpawnPosition.y, locked.center.y);
+            enemy.transform.position = lockedFeet;
+            Assert.IsFalse(AutoAimTargeting.TryDirection(lockedFeet + Vector3.up * 1.14f, 18, out _),
+                "Even a zero-length XZ segment cannot acquire inside a locked territory.");
         }
 
         [Test]

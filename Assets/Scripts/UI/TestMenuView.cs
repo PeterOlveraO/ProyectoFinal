@@ -21,6 +21,8 @@ namespace Game.UI
         TMPro.TMP_InputField _amount;
         UnityEngine.UI.LayoutElement _previousWidth, _nextWidth;
         UnityEngine.UI.Button _addPokemon;
+        UnityEngine.UI.ScrollRect _scroll;
+        RectTransform _scrollbar;
         int _speciesIndex;
         Rarity _rarity;
         Vector2 _lastSize;
@@ -39,14 +41,27 @@ namespace Game.UI
             UnityEngine.Events.UnityAction back)
         {
             Page = page;
-            Page.SetSize(new Vector2(1120, 800));
+            Page.SetSize(new Vector2(1120, 760));
             _safe = (RectTransform)Page.Root.Find("SafeArea");
             _canvas = GetComponentInParent<Canvas>();
             _title = Page.Root.Find("SafeArea/Content/Title").GetComponent<TMPro.TMP_Text>();
             Page.Wallet.gameObject.SetActive(false);
             var surface = UIFactory.Surface("Rewards", Page.Body);
             UIFactory.Stretch(surface);
-            _content = UIFactory.ScrollStack(surface, 12, 12);
+            _content = UIFactory.ScrollStack(surface, 8, 8);
+            _scroll = surface.GetComponent<UnityEngine.UI.ScrollRect>();
+            var track = UIFactory.CreateImage("ScrollIndicator", surface, null, UIFactory.Inner, true);
+            _scrollbar = track.rectTransform;
+            UIFactory.Region(_scrollbar, 1, 0, 1, 1);
+            var handle = UIFactory.CreateImage("Handle", track.transform, null, UIFactory.Sky, true);
+            UIFactory.Stretch(handle.rectTransform);
+            var scrollbar = track.gameObject.AddComponent<UnityEngine.UI.Scrollbar>();
+            scrollbar.handleRect = handle.rectTransform;
+            scrollbar.targetGraphic = handle;
+            scrollbar.direction = UnityEngine.UI.Scrollbar.Direction.BottomToTop;
+            scrollbar.navigation = new UnityEngine.UI.Navigation { mode = UnityEngine.UI.Navigation.Mode.None };
+            _scroll.verticalScrollbar = scrollbar;
+            _scroll.verticalScrollbarVisibility = UnityEngine.UI.ScrollRect.ScrollbarVisibility.AutoHide;
             _summary = Caption("Summary", "");
             var presets = Row("CoinPresets");
             foreach (int value in new[] { 100, 1000, 10000 })
@@ -65,6 +80,7 @@ namespace Game.UI
 
             Caption("SpeciesTitle", "ESPECIE DEL CATÁLOGO");
             var speciesRow = Row("SpeciesSelector");
+            speciesRow.GetComponent<UnityEngine.UI.HorizontalLayoutGroup>().childForceExpandWidth = false;
             var previous = Button(speciesRow, "PreviousSpecies", "<", "Blue", () => CycleSpecies(-1));
             _previousWidth = previous.GetComponent<UnityEngine.UI.LayoutElement>();
             _previousWidth.flexibleWidth = 0;
@@ -88,7 +104,6 @@ namespace Game.UI
             _rows.Add(_addPokemon.GetComponent<UnityEngine.UI.LayoutElement>());
             Page.Action("Back", "VOLVER", UIFactory.Sun, back);
             SetFeedback("Colección normal · guardado automático.");
-            RefreshLayout();
         }
 
         public void Bind(IReadOnlyList<SpeciesDefinition> catalog, int coins, int count, int capacity, bool ready)
@@ -105,6 +120,7 @@ namespace Game.UI
         {
             Page.Status.text = text;
             Page.Status.color = error ? UIFactory.Coral : UIFactory.Muted;
+            RefreshLayout();
         }
 
         public static bool TryParseAmount(string text, out int amount) =>
@@ -132,14 +148,14 @@ namespace Game.UI
         RectTransform Row(string name)
         {
             var row = UIFactory.CreateRect(name, _content);
-            _rows.Add(UIFactory.Layout(row, 88));
-            UIFactory.Row(row, 12);
+            _rows.Add(UIFactory.Layout(row, 64));
+            UIFactory.Row(row, 8);
             return row;
         }
 
         TMPro.TMP_Text Caption(string name, string text)
         {
-            var label = UIFactory.Label(_content, name, text, 28, UIFactory.Cream, 44);
+            var label = UIFactory.Label(_content, name, text, 28, UIFactory.Cream, 34);
             _captions.Add(label.GetComponent<UnityEngine.UI.LayoutElement>());
             return label;
         }
@@ -167,6 +183,8 @@ namespace Game.UI
             Flexible(image.transform).flexibleWidth = 1.5f;
             var viewport = UIFactory.CreateRect("TextArea", image.transform);
             UIFactory.Stretch(viewport, 16);
+            viewport.offsetMin = new Vector2(16, 8);
+            viewport.offsetMax = new Vector2(-16, -8);
             viewport.gameObject.AddComponent<UnityEngine.UI.RectMask2D>();
             var text = UIFactory.CreateText("InputText", viewport, "", 28, UIFactory.Cream, TextAnchor.MiddleLeft);
             UIFactory.Stretch(text.rectTransform);
@@ -203,10 +221,14 @@ namespace Game.UI
             _lastSize = _safe.rect.size;
             _lastScale = Mathf.Max(.01f, _canvas.scaleFactor);
             float font = Mathf.Max(28, 14 / _lastScale);
-            float touch = Mathf.Max(88, 48 / _lastScale);
-            float gap = Mathf.Max(12, 6 / _lastScale);
+            float touch = Mathf.Max(64, 48 / _lastScale);
+            float gap = Mathf.Max(8, 4 / _lastScale);
             float titleHeight = font * 1.5f;
-            float statusHeight = font * 2.5f;
+            foreach (var text in Page.Root.GetComponentsInChildren<TMPro.TMP_Text>(true))
+                text.fontSize = font;
+            float statusWidth = ((RectTransform)Page.Body.parent).rect.width - gap * 2;
+            float statusHeight = Mathf.Ceil(Mathf.Max(font * 1.25f,
+                Page.Status.GetPreferredValues(Page.Status.text, statusWidth, float.PositiveInfinity).y));
             UIFactory.Region(_title.rectTransform, 0, 1, 1, 1);
             _title.rectTransform.offsetMin = new Vector2(gap, -gap - titleHeight);
             _title.rectTransform.offsetMax = new Vector2(-gap, -gap);
@@ -217,13 +239,26 @@ namespace Game.UI
             Page.Body.offsetMax = new Vector2(-gap, -gap * 2 - titleHeight - statusHeight);
             Page.Footer.offsetMin = new Vector2(gap, gap);
             Page.Footer.offsetMax = new Vector2(-gap, gap + touch);
-            foreach (var row in _rows) row.minHeight = row.preferredHeight = touch;
-            foreach (var caption in _captions) caption.minHeight = caption.preferredHeight = font * 1.5f;
+            foreach (var row in _rows)
+            {
+                row.minHeight = row.preferredHeight = touch;
+                var group = row.GetComponent<UnityEngine.UI.HorizontalLayoutGroup>();
+                if (group != null) group.spacing = gap;
+            }
+            var speciesHeight = _species.transform.parent.GetComponent<UnityEngine.UI.LayoutElement>();
+            speciesHeight.minHeight = speciesHeight.preferredHeight = Mathf.Max(touch, font * 2.5f);
+            _content.GetComponent<UnityEngine.UI.VerticalLayoutGroup>().spacing = gap;
+            foreach (var caption in _captions)
+                caption.minHeight = caption.preferredHeight = Mathf.Max(34, font * 1.25f);
             _previousWidth.minWidth = _previousWidth.preferredWidth = touch;
             _nextWidth.minWidth = _nextWidth.preferredWidth = touch;
-            foreach (var text in Page.Root.GetComponentsInChildren<TMPro.TMP_Text>(true))
-                text.fontSize = font;
+            float scrollbarWidth = Mathf.Max(12, 8 / _lastScale);
+            _scrollbar.offsetMin = new Vector2(-gap - scrollbarWidth, gap);
+            _scrollbar.offsetMax = new Vector2(-gap, -gap);
+            _scroll.viewport.offsetMin = new Vector2(gap, gap);
+            _scroll.viewport.offsetMax = new Vector2(-gap * 2 - scrollbarWidth, -gap);
             UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
+            _scrollbar.gameObject.SetActive(_content.rect.height > _scroll.viewport.rect.height + .01f);
         }
     }
 }
