@@ -15,13 +15,15 @@ namespace Game.Weather
 {
     /// <summary>
     /// Scene/run weather. Attach to the persistent menu host, not a per-round object.
-    /// Changed reports the selected target once; visual blending runs on gameplay seconds.
+    /// Changed reports the selected target once; blending and automatic cycling use gameplay seconds.
     /// ResetWeather is the explicit return-to-main-menu operation, including while paused.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class WeatherController : MonoBehaviour
     {
+        const float DefaultAutoChangeSeconds = 60f;
         [SerializeField, Min(.1f)] float transitionSeconds = 2.4f;
+        [SerializeField, Min(1f)] float autoChangeSeconds = DefaultAutoChangeSeconds;
         readonly WeatherTransition _transition = new WeatherTransition();
         readonly WeatherEnvironment _environment = new WeatherEnvironment();
         readonly List<UniversalAdditionalCameraData> _createdCameraData = new List<UniversalAdditionalCameraData>(2);
@@ -34,7 +36,7 @@ namespace Game.Weather
         UniversalAdditionalCameraData _cameraData;
         bool _previousPostProcessing, _ownsEnvironment;
         LayerMask _previousVolumeMask;
-        float _cameraRetryAt;
+        float _cameraRetryAt, _autoChangeElapsed;
 
         public static WeatherController Instance { get; private set; }
         public WeatherKind Current => _transition.Current;
@@ -126,6 +128,7 @@ namespace Game.Weather
         public void SetWeather(WeatherKind kind)
         {
             if (!_transition.Set(kind, transitionSeconds)) return;
+            _autoChangeElapsed = 0f;
             Changed?.Invoke();
         }
 
@@ -135,6 +138,7 @@ namespace Game.Weather
         public void ResetWeather()
         {
             bool changed = Current != WeatherKind.Sunny || IsTransitioning;
+            _autoChangeElapsed = 0f; // A new run gets a full interval even if already sunny.
             _transition.Reset();
             if (_ownsEnvironment) ApplyVisuals();
             _rain?.Clear();
@@ -145,6 +149,15 @@ namespace Game.Weather
         {
             if (!_ownsEnvironment || !isActiveAndEnabled || !GameFlow.Playing || Time.timeScale <= 0f ||
                 deltaTime <= 0f || float.IsNaN(deltaTime) || float.IsInfinity(deltaTime)) return;
+            AdvanceVisuals(deltaTime);
+            _autoChangeElapsed += deltaTime;
+            // Select after advancing the old visuals so a long frame cannot consume the new
+            // 2.4-second blend. SetWeather resets the clock: one selection, no catch-up backlog.
+            if (_autoChangeElapsed >= Mathf.Max(1f, autoChangeSeconds)) NextWeather();
+        }
+
+        void AdvanceVisuals(float deltaTime)
+        {
             bool wasTransitioning = IsTransitioning;
             _transition.Advance(deltaTime, true);
             if (wasTransitioning) ApplyVisuals();

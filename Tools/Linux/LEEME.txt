@@ -12,7 +12,9 @@ Controles
   WASD o flechas: moverse.
   Mantener Espacio: disparar al enemigo válido más cercano.
   Clic izquierdo: apuntar y disparar hacia el cursor.
-  M: alternar soleado, nublado, neblina, lluvia, atardecer y noche.
+  Clima automático: cambia cada 60 segundos de partida; se detiene en pausa.
+  M: adelantar el cambio y reiniciar el intervalo de 60 segundos.
+     Ciclo: soleado, nublado, neblina, lluvia, atardecer y noche.
   Esc: pausa / volver.
   R: regresar al punto inicial.
 

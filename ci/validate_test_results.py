@@ -34,7 +34,7 @@ CONDITIONAL = {
     "Game.CompactMenus.Tests": ("playmode", 11),
     "Game.WorldZones.PlayMode.Tests": ("playmode", 13),
     "Game.Weather.EditMode.Tests": ("editmode", 12),
-    "Game.Weather.PlayMode.Tests": ("playmode", 17),
+    "Game.Weather.PlayMode.Tests": ("playmode", 34),
 }
 
 # Features added to existing baseline assemblies must also be discovered.

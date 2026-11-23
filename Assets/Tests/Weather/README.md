@@ -22,6 +22,24 @@ and no selected TMP/legacy input field. Selection is session-only. A 2.4-second 
 blend retargets from the currently visible palette. There are no round or save-system
 subscriptions. Reset snaps to the original sunny lighting and clears rain, even in pause.
 
+## Automatic gameplay weather
+
+- `WeatherController.autoChangeSeconds` is serialized with `[Min(1f)]`; its default
+  `DefaultAutoChangeSeconds` is **60 seconds of gameplay**, using the same scaled delta as
+  transitions and particles.
+- Each interval selects the next state: Sunny → Cloudy → Fog → Rain → Sunset → Night →
+  Sunny. Selection emits `Changed` once and starts the existing **2.4-second** visual blend.
+  The interval includes blending time; a long frame selects at most one state, discards
+  excess elapsed time and leaves the new blend ready to advance on subsequent frames.
+- The clock shares `Advance`'s gameplay guard: blocked/game-over, zero time scale, disabled
+  or inactive controllers, and invalid/nonpositive delta cannot advance it. Pause and
+  re-enable retain the remaining interval; there is no separate coroutine or wall clock.
+- M and any effective `SetWeather` selection restart the full interval. Selecting the
+  current target again neither restarts the clock nor emits `Changed`.
+- `ResetWeather()` restarts the clock even when already Sunny. `ShowMainMenu` therefore
+  gives the next run a fresh interval; pause and round changes do not reset it. The elapsed
+  clock is runtime-only, with no PlayerPrefs or save-system writes.
+
 ## Rendering contract
 
 - Runtime global URP Volume: exposure, multiplication tint, saturation, zero contrast.
@@ -54,6 +72,10 @@ subscriptions. Reset snaps to the original sunny lighting and clears rain, even 
   time-scale/text-input rejection, particle lifetime and position freeze (including real
   frames at time scale 1), post-processing for unlit sprites, menu reset, singleton idempotency,
   camera/light/fog/ambient restore, native resource cleanup, particle budget, unlock masks.
+- Deterministic automatic-clock cases call `Advance` directly: just-before/exactly 60 seconds,
+  the six-state wrap, the full 2.4-second blend, pause/game-over/disable/inactive freeze,
+  invalid deltas, a real M press near the deadline, repeated selections, menu reset already
+  Sunny or previously Night, and long-frame catch-up suppression. No real-minute waits.
 - A GPU readback test draws the real rain shader: visible ground brightens, pure black
   remains black, and the closed-zone fragment is discarded. It skips a Null graphics device.
 

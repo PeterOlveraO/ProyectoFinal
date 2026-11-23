@@ -195,6 +195,177 @@ namespace Game.Weather.Tests
             Assert.That(notifications, Is.EqualTo(6));
         }
 
+        [Test]
+        public void AutomaticWeatherChangesAtSixtyGameplaySecondsAndBlendsGradually()
+        {
+            StartWeather();
+            int notifications = 0;
+            _weather.Changed += () => notifications++;
+            _weather.Advance(59.75f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Sunny));
+            Assert.That(notifications, Is.Zero);
+            _weather.Advance(.25f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Cloudy));
+            Assert.That(notifications, Is.EqualTo(1));
+            Assert.That(_weather.IsTransitioning, Is.True);
+            Assert.That(_weather.TransitionProgress, Is.Zero);
+            Assert.That(_weather.VisualState.Exposure, Is.EqualTo(WeatherStyle.For(WeatherKind.Sunny).Exposure));
+            _weather.Advance(1.2f);
+            Assert.That(_weather.TransitionProgress, Is.EqualTo(.5f).Within(.0001f));
+            float cloudyExposure = WeatherStyle.For(WeatherKind.Cloudy).Exposure;
+            Assert.That(_weather.VisualState.Exposure, Is.LessThan(0f).And.GreaterThan(cloudyExposure));
+            _weather.Advance(1.2f);
+            Assert.That(_weather.IsTransitioning, Is.False);
+            Assert.That(_weather.VisualState.Exposure, Is.EqualTo(cloudyExposure));
+            Assert.That(notifications, Is.EqualTo(1), "Blending must not emit additional selections.");
+        }
+
+        [Test]
+        public void AutomaticWeatherCyclesThroughAllSixStatesAndWrapsToSunny()
+        {
+            StartWeather();
+            int notifications = 0, expectedNotifications = 0;
+            _weather.Changed += () => notifications++;
+            foreach (var kind in new[] { WeatherKind.Cloudy, WeatherKind.Fog, WeatherKind.Rain,
+                         WeatherKind.Sunset, WeatherKind.Night, WeatherKind.Sunny })
+            {
+                _weather.Advance(60f);
+                Assert.That(_weather.Current, Is.EqualTo(kind));
+                Assert.That(notifications, Is.EqualTo(++expectedNotifications));
+            }
+        }
+
+        [TestCase("blocked")]
+        [TestCase("over")]
+        [TestCase("timeScale")]
+        [TestCase("disabled")]
+        [TestCase("inactive")]
+        public void AutomaticClockFreezesOutsideGameplayAndResumesItsRemainingInterval(string reason)
+        {
+            StartWeather();
+            int notifications = 0;
+            _weather.Changed += () => notifications++;
+            _weather.Advance(59.5f);
+            switch (reason)
+            {
+                case "blocked": GameFlow.Blocked = true; break; // Keep timeScale at 1.
+                case "over": GameFlow.Over = true; break;
+                case "timeScale": Time.timeScale = 0f; break;
+                case "disabled": _weather.enabled = false; break;
+                case "inactive": _weather.gameObject.SetActive(false); break;
+            }
+            _weather.Advance(600f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Sunny));
+            Assert.That(notifications, Is.Zero);
+            GameFlow.Blocked = GameFlow.Over = false;
+            Time.timeScale = 1f;
+            _weather.gameObject.SetActive(true);
+            _weather.enabled = true;
+            _weather.Advance(.25f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Sunny));
+            _weather.Advance(.25f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Cloudy));
+            Assert.That(notifications, Is.EqualTo(1));
+        }
+
+        [TestCase(0f)]
+        [TestCase(-1f)]
+        [TestCase(float.NaN)]
+        [TestCase(float.PositiveInfinity)]
+        [TestCase(float.NegativeInfinity)]
+        public void InvalidDeltaCannotAdvanceOrPoisonTheAutomaticClock(float deltaTime)
+        {
+            StartWeather();
+            int notifications = 0;
+            _weather.Changed += () => notifications++;
+            _weather.Advance(59.5f);
+            _weather.Advance(deltaTime);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Sunny));
+            Assert.That(notifications, Is.Zero);
+            _weather.Advance(.5f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Cloudy));
+            Assert.That(notifications, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ManualMNearAutomaticDeadlineStartsAFullNewInterval()
+        {
+            StartWeather();
+            int notifications = 0;
+            _weather.Changed += () => notifications++;
+            _weather.Advance(59.75f);
+            KeyState(true);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Cloudy));
+            Assert.That(notifications, Is.EqualTo(1));
+            KeyState(false);
+            _weather.Advance(.25f); // The original automatic deadline must no longer apply.
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Cloudy));
+            _weather.Advance(59.5f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Cloudy));
+            Assert.That(notifications, Is.EqualTo(1));
+            _weather.Advance(.25f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Fog));
+            Assert.That(notifications, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void RepeatedWeatherSelectionDoesNotRestartTheAutomaticInterval()
+        {
+            StartWeather();
+            int notifications = 0;
+            _weather.Changed += () => notifications++;
+            _weather.SetWeather(WeatherKind.Cloudy);
+            _weather.Advance(59.5f);
+            _weather.SetWeather(WeatherKind.Cloudy);
+            Assert.That(notifications, Is.EqualTo(1));
+            _weather.Advance(.5f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Fog));
+            Assert.That(notifications, Is.EqualTo(2));
+        }
+
+        [TestCase(WeatherKind.Sunny)]
+        [TestCase(WeatherKind.Night)]
+        public void MainMenuResetStartsAFullAutomaticIntervalEvenWhenAlreadySunny(WeatherKind previous)
+        {
+            StartWeather();
+            _weather.SetWeather(previous);
+            _weather.Advance(59.5f);
+            int notifications = 0;
+            _weather.Changed += () => notifications++;
+            GameFlow.Blocked = true;
+            _weather.ResetWeather();
+            int resetNotifications = previous == WeatherKind.Sunny ? 0 : 1;
+            Assert.That(notifications, Is.EqualTo(resetNotifications));
+            _weather.Advance(600f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Sunny));
+            GameFlow.Blocked = false;
+            _weather.Advance(59.5f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Sunny));
+            Assert.That(notifications, Is.EqualTo(resetNotifications));
+            _weather.Advance(.5f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Cloudy));
+            Assert.That(notifications, Is.EqualTo(resetNotifications + 1));
+        }
+
+        [Test]
+        public void LongFrameSelectsOnlyOneWeatherAndDiscardsCatchUpTime()
+        {
+            StartWeather();
+            int notifications = 0;
+            _weather.Changed += () => notifications++;
+            _weather.Advance(600f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Cloudy));
+            Assert.That(notifications, Is.EqualTo(1));
+            Assert.That(_weather.IsTransitioning, Is.True);
+            Assert.That(_weather.TransitionProgress, Is.Zero);
+            _weather.Advance(59.5f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Cloudy));
+            Assert.That(notifications, Is.EqualTo(1));
+            _weather.Advance(.5f);
+            Assert.That(_weather.Current, Is.EqualTo(WeatherKind.Fog));
+            Assert.That(notifications, Is.EqualTo(2));
+        }
+
         [TestCase("blocked")]
         [TestCase("over")]
         [TestCase("timeScale")]
