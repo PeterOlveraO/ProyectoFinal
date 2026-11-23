@@ -89,7 +89,7 @@ namespace Game.Weather.Tests
                 RenderSettings.sun = _previousSun;
                 _captured = false;
             }
-            // The last billboard releases its shared Material with Destroy in PlayMode.
+            // Allow deferred PlayMode destruction to settle before the next fixture.
             yield return null;
         }
 

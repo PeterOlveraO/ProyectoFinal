@@ -1,6 +1,8 @@
+using System.Collections;
 using Game.UI;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Game.Tests.CompactMenus
 {
@@ -251,6 +253,68 @@ namespace Game.Tests.CompactMenus
                 Assert.AreEqual(1, backCalls);
             }
             finally { if (events != null) Object.DestroyImmediate(events); }
+        }
+
+        [UnityTest]
+        public IEnumerator CreditsOpenAt720pWithoutManualLayout() => OpenCreditsWithoutManualLayout(1280, 720);
+
+        [UnityTest]
+        public IEnumerator CreditsOpenAt1080pWithoutManualLayout() => OpenCreditsWithoutManualLayout(1920, 1080);
+
+        [UnityTest]
+        public IEnumerator CreditsOpenAtFourByThreeWithoutManualLayout() => OpenCreditsWithoutManualLayout(1440, 1080);
+
+        IEnumerator OpenCreditsWithoutManualLayout(int width, int height)
+        {
+            _canvas = UIFactory.CreateCanvas("CreditsOpeningLayout", 0);
+            _canvas.GetComponent<UnityEngine.UI.CanvasScaler>().enabled = false;
+            var canvas = _canvas.GetComponent<Canvas>();
+            canvas.scaleFactor = Mathf.Sqrt(width / 1920f * height / 1080f);
+            var page = new CreditsView(_canvas, () => { }).Page;
+            Assert.IsFalse(page.Root.gameObject.activeSelf, "Exercise construction under the inactive page.");
+            var safe = (RectTransform)page.Root.Find("SafeArea");
+            safe.GetComponent<SafeAreaLayout>().enabled = false;
+            UIFactory.Place(safe, new Vector2(.5f, .5f), new Vector2(.5f, .5f), Vector2.zero,
+                new Vector2(width / canvas.scaleFactor, height / canvas.scaleFactor));
+
+            // Both the first activation and reopening use only the normal player/Canvas loop.
+            for (int opening = 0; opening < 2; opening++)
+            {
+                page.Root.gameObject.SetActive(true);
+                for (int frame = 0; frame < 4; frame++) yield return null;
+                var scroll = page.Root.GetComponentInChildren<UnityEngine.UI.ScrollRect>();
+                var institutions = (RectTransform)scroll.content.Find("Institutions");
+                AssertInside(safe, (RectTransform)page.Body.parent);
+                AssertInside(scroll.viewport, (RectTransform)scroll.content.Find("Author"));
+                Assert.AreEqual("Pedro Olvera Ochoa",
+                    scroll.content.Find("Author").GetComponent<TMPro.TMP_Text>().text);
+                AssertInside(safe, (RectTransform)page.Footer.Find("Back"));
+                string[] cards = { "University", "Faculty" };
+                string[] logos = { "Credits/UAT", "Credits/FIT" };
+                for (int i = 0; i < cards.Length; i++)
+                {
+                    var card = (RectTransform)institutions.Find(cards[i]);
+                    Assert.Greater(card.rect.width * canvas.scaleFactor, 200,
+                        "Cards must receive the resolved content width, not the constructor's provisional width.");
+                    AssertInside(scroll.viewport, card);
+                    var logo = card.Find("LogoBacking/Logo").GetComponent<UnityEngine.UI.Image>();
+                    Assert.IsTrue(logo.isActiveAndEnabled);
+                    Assert.NotNull(logo.sprite);
+                    Assert.AreSame(Resources.Load<Sprite>(logos[i]), logo.sprite);
+                    Assert.Greater(logo.rectTransform.rect.width * canvas.scaleFactor, 40);
+                    Assert.Greater(logo.rectTransform.rect.height * canvas.scaleFactor, 40);
+                    AssertInside(scroll.viewport, logo.rectTransform);
+                }
+                foreach (var text in page.Root.GetComponentsInChildren<TMPro.TMP_Text>())
+                {
+                    Assert.GreaterOrEqual(text.fontSize * canvas.scaleFactor, 13.99f);
+                    Assert.Greater(text.textInfo.characterCount, 0, text.name);
+                    Assert.IsFalse(text.isTextOverflowing, text.name);
+                    AssertInside(safe, text.rectTransform);
+                }
+                page.Root.gameObject.SetActive(false);
+                yield return null;
+            }
         }
 
         [TestCase("100", true, 100)]

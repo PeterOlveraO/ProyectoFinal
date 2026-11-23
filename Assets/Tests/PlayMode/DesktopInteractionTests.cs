@@ -26,6 +26,10 @@ namespace Game.Tests.PlayMode
         PlayerSphereController _player;
         RunHud _hud;
         Keyboard _keyboard, _previousKeyboard;
+        InputSettings _originalInputSettings, _testInputSettings;
+        HideFlags _originalInputSettingsFlags;
+        System.Action<InputUpdateType> _updateInput;
+        bool _runInBackground;
         TerrainSettings _settings;
         WorldTerrain _terrain;
         bool _blocked, _over;
@@ -43,11 +47,31 @@ namespace Game.Tests.PlayMode
             GameFlow.Blocked = GameFlow.Over = false;
             Time.timeScale = 1;
             WorldShopPlacement.IsZoneAccessible = _ => true;
+            // Like WeatherRuntimeTests, drive explicit input frames independently of the
+            // Editor's Game View focus (batchmode has no focused Game View).
+            _runInBackground = Application.runInBackground;
+            _originalInputSettings = InputSystem.settings;
+            _originalInputSettingsFlags = _originalInputSettings.hideFlags;
+            _testInputSettings = Object.Instantiate(_originalInputSettings);
+            _testInputSettings.hideFlags = HideFlags.DontSave;
+            _testInputSettings.updateMode = InputSettings.UpdateMode.ProcessEventsManually;
+            _testInputSettings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+            _testInputSettings.editorInputBehaviorInPlayMode =
+                InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            if (_originalInputSettingsFlags == HideFlags.HideAndDontSave)
+                _originalInputSettings.hideFlags = HideFlags.DontSave;
+            InputSystem.settings = _testInputSettings;
+            Application.runInBackground = true;
+            var update = typeof(InputSystem).GetMethod("Update", BindingFlags.Static |
+                BindingFlags.Public | BindingFlags.NonPublic, null, new[] { typeof(InputUpdateType) }, null);
+            Assert.That(update, Is.Not.Null, "Input System's typed test update API changed.");
+            _updateInput = (System.Action<InputUpdateType>)update.CreateDelegate(typeof(System.Action<InputUpdateType>));
             _previousKeyboard = Keyboard.current;
             _keyboard = InputSystem.AddDevice<Keyboard>();
             _keyboard.MakeCurrent();
-            _ = _keyboard.eKey.wasPressedThisFrame;
             Key(false);
+            Assert.IsFalse(_keyboard.eKey.wasPressedThisFrame);
+            _updateInput(InputUpdateType.Manual);
             _round = Create("InteractionRound").AddComponent<RoundManager>();
             foreach (var component in _round.GetComponents<MonoBehaviour>()) component.enabled = false;
             _player = Create("InteractionPlayer").AddComponent<PlayerSphereController>();
@@ -84,8 +108,15 @@ namespace Game.Tests.PlayMode
             if (_settings != null) Object.DestroyImmediate(_settings);
             InputSystem.RemoveDevice(_keyboard);
             if (_previousKeyboard != null && _previousKeyboard.added) _previousKeyboard.MakeCurrent();
+            InputSystem.settings = _originalInputSettings;
+            _originalInputSettings.hideFlags = _originalInputSettingsFlags;
+            if (_testInputSettings != null && !ReferenceEquals(InputSystem.settings, _testInputSettings))
+                Object.DestroyImmediate(_testInputSettings);
+            Application.runInBackground = _runInBackground;
             WorldShopPlacement.IsZoneAccessible = _zoneAccess;
             GameFlow.Blocked = _blocked; GameFlow.Over = _over; Time.timeScale = _timeScale;
+            Assert.That(ReferenceEquals(InputSystem.settings, _originalInputSettings), Is.True);
+            Assert.That(_originalInputSettings != null, Is.True);
         }
 
         [UnityTest]
@@ -96,7 +127,7 @@ namespace Game.Tests.PlayMode
             Assert.IsFalse(_round.Drinks.Has(DrinkType.Power));
             Assert.AreEqual(900, _round.Points);
             yield return null;
-            InputSystem.Update();
+            _updateInput(InputUpdateType.Manual);
             Tick();
             Assert.AreEqual(900, _round.Points, "holding E must not buy the newly built perk");
             Key(false); Tick();
@@ -219,8 +250,9 @@ namespace Game.Tests.PlayMode
         void Key(bool pressed)
         {
             InputSystem.QueueStateEvent(_keyboard, pressed ? new KeyboardState(UnityEngine.InputSystem.Key.E) : new KeyboardState());
-            InputSystem.Update();
+            _updateInput(InputUpdateType.Manual);
             _keyboard.MakeCurrent();
+            Assert.AreEqual(pressed, _keyboard.eKey.isPressed, "The synthetic key event must reach the game input frame.");
         }
         void Tick() => Call(_hud, "Update");
         GameObject Create(string name)

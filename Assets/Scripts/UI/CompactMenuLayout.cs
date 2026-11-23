@@ -19,6 +19,7 @@ namespace Game.UI
         TMPro.TMP_Text _creditsAuthor;
         UnityEngine.UI.GridLayoutGroup _institutions;
         UnityEngine.UI.ScrollRect _creditsScroll;
+        float _lastCreditsContentWidth = -1, _lastInstitutionsWidth = -1;
 
         public void Configure(RectTransform safe, RectTransform panel, RectTransform header,
             RectTransform body, RectTransform footer, CompactMenuKind kind)
@@ -56,6 +57,10 @@ namespace Game.UI
         void LateUpdate()
         {
             if (_safe != null && (_lastSize != _safe.rect.size || _lastScale != _canvas.scaleFactor))
+                RefreshLayout();
+            else if (_institutions != null &&
+                (!Mathf.Approximately(_lastCreditsContentWidth, _creditsContent.rect.width) ||
+                 !Mathf.Approximately(_lastInstitutionsWidth, ((RectTransform)_institutions.transform).rect.width)))
                 RefreshLayout();
         }
 
@@ -137,7 +142,8 @@ namespace Game.UI
             _creditsAuthor.fontSize = font * 1.15f;
             var authorSize = _creditsAuthor.GetComponent<UnityEngine.UI.LayoutElement>();
             authorSize.minHeight = authorSize.preferredHeight = _creditsAuthor.fontSize * 1.5f;
-            _creditsContent.GetComponent<UnityEngine.UI.VerticalLayoutGroup>().spacing = gap;
+            var stack = _creditsContent.GetComponent<UnityEngine.UI.VerticalLayoutGroup>();
+            stack.spacing = gap;
             float barWidth = Mathf.Max(12, 6 / _lastScale);
             var bar = (RectTransform)_creditsScroll.verticalScrollbar.transform;
             bar.offsetMin = new Vector2(-6 - barWidth, 6);
@@ -150,11 +156,17 @@ namespace Game.UI
             var institutionSize = _institutions.GetComponent<UnityEngine.UI.LayoutElement>();
             institutionSize.minHeight = institutionSize.preferredHeight =
                 cardHeight * (2 / columns) + (columns == 1 ? gap : 0);
-            // The outer vertical stack determines the grid width before sizing its cells.
+            // Inactive children have not participated in layout yet. OnEnable and the
+            // width observer in LateUpdate handle the first normal Canvas layout pass.
+            if (!isActiveAndEnabled) return;
             UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(_creditsContent);
+            _lastCreditsContentWidth = _creditsContent.rect.width;
+            // Use available stack width, not the grid's own minimum width (which depends
+            // on its previous cell size and would prevent shrinking after a resize).
             _institutions.cellSize = new Vector2(
-                (((RectTransform)_institutions.transform).rect.width - gap * (columns - 1)) / columns, cardHeight);
+                (_lastCreditsContentWidth - stack.padding.horizontal - gap * (columns - 1)) / columns, cardHeight);
             UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(_creditsContent);
+            _lastInstitutionsWidth = ((RectTransform)_institutions.transform).rect.width;
             bar.gameObject.SetActive(_creditsContent.rect.height > _creditsScroll.viewport.rect.height + .01f);
         }
     }
