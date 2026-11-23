@@ -136,6 +136,8 @@ jobs:
           DIRECTORY="$(dirname "$PLAYER")"
           test -f "$DIRECTORY/UnityPlayer.so"
           test -d "$DIRECTORY/PKETER_Data"
+          # Unity runs in Docker as root; give the runner ownership before packaging.
+          sudo chown -R "$(id -u):$(id -g)" "$DIRECTORY"
           chmod +x "$PLAYER" "$DIRECTORY/Jugar.sh"
           file "$PLAYER" | grep -q 'ELF 64-bit.*x86-64'
           echo "${{ github.sha }}" > "$DIRECTORY/commit.txt"
