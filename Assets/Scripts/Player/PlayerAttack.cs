@@ -180,7 +180,7 @@ namespace Game.Player
             AttackProjectile.SpawnPattern(origin, direction, speed, shotRange,
                 type == ShotType.Precision ? shotDamage * 2 : shotDamage,
                 type == ShotType.Basic ? projectileColor : ShotDefinitions.Color(type), type, element);
-            HitBurst.SpawnMuzzle(origin, element);
+            HitBurst.SpawnMuzzle(origin, element, type, direction);
             Game.Audio.GameAudio.PlayShot(element);
         }
 

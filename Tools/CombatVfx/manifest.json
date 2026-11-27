@@ -1,0 +1,27 @@
+{
+  "source": {
+    "kind": "original-procedural-art-ai-assisted-code",
+    "path": "Assets/Scripts/Combat/ShotAnimationAtlas.cs",
+    "external_assets": false,
+    "terms": "Original project code; no third-party asset licence required."
+  },
+  "atlas": {
+    "width": 256,
+    "height": 736,
+    "frame_size": [32, 32],
+    "frames_per_animation": 8,
+    "pivot": [0.5, 0.5],
+    "filter": "Point",
+    "mipmaps": false,
+    "alpha": true,
+    "collision_role": "none; presentation only"
+  },
+  "families": [
+    { "kind": "element", "animations": ["Normal", "Electric", "Fire", "Water", "Grass", "Ice", "Psychic", "Ghost", "Rock", "Ground", "Dragon", "Fighting", "Steel"] },
+    { "kind": "pattern", "animations": ["Basic", "Burst", "Fan", "Piercing", "Precision", "Boomerang", "Explosive"] },
+    { "kind": "accent", "animations": ["Ring", "Slash", "Flash"] }
+  ],
+  "technical_checks_passed": true,
+  "visual_review": "1280x720 GPU contact sheets and World terrain capture",
+  "evidence": "Builds/Linux/QA-shot-vfx"
+}

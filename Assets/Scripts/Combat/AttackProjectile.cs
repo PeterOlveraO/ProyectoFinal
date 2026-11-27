@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Game.Core;
 using Game.Enemies;
-using Game.Rendering;
 using Game.Terrain;
 using UnityEngine;
 
@@ -41,14 +40,7 @@ namespace Game.Combat
         bool _elemental;
         WorldTerrain _terrain;
 
-        SpriteRenderer _glow;
-        Transform _visual;
-        Transform _visualAnchor;
-        Camera _camera;
-        Sprite _frame0;
-        Sprite _frame1;
-        float _pulse;
-        float _visualTime;
+        ShotFlightVisual _flightVisual;
 
         public static AttackProjectile Spawn(Vector3 origin, Vector3 direction, float speed, float range,
                                              int damage, Color color, int maxTargets = 1)
@@ -64,13 +56,12 @@ namespace Game.Combat
         {
             int targets = type == ShotType.Piercing ? ShotDefinitions.MaxPiercingTargets :
                 type == ShotType.Boomerang ? ShotDefinitions.MaxBoomerangTargetsPerLeg : 1;
-            var projectile = SpawnInternal(origin, direction, speed, range, damage, color, targets, element, true);
-            projectile._shotType = type;
-            return projectile;
+            return SpawnInternal(origin, direction, speed, range, damage, color, targets, element, true, type);
         }
 
         static AttackProjectile SpawnInternal(Vector3 origin, Vector3 direction, float speed, float range,
-                                               int damage, Color color, int maxTargets, PokemonElement element, bool elemental)
+                                               int damage, Color color, int maxTargets, PokemonElement element, bool elemental,
+                                               ShotType type = ShotType.Basic)
         {
             if (direction.sqrMagnitude < 0.0001f) direction = Vector3.forward;
 
@@ -80,6 +71,7 @@ namespace Game.Combat
             var projectile = go.AddComponent<AttackProjectile>();
             projectile._element = element;
             projectile._elemental = elemental;
+            projectile._shotType = type;
             projectile.Initialize(direction, speed, range, damage, color, maxTargets);
             return projectile;
         }
@@ -111,57 +103,8 @@ namespace Game.Combat
             _maxTargets = Mathf.Clamp(maxTargets, 1, ShotDefinitions.MaxPiercingTargets);
             _color = color;
 
-            BuildVisual();
-        }
-
-        void BuildVisual()
-        {
-            var anchor = new GameObject("VisualAnchor");
-            anchor.transform.SetParent(transform, false);
-            _visualAnchor = anchor.transform;
-            var billboard = anchor.AddComponent<BillboardSprite>();
-            billboard.SetContinuous(false);
-
-            var visual = new GameObject("ElementVisual");
-            visual.transform.SetParent(anchor.transform, false);
-            _visual = visual.transform;
-            _glow = visual.AddComponent<SpriteRenderer>();
-            if (_elemental)
-            {
-                _frame0 = PixelCombatSprites.ElementShot(_element, 0);
-                _frame1 = PixelCombatSprites.ElementShot(_element, 1);
-                _camera = Camera.main;
-            }
-            _glow.sprite = _elemental ? _frame0 : PixelCombatSprites.Shot;
-            Color visualColor = _elemental ? PixelCombatSprites.ElementColor(_element) : _color;
-            _glow.color = _elemental ? Color.white : new Color(visualColor.r, visualColor.g, visualColor.b, 1f);
-            _glow.sortingOrder = 18;
-            _visual.localScale = Vector3.one * (_elemental ? .78f : .48f);
-
-            var core = new GameObject("Core");
-            core.transform.SetParent(_visual, false);
-            core.transform.localScale = Vector3.one * 0.44f;
-
-            var coreRenderer = core.AddComponent<SpriteRenderer>();
-            coreRenderer.sprite = PixelCombatSprites.Shot;
-            coreRenderer.color = new Color(1f, 0.98f, 0.85f, 1f);
-            coreRenderer.sortingOrder = 19;
-            coreRenderer.enabled = !_elemental;
-
-            var trail = gameObject.AddComponent<TrailRenderer>();
-            trail.time = 0.10f;
-            trail.startWidth = 0.12f;
-            trail.endWidth = 0f;
-            trail.minVertexDistance = 0.04f;
-            trail.numCapVertices = 0;
-            trail.alignment = LineAlignment.View;
-            trail.sortingOrder = 17;
-            trail.startColor = visualColor;
-            trail.endColor = new Color(visualColor.r, visualColor.g, visualColor.b, 0f);
-
-            trail.sharedMaterial = _glow.sharedMaterial;
-
-            _pulse = Random.Range(0f, Mathf.PI * 2f);
+            _flightVisual = new ShotFlightVisual(transform, _shotType, _element, _color, _elemental);
+            _flightVisual.Tick(0f, _direction, false);
         }
 
         void Update() => TickProjectile(Time.deltaTime);
@@ -223,16 +166,17 @@ namespace Game.Combat
                     _travelled = 0f;
                     _hitCount = 0;
                     System.Array.Clear(_hitTargets, 0, _hitTargets.Length);
+                    HitBurst.SpawnTurn(transform.position, _element, _direction);
                     if (remaining <= 0f) break;
                 }
                 else
                 {
-                    if (_elemental) HitBurst.SpawnElement(transform.position, _element, 4, .5f);
+                    if (_elemental) HitBurst.SpawnDissipate(transform.position, _element, _shotType, _direction);
                     else HitBurst.Spawn(transform.position, _color, 5, .5f);
                     Retire();
                 }
             }
-            Pulse();
+            if (!_retired) _flightVisual.Tick(deltaTime, _direction, _returning);
         }
 
         /// <summary>Mantiene la bala a una altura constante sobre el terreno para no cruzar colinas.</summary>
@@ -252,35 +196,6 @@ namespace Game.Combat
             float targetY = _terrain.BlockTopCenter(x, z).y + GroundClearance;
             position.y = Mathf.Lerp(position.y, targetY, 18f * Time.deltaTime);
             transform.position = position;
-        }
-
-        void Pulse()
-        {
-            if (_glow == null) return;
-
-            _pulse += Time.deltaTime * 14f;
-            float scale = (_elemental ? .78f : .48f) + Mathf.Sin(_pulse) * .025f;
-            _visual.localScale = new Vector3(scale, scale, 1f);
-            if (_elemental)
-            {
-                _visualTime += Time.deltaTime;
-                _glow.sprite = ((int)(_visualTime * 12f) & 1) == 0 ? _frame0 : _frame1;
-                if (_camera == null) _camera = Camera.main;
-                if (_camera != null)
-                {
-                    Vector3 view = _camera.transform.InverseTransformDirection(_direction);
-                    Vector3 right = _camera.transform.InverseTransformDirection(_visualAnchor.right);
-                    Vector3 up = _camera.transform.InverseTransformDirection(_visualAnchor.up);
-                    float determinant = right.x * up.y - right.y * up.x;
-                    if (Mathf.Abs(determinant) > .0001f)
-                    {
-                        float x = (view.x * up.y - view.y * up.x) / determinant;
-                        float y = (view.y * right.x - view.x * right.y) / determinant;
-                        if (x * x + y * y > .00001f)
-                            _visual.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(y, x) * Mathf.Rad2Deg);
-                    }
-                }
-            }
         }
 
         bool CheckHit()
@@ -318,7 +233,8 @@ namespace Game.Combat
                 Vector3 impact = _previousPosition + segment * nearestT;
                 if (_elemental)
                 {
-                    HitBurst.SpawnElement(impact, _element, 6, .8f);
+                    if (_shotType != ShotType.Explosive)
+                        HitBurst.SpawnImpact(impact, _element, _shotType, _direction);
                     Game.Audio.GameAudio.PlayImpact(_element);
                 }
                 else HitBurst.Spawn(impact, _color, 8, .8f);
@@ -335,7 +251,7 @@ namespace Game.Combat
 
         void Explode(Vector3 center)
         {
-            if (_elemental) HitBurst.SpawnElement(center, _element, 14, ShotDefinitions.ExplosionRadius);
+            if (_elemental) HitBurst.SpawnImpact(center, _element, ShotType.Explosive, _direction);
             else HitBurst.Spawn(center, _color, 14, ShotDefinitions.ExplosionRadius);
             int splashDamage = Mathf.Max(1, Mathf.RoundToInt(_damage * ShotDefinitions.ExplosionDamageMultiplier));
             int additional = 0;
