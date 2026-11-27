@@ -86,6 +86,7 @@ namespace Game.Enemies
             _visualRenderer = renderer;
             _spriteVisual = renderer as SpriteRenderer;
             if (_spriteVisual != null) _baseVisualColor = _spriteVisual.color;
+            UpdateHealthBarPosition();
 
             if (isActiveAndEnabled && _visualRenderer != null)
                 VisibilityCuller.RegisterEnemy(_visualRenderer);
@@ -125,9 +126,7 @@ namespace Game.Enemies
             BonusDropPoints = 0;
             var pokemonVisual = GetComponent<PokemonEnemyVisual>();
             if (pokemonVisual != null)
-                pokemonVisual.SetVisualProfile(boss ? 1.9f : PokemonEnemyVisual.NormalHeight,
-                    boss ? 3.2f : PokemonEnemyVisual.NormalMaximumWidth);
-            if (_healthBar != null) _healthBar.localPosition = Vector3.up * (boss ? 2.17f : 1.62f);
+                pokemonVisual.ApplySpeciesScale();
             _contactDamage = Mathf.Max(0f, damage);
             _flashUntil = 0f;
             if (_spriteVisual != null) _spriteVisual.color = _baseVisualColor;
@@ -319,6 +318,7 @@ namespace Game.Enemies
         void UpdateHealthBar()
         {
             if (_healthBar == null || _healthBarFill == null) return;
+            UpdateHealthBarPosition();
 
             float ratio = maxHealth > 0 ? Mathf.Clamp01(_health / (float)maxHealth) : 0f;
             bool visible = _health > 0 && _health < maxHealth;
@@ -327,6 +327,14 @@ namespace Game.Enemies
             _healthBarFill.size = new Vector2(0.86f * ratio, 0.11f);
             _healthBarFill.color = Color.Lerp(new Color32(255, 90, 95, 255),
                                               new Color32(72, 220, 120, 255), ratio);
+        }
+
+        void UpdateHealthBarPosition()
+        {
+            if (_healthBar == null) return;
+            var visual = GetComponent<PokemonEnemyVisual>();
+            float height = visual != null ? visual.VisibleHeight : PokemonEnemyVisual.NormalHeight;
+            _healthBar.localPosition = Vector3.up * (height + .27f);
         }
 
         // ------------------------------------------------------------ Movimiento

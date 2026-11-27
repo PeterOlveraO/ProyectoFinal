@@ -1,0 +1,1531 @@
+{
+  "version": 1,
+  "worldUnitsPerMeter": 1.0,
+  "measurement": "Standard Pokedex height (dm / 10) and weight (hg / 10), not a sample average. Height is the maximum animated visible vertical envelope; preserve aspect ratio.",
+  "sourceUrl": "https://raw.githubusercontent.com/PokeAPI/pokeapi/e4f981e5cb03c1fe33d436b1ee8e1197fbb0af84/data/v2/csv/pokemon.csv",
+  "sourceSha256": "eb8a7f59134bf3763a0f3072a7794cb097413e6f6027c380a92dd8d63082ab80",
+  "identitiesSha256": "a84ffa794a5b5111e236b8bf1d30c31d7ac6b2549cb2d0b3ba8dff43ce5e0b6a",
+  "mappingSha256": "9979a70a1c5c5a84a4f8b920249cbf34fc50b850518807ed57b7a7551bebc599",
+  "families": [
+    {
+      "name": "poke_000",
+      "pokemon": "chinchou",
+      "pokedexId": 170,
+      "pokemonId": 170,
+      "heightMeters": 0.5,
+      "weightKilograms": 12.0
+    },
+    {
+      "name": "poke_001",
+      "pokemon": "persian",
+      "pokedexId": 53,
+      "pokemonId": 53,
+      "heightMeters": 1.0,
+      "weightKilograms": 32.0
+    },
+    {
+      "name": "poke_002",
+      "pokemon": "haunter",
+      "pokedexId": 93,
+      "pokemonId": 93,
+      "heightMeters": 1.6,
+      "weightKilograms": 0.1
+    },
+    {
+      "name": "poke_003",
+      "pokemon": "lombre",
+      "pokedexId": 271,
+      "pokemonId": 271,
+      "heightMeters": 1.2,
+      "weightKilograms": 32.5
+    },
+    {
+      "name": "poke_004",
+      "pokemon": "skiploom",
+      "pokedexId": 188,
+      "pokemonId": 188,
+      "heightMeters": 0.6,
+      "weightKilograms": 1.0
+    },
+    {
+      "name": "poke_005",
+      "pokemon": "shuppet",
+      "pokedexId": 353,
+      "pokemonId": 353,
+      "heightMeters": 0.6,
+      "weightKilograms": 2.3
+    },
+    {
+      "name": "poke_006",
+      "pokemon": "golem",
+      "pokedexId": 76,
+      "pokemonId": 76,
+      "heightMeters": 1.4,
+      "weightKilograms": 300.0
+    },
+    {
+      "name": "poke_007",
+      "pokemon": "donphan",
+      "pokedexId": 232,
+      "pokemonId": 232,
+      "heightMeters": 1.1,
+      "weightKilograms": 120.0
+    },
+    {
+      "name": "poke_008",
+      "pokemon": "sableye",
+      "pokedexId": 302,
+      "pokemonId": 302,
+      "heightMeters": 0.5,
+      "weightKilograms": 11.0
+    },
+    {
+      "name": "poke_009",
+      "pokemon": "gloom",
+      "pokedexId": 44,
+      "pokemonId": 44,
+      "heightMeters": 0.8,
+      "weightKilograms": 8.6
+    },
+    {
+      "name": "poke_010",
+      "pokemon": "luxio",
+      "pokedexId": 404,
+      "pokemonId": 404,
+      "heightMeters": 0.9,
+      "weightKilograms": 30.5
+    },
+    {
+      "name": "poke_011",
+      "pokemon": "omastar",
+      "pokedexId": 139,
+      "pokemonId": 139,
+      "heightMeters": 1.0,
+      "weightKilograms": 35.0
+    },
+    {
+      "name": "poke_012",
+      "pokemon": "bronzong",
+      "pokedexId": 437,
+      "pokemonId": 437,
+      "heightMeters": 1.3,
+      "weightKilograms": 187.0
+    },
+    {
+      "name": "poke_013",
+      "pokemon": "granbull",
+      "pokedexId": 210,
+      "pokemonId": 210,
+      "heightMeters": 1.4,
+      "weightKilograms": 48.7
+    },
+    {
+      "name": "poke_014",
+      "pokemon": "totodile",
+      "pokedexId": 158,
+      "pokemonId": 158,
+      "heightMeters": 0.6,
+      "weightKilograms": 9.5
+    },
+    {
+      "name": "poke_015",
+      "pokemon": "squirtle",
+      "pokedexId": 7,
+      "pokemonId": 7,
+      "heightMeters": 0.5,
+      "weightKilograms": 9.0
+    },
+    {
+      "name": "poke_016",
+      "pokemon": "shaymin-sky",
+      "pokedexId": 492,
+      "pokemonId": 10006,
+      "heightMeters": 0.4,
+      "weightKilograms": 5.2
+    },
+    {
+      "name": "poke_017",
+      "pokemon": "deoxys-speed",
+      "pokedexId": 386,
+      "pokemonId": 10003,
+      "heightMeters": 1.7,
+      "weightKilograms": 60.8
+    },
+    {
+      "name": "poke_018",
+      "pokemon": "cyndaquil",
+      "pokedexId": 155,
+      "pokemonId": 155,
+      "heightMeters": 0.5,
+      "weightKilograms": 7.9
+    },
+    {
+      "name": "poke_019",
+      "pokemon": "nidorino",
+      "pokedexId": 33,
+      "pokemonId": 33,
+      "heightMeters": 0.9,
+      "weightKilograms": 19.5
+    },
+    {
+      "name": "poke_020",
+      "pokemon": "magnezone",
+      "pokedexId": 462,
+      "pokemonId": 462,
+      "heightMeters": 1.2,
+      "weightKilograms": 180.0
+    },
+    {
+      "name": "poke_021",
+      "pokemon": "blissey",
+      "pokedexId": 242,
+      "pokemonId": 242,
+      "heightMeters": 1.5,
+      "weightKilograms": 46.8
+    },
+    {
+      "name": "poke_022",
+      "pokemon": "huntail",
+      "pokedexId": 367,
+      "pokemonId": 367,
+      "heightMeters": 1.7,
+      "weightKilograms": 27.0
+    },
+    {
+      "name": "poke_023",
+      "pokemon": "noctowl",
+      "pokedexId": 164,
+      "pokemonId": 164,
+      "heightMeters": 1.6,
+      "weightKilograms": 40.8
+    },
+    {
+      "name": "poke_024",
+      "pokemon": "mantine",
+      "pokedexId": 226,
+      "pokemonId": 226,
+      "heightMeters": 2.1,
+      "weightKilograms": 220.0
+    },
+    {
+      "name": "poke_025",
+      "pokemon": "gulpin",
+      "pokedexId": 316,
+      "pokemonId": 316,
+      "heightMeters": 0.4,
+      "weightKilograms": 10.3
+    },
+    {
+      "name": "poke_026",
+      "pokemon": "gastrodon",
+      "pokedexId": 423,
+      "pokemonId": 423,
+      "heightMeters": 0.9,
+      "weightKilograms": 29.9
+    },
+    {
+      "name": "poke_027",
+      "pokemon": "porygon",
+      "pokedexId": 137,
+      "pokemonId": 137,
+      "heightMeters": 0.8,
+      "weightKilograms": 36.5
+    },
+    {
+      "name": "poke_028",
+      "pokemon": "slaking",
+      "pokedexId": 289,
+      "pokemonId": 289,
+      "heightMeters": 2.0,
+      "weightKilograms": 130.5
+    },
+    {
+      "name": "poke_029",
+      "pokemon": "metagross",
+      "pokedexId": 376,
+      "pokemonId": 376,
+      "heightMeters": 1.6,
+      "weightKilograms": 550.0
+    },
+    {
+      "name": "poke_030",
+      "pokemon": "haunter",
+      "pokedexId": 93,
+      "pokemonId": 93,
+      "heightMeters": 1.6,
+      "weightKilograms": 0.1
+    },
+    {
+      "name": "poke_031",
+      "pokemon": "gastly",
+      "pokedexId": 92,
+      "pokemonId": 92,
+      "heightMeters": 1.3,
+      "weightKilograms": 0.1
+    },
+    {
+      "name": "poke_032",
+      "pokemon": "zangoose",
+      "pokedexId": 335,
+      "pokemonId": 335,
+      "heightMeters": 1.3,
+      "weightKilograms": 40.3
+    },
+    {
+      "name": "poke_033",
+      "pokemon": "blaziken",
+      "pokedexId": 257,
+      "pokemonId": 257,
+      "heightMeters": 1.9,
+      "weightKilograms": 52.0
+    },
+    {
+      "name": "poke_034",
+      "pokemon": "miltank",
+      "pokedexId": 241,
+      "pokemonId": 241,
+      "heightMeters": 1.2,
+      "weightKilograms": 75.5
+    },
+    {
+      "name": "poke_035",
+      "pokemon": "arbok",
+      "pokedexId": 24,
+      "pokemonId": 24,
+      "heightMeters": 3.5,
+      "weightKilograms": 65.0
+    },
+    {
+      "name": "poke_036",
+      "pokemon": "arbok",
+      "pokedexId": 24,
+      "pokemonId": 24,
+      "heightMeters": 3.5,
+      "weightKilograms": 65.0
+    },
+    {
+      "name": "poke_037",
+      "pokemon": "deoxys-defense",
+      "pokedexId": 386,
+      "pokemonId": 10002,
+      "heightMeters": 1.7,
+      "weightKilograms": 60.8
+    },
+    {
+      "name": "poke_038",
+      "pokemon": "weedle",
+      "pokedexId": 13,
+      "pokemonId": 13,
+      "heightMeters": 0.3,
+      "weightKilograms": 3.2
+    },
+    {
+      "name": "poke_039",
+      "pokemon": "swalot",
+      "pokedexId": 317,
+      "pokemonId": 317,
+      "heightMeters": 1.7,
+      "weightKilograms": 80.0
+    },
+    {
+      "name": "poke_040",
+      "pokemon": "zubat",
+      "pokedexId": 41,
+      "pokemonId": 41,
+      "heightMeters": 0.8,
+      "weightKilograms": 7.5
+    },
+    {
+      "name": "poke_041",
+      "pokemon": "porygon2",
+      "pokedexId": 233,
+      "pokemonId": 233,
+      "heightMeters": 0.6,
+      "weightKilograms": 32.5
+    },
+    {
+      "name": "poke_042",
+      "pokemon": "jynx",
+      "pokedexId": 124,
+      "pokemonId": 124,
+      "heightMeters": 1.4,
+      "weightKilograms": 40.6
+    },
+    {
+      "name": "poke_043",
+      "pokemon": "articuno",
+      "pokedexId": 144,
+      "pokemonId": 144,
+      "heightMeters": 1.7,
+      "weightKilograms": 55.4
+    },
+    {
+      "name": "poke_044",
+      "pokemon": "sneasel",
+      "pokedexId": 215,
+      "pokemonId": 215,
+      "heightMeters": 0.9,
+      "weightKilograms": 28.0
+    },
+    {
+      "name": "poke_045",
+      "pokemon": "clefairy",
+      "pokedexId": 35,
+      "pokemonId": 35,
+      "heightMeters": 0.6,
+      "weightKilograms": 7.5
+    },
+    {
+      "name": "poke_046",
+      "pokemon": "whiscash",
+      "pokedexId": 340,
+      "pokemonId": 340,
+      "heightMeters": 0.9,
+      "weightKilograms": 23.6
+    },
+    {
+      "name": "poke_047",
+      "pokemon": "vigoroth",
+      "pokedexId": 288,
+      "pokemonId": 288,
+      "heightMeters": 1.4,
+      "weightKilograms": 46.5
+    },
+    {
+      "name": "poke_048",
+      "pokemon": "slugma",
+      "pokedexId": 218,
+      "pokemonId": 218,
+      "heightMeters": 0.7,
+      "weightKilograms": 35.0
+    },
+    {
+      "name": "poke_049",
+      "pokemon": "froslass",
+      "pokedexId": 478,
+      "pokemonId": 478,
+      "heightMeters": 1.3,
+      "weightKilograms": 26.6
+    },
+    {
+      "name": "poke_050",
+      "pokemon": "blissey",
+      "pokedexId": 242,
+      "pokemonId": 242,
+      "heightMeters": 1.5,
+      "weightKilograms": 46.8
+    },
+    {
+      "name": "poke_051",
+      "pokemon": "rhyhorn",
+      "pokedexId": 111,
+      "pokemonId": 111,
+      "heightMeters": 1.0,
+      "weightKilograms": 115.0
+    },
+    {
+      "name": "poke_052",
+      "pokemon": "mew",
+      "pokedexId": 151,
+      "pokemonId": 151,
+      "heightMeters": 0.4,
+      "weightKilograms": 4.0
+    },
+    {
+      "name": "poke_053",
+      "pokemon": "mawile",
+      "pokedexId": 303,
+      "pokemonId": 303,
+      "heightMeters": 0.6,
+      "weightKilograms": 11.5
+    },
+    {
+      "name": "poke_054",
+      "pokemon": "latias",
+      "pokedexId": 380,
+      "pokemonId": 380,
+      "heightMeters": 1.4,
+      "weightKilograms": 40.0
+    },
+    {
+      "name": "poke_055",
+      "pokemon": "delcatty",
+      "pokedexId": 301,
+      "pokemonId": 301,
+      "heightMeters": 1.1,
+      "weightKilograms": 32.6
+    },
+    {
+      "name": "poke_056",
+      "pokemon": "yanma",
+      "pokedexId": 193,
+      "pokemonId": 193,
+      "heightMeters": 1.2,
+      "weightKilograms": 38.0
+    },
+    {
+      "name": "poke_057",
+      "pokemon": "wooper",
+      "pokedexId": 194,
+      "pokemonId": 194,
+      "heightMeters": 0.4,
+      "weightKilograms": 8.5
+    },
+    {
+      "name": "poke_058",
+      "pokemon": "lumineon",
+      "pokedexId": 457,
+      "pokemonId": 457,
+      "heightMeters": 1.2,
+      "weightKilograms": 24.0
+    },
+    {
+      "name": "poke_059",
+      "pokemon": "skarmory",
+      "pokedexId": 227,
+      "pokemonId": 227,
+      "heightMeters": 1.7,
+      "weightKilograms": 50.5
+    },
+    {
+      "name": "poke_060",
+      "pokemon": "deoxys-attack",
+      "pokedexId": 386,
+      "pokemonId": 10001,
+      "heightMeters": 1.7,
+      "weightKilograms": 60.8
+    },
+    {
+      "name": "poke_061",
+      "pokemon": "skitty",
+      "pokedexId": 300,
+      "pokemonId": 300,
+      "heightMeters": 0.6,
+      "weightKilograms": 11.0
+    },
+    {
+      "name": "poke_062",
+      "pokemon": "spinarak",
+      "pokedexId": 167,
+      "pokemonId": 167,
+      "heightMeters": 0.5,
+      "weightKilograms": 8.5
+    },
+    {
+      "name": "poke_063",
+      "pokemon": "rotom-mow",
+      "pokedexId": 479,
+      "pokemonId": 10012,
+      "heightMeters": 0.3,
+      "weightKilograms": 0.3
+    },
+    {
+      "name": "poke_064",
+      "pokemon": "gorebyss",
+      "pokedexId": 368,
+      "pokemonId": 368,
+      "heightMeters": 1.8,
+      "weightKilograms": 22.6
+    },
+    {
+      "name": "poke_065",
+      "pokemon": "metapod",
+      "pokedexId": 11,
+      "pokemonId": 11,
+      "heightMeters": 0.7,
+      "weightKilograms": 9.9
+    },
+    {
+      "name": "poke_066",
+      "pokemon": "nidoking",
+      "pokedexId": 34,
+      "pokemonId": 34,
+      "heightMeters": 1.4,
+      "weightKilograms": 62.0
+    },
+    {
+      "name": "poke_067",
+      "pokemon": "snorunt",
+      "pokedexId": 361,
+      "pokemonId": 361,
+      "heightMeters": 0.7,
+      "weightKilograms": 16.8
+    },
+    {
+      "name": "poke_068",
+      "pokemon": "whiscash",
+      "pokedexId": 340,
+      "pokemonId": 340,
+      "heightMeters": 0.9,
+      "weightKilograms": 23.6
+    },
+    {
+      "name": "poke_069",
+      "pokemon": "poliwrath",
+      "pokedexId": 62,
+      "pokemonId": 62,
+      "heightMeters": 1.3,
+      "weightKilograms": 54.0
+    },
+    {
+      "name": "poke_070",
+      "pokemon": "sceptile",
+      "pokedexId": 254,
+      "pokemonId": 254,
+      "heightMeters": 1.7,
+      "weightKilograms": 52.2
+    },
+    {
+      "name": "poke_071",
+      "pokemon": "carvanha",
+      "pokedexId": 318,
+      "pokemonId": 318,
+      "heightMeters": 0.8,
+      "weightKilograms": 20.8
+    },
+    {
+      "name": "poke_072",
+      "pokemon": "weepinbell",
+      "pokedexId": 70,
+      "pokemonId": 70,
+      "heightMeters": 1.0,
+      "weightKilograms": 6.4
+    },
+    {
+      "name": "poke_073",
+      "pokemon": "paras",
+      "pokedexId": 46,
+      "pokemonId": 46,
+      "heightMeters": 0.3,
+      "weightKilograms": 5.4
+    },
+    {
+      "name": "poke_074",
+      "pokemon": "togepi",
+      "pokedexId": 175,
+      "pokemonId": 175,
+      "heightMeters": 0.3,
+      "weightKilograms": 1.5
+    },
+    {
+      "name": "poke_075",
+      "pokemon": "tyrogue",
+      "pokedexId": 236,
+      "pokemonId": 236,
+      "heightMeters": 0.7,
+      "weightKilograms": 21.0
+    },
+    {
+      "name": "poke_076",
+      "pokemon": "honchkrow",
+      "pokedexId": 430,
+      "pokemonId": 430,
+      "heightMeters": 0.9,
+      "weightKilograms": 27.3
+    },
+    {
+      "name": "poke_077",
+      "pokemon": "shelgon",
+      "pokedexId": 372,
+      "pokemonId": 372,
+      "heightMeters": 1.1,
+      "weightKilograms": 110.5
+    },
+    {
+      "name": "poke_078",
+      "pokemon": "carnivine",
+      "pokedexId": 455,
+      "pokemonId": 455,
+      "heightMeters": 1.4,
+      "weightKilograms": 27.0
+    },
+    {
+      "name": "poke_079",
+      "pokemon": "ivysaur",
+      "pokedexId": 2,
+      "pokemonId": 2,
+      "heightMeters": 1.0,
+      "weightKilograms": 13.0
+    },
+    {
+      "name": "poke_080",
+      "pokemon": "porygon-z",
+      "pokedexId": 474,
+      "pokemonId": 474,
+      "heightMeters": 0.9,
+      "weightKilograms": 34.0
+    },
+    {
+      "name": "poke_081",
+      "pokemon": "articuno",
+      "pokedexId": 144,
+      "pokemonId": 144,
+      "heightMeters": 1.7,
+      "weightKilograms": 55.4
+    },
+    {
+      "name": "poke_082",
+      "pokemon": "ledian",
+      "pokedexId": 166,
+      "pokemonId": 166,
+      "heightMeters": 1.4,
+      "weightKilograms": 35.6
+    },
+    {
+      "name": "poke_083",
+      "pokemon": "cresselia",
+      "pokedexId": 488,
+      "pokemonId": 488,
+      "heightMeters": 1.5,
+      "weightKilograms": 85.6
+    },
+    {
+      "name": "poke_084",
+      "pokemon": "victreebel",
+      "pokedexId": 71,
+      "pokemonId": 71,
+      "heightMeters": 1.7,
+      "weightKilograms": 15.5
+    },
+    {
+      "name": "poke_085",
+      "pokemon": "slowbro",
+      "pokedexId": 80,
+      "pokemonId": 80,
+      "heightMeters": 1.6,
+      "weightKilograms": 78.5
+    },
+    {
+      "name": "poke_086",
+      "pokemon": "yanmega",
+      "pokedexId": 469,
+      "pokemonId": 469,
+      "heightMeters": 1.9,
+      "weightKilograms": 51.5
+    },
+    {
+      "name": "poke_087",
+      "pokemon": "shinx",
+      "pokedexId": 403,
+      "pokemonId": 403,
+      "heightMeters": 0.5,
+      "weightKilograms": 9.5
+    },
+    {
+      "name": "poke_088",
+      "pokemon": "ludicolo",
+      "pokedexId": 272,
+      "pokemonId": 272,
+      "heightMeters": 1.5,
+      "weightKilograms": 55.0
+    },
+    {
+      "name": "poke_089",
+      "pokemon": "slowpoke",
+      "pokedexId": 79,
+      "pokemonId": 79,
+      "heightMeters": 1.2,
+      "weightKilograms": 36.0
+    },
+    {
+      "name": "poke_090",
+      "pokemon": "jynx",
+      "pokedexId": 124,
+      "pokemonId": 124,
+      "heightMeters": 1.4,
+      "weightKilograms": 40.6
+    },
+    {
+      "name": "poke_091",
+      "pokemon": "alakazam",
+      "pokedexId": 65,
+      "pokemonId": 65,
+      "heightMeters": 1.5,
+      "weightKilograms": 48.0
+    },
+    {
+      "name": "poke_092",
+      "pokemon": "swampert",
+      "pokedexId": 260,
+      "pokemonId": 260,
+      "heightMeters": 1.5,
+      "weightKilograms": 81.9
+    },
+    {
+      "name": "poke_093",
+      "pokemon": "smoochum",
+      "pokedexId": 238,
+      "pokemonId": 238,
+      "heightMeters": 0.4,
+      "weightKilograms": 6.0
+    },
+    {
+      "name": "poke_094",
+      "pokemon": "leafeon",
+      "pokedexId": 470,
+      "pokemonId": 470,
+      "heightMeters": 1.0,
+      "weightKilograms": 25.5
+    },
+    {
+      "name": "poke_095",
+      "pokemon": "suicune",
+      "pokedexId": 245,
+      "pokemonId": 245,
+      "heightMeters": 2.0,
+      "weightKilograms": 187.0
+    },
+    {
+      "name": "poke_096",
+      "pokemon": "gloom",
+      "pokedexId": 44,
+      "pokemonId": 44,
+      "heightMeters": 0.8,
+      "weightKilograms": 8.6
+    },
+    {
+      "name": "poke_097",
+      "pokemon": "croagunk",
+      "pokedexId": 453,
+      "pokemonId": 453,
+      "heightMeters": 0.7,
+      "weightKilograms": 23.0
+    },
+    {
+      "name": "poke_098",
+      "pokemon": "shellos",
+      "pokedexId": 422,
+      "pokemonId": 422,
+      "heightMeters": 0.3,
+      "weightKilograms": 6.3
+    },
+    {
+      "name": "poke_099",
+      "pokemon": "torkoal",
+      "pokedexId": 324,
+      "pokemonId": 324,
+      "heightMeters": 0.5,
+      "weightKilograms": 80.4
+    },
+    {
+      "name": "poke_100",
+      "pokemon": "vulpix",
+      "pokedexId": 37,
+      "pokemonId": 37,
+      "heightMeters": 0.6,
+      "weightKilograms": 9.9
+    },
+    {
+      "name": "poke_101",
+      "pokemon": "azurill",
+      "pokedexId": 298,
+      "pokemonId": 298,
+      "heightMeters": 0.2,
+      "weightKilograms": 2.0
+    },
+    {
+      "name": "poke_102",
+      "pokemon": "dusclops",
+      "pokedexId": 356,
+      "pokemonId": 356,
+      "heightMeters": 1.6,
+      "weightKilograms": 30.6
+    },
+    {
+      "name": "poke_103",
+      "pokemon": "grumpig",
+      "pokedexId": 326,
+      "pokemonId": 326,
+      "heightMeters": 0.9,
+      "weightKilograms": 71.5
+    },
+    {
+      "name": "poke_104",
+      "pokemon": "bayleef",
+      "pokedexId": 153,
+      "pokemonId": 153,
+      "heightMeters": 1.2,
+      "weightKilograms": 15.8
+    },
+    {
+      "name": "poke_105",
+      "pokemon": "azumarill",
+      "pokedexId": 184,
+      "pokemonId": 184,
+      "heightMeters": 0.8,
+      "weightKilograms": 28.5
+    },
+    {
+      "name": "poke_106",
+      "pokemon": "plusle",
+      "pokedexId": 311,
+      "pokemonId": 311,
+      "heightMeters": 0.4,
+      "weightKilograms": 4.2
+    },
+    {
+      "name": "poke_107",
+      "pokemon": "cresselia",
+      "pokedexId": 488,
+      "pokemonId": 488,
+      "heightMeters": 1.5,
+      "weightKilograms": 85.6
+    },
+    {
+      "name": "poke_108",
+      "pokemon": "marowak",
+      "pokedexId": 105,
+      "pokemonId": 105,
+      "heightMeters": 1.0,
+      "weightKilograms": 45.0
+    },
+    {
+      "name": "poke_109",
+      "pokemon": "miltank",
+      "pokedexId": 241,
+      "pokemonId": 241,
+      "heightMeters": 1.2,
+      "weightKilograms": 75.5
+    },
+    {
+      "name": "poke_110",
+      "pokemon": "porygon-z",
+      "pokedexId": 474,
+      "pokemonId": 474,
+      "heightMeters": 0.9,
+      "weightKilograms": 34.0
+    },
+    {
+      "name": "poke_111",
+      "pokemon": "cleffa",
+      "pokedexId": 173,
+      "pokemonId": 173,
+      "heightMeters": 0.3,
+      "weightKilograms": 3.0
+    },
+    {
+      "name": "poke_112",
+      "pokemon": "cresselia",
+      "pokedexId": 488,
+      "pokemonId": 488,
+      "heightMeters": 1.5,
+      "weightKilograms": 85.6
+    },
+    {
+      "name": "poke_113",
+      "pokemon": "makuhita",
+      "pokedexId": 296,
+      "pokemonId": 296,
+      "heightMeters": 1.0,
+      "weightKilograms": 86.4
+    },
+    {
+      "name": "poke_114",
+      "pokemon": "meowth",
+      "pokedexId": 52,
+      "pokemonId": 52,
+      "heightMeters": 0.4,
+      "weightKilograms": 4.2
+    },
+    {
+      "name": "poke_115",
+      "pokemon": "vulpix",
+      "pokedexId": 37,
+      "pokemonId": 37,
+      "heightMeters": 0.6,
+      "weightKilograms": 9.9
+    },
+    {
+      "name": "poke_116",
+      "pokemon": "espeon",
+      "pokedexId": 196,
+      "pokemonId": 196,
+      "heightMeters": 0.9,
+      "weightKilograms": 26.5
+    },
+    {
+      "name": "poke_117",
+      "pokemon": "wormadam-sandy",
+      "pokedexId": 413,
+      "pokemonId": 10004,
+      "heightMeters": 0.5,
+      "weightKilograms": 6.5
+    },
+    {
+      "name": "poke_118",
+      "pokemon": "horsea",
+      "pokedexId": 116,
+      "pokemonId": 116,
+      "heightMeters": 0.4,
+      "weightKilograms": 8.0
+    },
+    {
+      "name": "poke_119",
+      "pokemon": "chimchar",
+      "pokedexId": 390,
+      "pokemonId": 390,
+      "heightMeters": 0.5,
+      "weightKilograms": 6.2
+    },
+    {
+      "name": "poke_120",
+      "pokemon": "spheal",
+      "pokedexId": 363,
+      "pokemonId": 363,
+      "heightMeters": 0.8,
+      "weightKilograms": 39.5
+    },
+    {
+      "name": "poke_121",
+      "pokemon": "dusknoir",
+      "pokedexId": 477,
+      "pokemonId": 477,
+      "heightMeters": 2.2,
+      "weightKilograms": 106.6
+    },
+    {
+      "name": "poke_122",
+      "pokemon": "masquerain",
+      "pokedexId": 284,
+      "pokemonId": 284,
+      "heightMeters": 0.8,
+      "weightKilograms": 3.6
+    },
+    {
+      "name": "poke_123",
+      "pokemon": "electabuzz",
+      "pokedexId": 125,
+      "pokemonId": 125,
+      "heightMeters": 1.1,
+      "weightKilograms": 30.0
+    },
+    {
+      "name": "poke_124",
+      "pokemon": "buizel",
+      "pokedexId": 418,
+      "pokemonId": 418,
+      "heightMeters": 0.7,
+      "weightKilograms": 29.5
+    },
+    {
+      "name": "poke_125",
+      "pokemon": "togekiss",
+      "pokedexId": 468,
+      "pokemonId": 468,
+      "heightMeters": 1.5,
+      "weightKilograms": 38.0
+    },
+    {
+      "name": "poke_126",
+      "pokemon": "gyarados",
+      "pokedexId": 130,
+      "pokemonId": 130,
+      "heightMeters": 6.5,
+      "weightKilograms": 235.0
+    },
+    {
+      "name": "poke_127",
+      "pokemon": "lickilicky",
+      "pokedexId": 463,
+      "pokemonId": 463,
+      "heightMeters": 1.7,
+      "weightKilograms": 140.0
+    },
+    {
+      "name": "poke_128",
+      "pokemon": "ariados",
+      "pokedexId": 168,
+      "pokemonId": 168,
+      "heightMeters": 1.1,
+      "weightKilograms": 33.5
+    },
+    {
+      "name": "poke_129",
+      "pokemon": "dewgong",
+      "pokedexId": 87,
+      "pokemonId": 87,
+      "heightMeters": 1.7,
+      "weightKilograms": 120.0
+    },
+    {
+      "name": "poke_130",
+      "pokemon": "garchomp",
+      "pokedexId": 445,
+      "pokemonId": 445,
+      "heightMeters": 1.9,
+      "weightKilograms": 95.0
+    },
+    {
+      "name": "poke_131",
+      "pokemon": "mismagius",
+      "pokedexId": 429,
+      "pokemonId": 429,
+      "heightMeters": 0.9,
+      "weightKilograms": 4.4
+    },
+    {
+      "name": "poke_132",
+      "pokemon": "golduck",
+      "pokedexId": 55,
+      "pokemonId": 55,
+      "heightMeters": 1.7,
+      "weightKilograms": 76.6
+    },
+    {
+      "name": "poke_133",
+      "pokemon": "flygon",
+      "pokedexId": 330,
+      "pokemonId": 330,
+      "heightMeters": 2.0,
+      "weightKilograms": 82.0
+    },
+    {
+      "name": "poke_134",
+      "pokemon": "nidoqueen",
+      "pokedexId": 31,
+      "pokemonId": 31,
+      "heightMeters": 1.3,
+      "weightKilograms": 60.0
+    },
+    {
+      "name": "poke_135",
+      "pokemon": "blissey",
+      "pokedexId": 242,
+      "pokemonId": 242,
+      "heightMeters": 1.5,
+      "weightKilograms": 46.8
+    },
+    {
+      "name": "poke_136",
+      "pokemon": "mothim",
+      "pokedexId": 414,
+      "pokemonId": 414,
+      "heightMeters": 0.9,
+      "weightKilograms": 23.3
+    },
+    {
+      "name": "poke_137",
+      "pokemon": "whismur",
+      "pokedexId": 293,
+      "pokemonId": 293,
+      "heightMeters": 0.6,
+      "weightKilograms": 16.3
+    },
+    {
+      "name": "poke_138",
+      "pokemon": "seedot",
+      "pokedexId": 273,
+      "pokemonId": 273,
+      "heightMeters": 0.5,
+      "weightKilograms": 4.0
+    },
+    {
+      "name": "poke_139",
+      "pokemon": "elekid",
+      "pokedexId": 239,
+      "pokemonId": 239,
+      "heightMeters": 0.6,
+      "weightKilograms": 23.5
+    },
+    {
+      "name": "poke_140",
+      "pokemon": "aerodactyl",
+      "pokedexId": 142,
+      "pokemonId": 142,
+      "heightMeters": 1.8,
+      "weightKilograms": 59.0
+    },
+    {
+      "name": "poke_141",
+      "pokemon": "treecko",
+      "pokedexId": 252,
+      "pokemonId": 252,
+      "heightMeters": 0.5,
+      "weightKilograms": 5.0
+    },
+    {
+      "name": "poke_142",
+      "pokemon": "porygon-z",
+      "pokedexId": 474,
+      "pokemonId": 474,
+      "heightMeters": 0.9,
+      "weightKilograms": 34.0
+    },
+    {
+      "name": "poke_143",
+      "pokemon": "muk",
+      "pokedexId": 89,
+      "pokemonId": 89,
+      "heightMeters": 1.2,
+      "weightKilograms": 30.0
+    },
+    {
+      "name": "poke_144",
+      "pokemon": "swampert",
+      "pokedexId": 260,
+      "pokemonId": 260,
+      "heightMeters": 1.5,
+      "weightKilograms": 81.9
+    },
+    {
+      "name": "poke_145",
+      "pokemon": "azurill",
+      "pokedexId": 298,
+      "pokemonId": 298,
+      "heightMeters": 0.2,
+      "weightKilograms": 2.0
+    },
+    {
+      "name": "poke_146",
+      "pokemon": "victreebel",
+      "pokedexId": 71,
+      "pokemonId": 71,
+      "heightMeters": 1.7,
+      "weightKilograms": 15.5
+    },
+    {
+      "name": "poke_147",
+      "pokemon": "weezing",
+      "pokedexId": 110,
+      "pokemonId": 110,
+      "heightMeters": 1.2,
+      "weightKilograms": 9.5
+    },
+    {
+      "name": "poke_148",
+      "pokemon": "xatu",
+      "pokedexId": 178,
+      "pokemonId": 178,
+      "heightMeters": 1.5,
+      "weightKilograms": 15.0
+    },
+    {
+      "name": "poke_149",
+      "pokemon": "marill",
+      "pokedexId": 183,
+      "pokemonId": 183,
+      "heightMeters": 0.4,
+      "weightKilograms": 8.5
+    },
+    {
+      "name": "poke_150",
+      "pokemon": "mr-mime",
+      "pokedexId": 122,
+      "pokemonId": 122,
+      "heightMeters": 1.3,
+      "weightKilograms": 54.5
+    },
+    {
+      "name": "poke_151",
+      "pokemon": "cleffa",
+      "pokedexId": 173,
+      "pokemonId": 173,
+      "heightMeters": 0.3,
+      "weightKilograms": 3.0
+    },
+    {
+      "name": "poke_152",
+      "pokemon": "snorlax",
+      "pokedexId": 143,
+      "pokemonId": 143,
+      "heightMeters": 2.1,
+      "weightKilograms": 460.0
+    },
+    {
+      "name": "poke_153",
+      "pokemon": "gabite",
+      "pokedexId": 444,
+      "pokemonId": 444,
+      "heightMeters": 1.4,
+      "weightKilograms": 56.0
+    },
+    {
+      "name": "poke_154",
+      "pokemon": "cyndaquil",
+      "pokedexId": 155,
+      "pokemonId": 155,
+      "heightMeters": 0.5,
+      "weightKilograms": 7.9
+    },
+    {
+      "name": "poke_155",
+      "pokemon": "beautifly",
+      "pokedexId": 267,
+      "pokemonId": 267,
+      "heightMeters": 1.0,
+      "weightKilograms": 28.4
+    },
+    {
+      "name": "poke_156",
+      "pokemon": "deoxys-normal",
+      "pokedexId": 386,
+      "pokemonId": 386,
+      "heightMeters": 1.7,
+      "weightKilograms": 60.8
+    },
+    {
+      "name": "poke_157",
+      "pokemon": "deoxys-defense",
+      "pokedexId": 386,
+      "pokemonId": 10002,
+      "heightMeters": 1.7,
+      "weightKilograms": 60.8
+    },
+    {
+      "name": "poke_158",
+      "pokemon": "ledyba",
+      "pokedexId": 165,
+      "pokemonId": 165,
+      "heightMeters": 1.0,
+      "weightKilograms": 10.8
+    },
+    {
+      "name": "poke_159",
+      "pokemon": "heracross",
+      "pokedexId": 214,
+      "pokemonId": 214,
+      "heightMeters": 1.5,
+      "weightKilograms": 54.0
+    },
+    {
+      "name": "poke_160",
+      "pokemon": "blissey",
+      "pokedexId": 242,
+      "pokemonId": 242,
+      "heightMeters": 1.5,
+      "weightKilograms": 46.8
+    },
+    {
+      "name": "poke_161",
+      "pokemon": "chikorita",
+      "pokedexId": 152,
+      "pokemonId": 152,
+      "heightMeters": 0.9,
+      "weightKilograms": 6.4
+    },
+    {
+      "name": "poke_162",
+      "pokemon": "kabutops",
+      "pokedexId": 141,
+      "pokemonId": 141,
+      "heightMeters": 1.3,
+      "weightKilograms": 40.5
+    },
+    {
+      "name": "species_blastoise",
+      "pokemon": "blastoise",
+      "pokedexId": 9,
+      "pokemonId": 9,
+      "heightMeters": 1.6,
+      "weightKilograms": 85.5
+    },
+    {
+      "name": "species_celebi",
+      "pokemon": "celebi",
+      "pokedexId": 251,
+      "pokemonId": 251,
+      "heightMeters": 0.6,
+      "weightKilograms": 5.0
+    },
+    {
+      "name": "species_charizard",
+      "pokemon": "charizard",
+      "pokedexId": 6,
+      "pokemonId": 6,
+      "heightMeters": 1.7,
+      "weightKilograms": 90.5
+    },
+    {
+      "name": "species_darkrai",
+      "pokemon": "darkrai",
+      "pokedexId": 491,
+      "pokemonId": 491,
+      "heightMeters": 1.5,
+      "weightKilograms": 50.5
+    },
+    {
+      "name": "species_ditto",
+      "pokemon": "ditto",
+      "pokedexId": 132,
+      "pokemonId": 132,
+      "heightMeters": 0.3,
+      "weightKilograms": 4.0
+    },
+    {
+      "name": "species_dragonite",
+      "pokemon": "dragonite",
+      "pokedexId": 149,
+      "pokemonId": 149,
+      "heightMeters": 2.2,
+      "weightKilograms": 210.0
+    },
+    {
+      "name": "species_flareon",
+      "pokemon": "flareon",
+      "pokedexId": 136,
+      "pokemonId": 136,
+      "heightMeters": 0.9,
+      "weightKilograms": 25.0
+    },
+    {
+      "name": "species_garchomp",
+      "pokemon": "garchomp",
+      "pokedexId": 445,
+      "pokemonId": 445,
+      "heightMeters": 1.9,
+      "weightKilograms": 95.0
+    },
+    {
+      "name": "species_gengar",
+      "pokemon": "gengar",
+      "pokedexId": 94,
+      "pokemonId": 94,
+      "heightMeters": 1.5,
+      "weightKilograms": 40.5
+    },
+    {
+      "name": "species_gyarados",
+      "pokemon": "gyarados",
+      "pokedexId": 130,
+      "pokemonId": 130,
+      "heightMeters": 6.5,
+      "weightKilograms": 235.0
+    },
+    {
+      "name": "species_ho-oh",
+      "pokemon": "ho-oh",
+      "pokedexId": 250,
+      "pokemonId": 250,
+      "heightMeters": 3.8,
+      "weightKilograms": 199.0
+    },
+    {
+      "name": "species_jirachi",
+      "pokemon": "jirachi",
+      "pokedexId": 385,
+      "pokemonId": 385,
+      "heightMeters": 0.3,
+      "weightKilograms": 1.1
+    },
+    {
+      "name": "species_jolteon",
+      "pokemon": "jolteon",
+      "pokedexId": 135,
+      "pokemonId": 135,
+      "heightMeters": 0.8,
+      "weightKilograms": 24.5
+    },
+    {
+      "name": "species_kangaskhan",
+      "pokemon": "kangaskhan",
+      "pokedexId": 115,
+      "pokemonId": 115,
+      "heightMeters": 2.2,
+      "weightKilograms": 80.0
+    },
+    {
+      "name": "species_lapras",
+      "pokemon": "lapras",
+      "pokedexId": 131,
+      "pokemonId": 131,
+      "heightMeters": 2.5,
+      "weightKilograms": 220.0
+    },
+    {
+      "name": "species_lucario",
+      "pokemon": "lucario",
+      "pokedexId": 448,
+      "pokemonId": 448,
+      "heightMeters": 1.2,
+      "weightKilograms": 54.0
+    },
+    {
+      "name": "species_lugia",
+      "pokemon": "lugia",
+      "pokedexId": 249,
+      "pokemonId": 249,
+      "heightMeters": 5.2,
+      "weightKilograms": 216.0
+    },
+    {
+      "name": "species_metagross",
+      "pokemon": "metagross",
+      "pokedexId": 376,
+      "pokemonId": 376,
+      "heightMeters": 1.6,
+      "weightKilograms": 550.0
+    },
+    {
+      "name": "species_mew",
+      "pokemon": "mew",
+      "pokedexId": 151,
+      "pokemonId": 151,
+      "heightMeters": 0.4,
+      "weightKilograms": 4.0
+    },
+    {
+      "name": "species_mewtwo",
+      "pokemon": "mewtwo",
+      "pokedexId": 150,
+      "pokemonId": 150,
+      "heightMeters": 2.0,
+      "weightKilograms": 122.0
+    },
+    {
+      "name": "species_rayquaza",
+      "pokemon": "rayquaza",
+      "pokedexId": 384,
+      "pokemonId": 384,
+      "heightMeters": 7.0,
+      "weightKilograms": 206.5
+    },
+    {
+      "name": "species_salamence",
+      "pokemon": "salamence",
+      "pokedexId": 373,
+      "pokemonId": 373,
+      "heightMeters": 1.5,
+      "weightKilograms": 102.6
+    },
+    {
+      "name": "species_snorlax",
+      "pokemon": "snorlax",
+      "pokedexId": 143,
+      "pokemonId": 143,
+      "heightMeters": 2.1,
+      "weightKilograms": 460.0
+    },
+    {
+      "name": "species_tauros",
+      "pokemon": "tauros",
+      "pokedexId": 128,
+      "pokemonId": 128,
+      "heightMeters": 1.4,
+      "weightKilograms": 88.4
+    },
+    {
+      "name": "species_tyranitar",
+      "pokemon": "tyranitar",
+      "pokedexId": 248,
+      "pokemonId": 248,
+      "heightMeters": 2.0,
+      "weightKilograms": 202.0
+    },
+    {
+      "name": "species_vaporeon",
+      "pokemon": "vaporeon",
+      "pokedexId": 134,
+      "pokemonId": 134,
+      "heightMeters": 1.0,
+      "weightKilograms": 29.0
+    },
+    {
+      "name": "species_venusaur",
+      "pokemon": "venusaur",
+      "pokedexId": 3,
+      "pokemonId": 3,
+      "heightMeters": 2.0,
+      "weightKilograms": 100.0
+    }
+  ]
+}

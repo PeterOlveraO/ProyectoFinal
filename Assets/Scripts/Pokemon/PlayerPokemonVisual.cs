@@ -13,7 +13,7 @@ namespace Game.Pokemon
     [DisallowMultipleComponent]
     public sealed class PlayerPokemonVisual : MonoBehaviour
     {
-        [Tooltip("Altura del Pokémon en unidades de mundo.")]
+        [Tooltip("Altura de la especie, obtenida de la Pokédex (1 metro = 1 unidad).")]
         [SerializeField, Min(0.2f)] float height = 1.65f;
 
         SpriteRenderer _renderer;
@@ -61,14 +61,17 @@ namespace Game.Pokemon
             }
             if (_renderer == null)
             {
+                height = PokemonPhysicalSize.HeightFor(sprite);
                 _renderer = PokemonVisuals.CreateBillboard(transform, "Pokemon Visual", sprite, height,
-                                                           false, height * (2.25f / 1.35f), -0.5f);
+                                                           false, PokemonPhysicalSize.WidthFor(sprite, height), -0.5f);
                 _layout = _renderer.GetComponent<PokemonBillboardLayout>();
             }
             if (_source != sprite)
             {
                 _source = sprite;
-                _layout.Configure(_renderer, sprite, height, height * (2.25f / 1.35f), -0.5f);
+                height = PokemonPhysicalSize.HeightFor(sprite);
+                _layout.Configure(_renderer, sprite, height, PokemonPhysicalSize.WidthFor(sprite, height), -0.5f);
+                Game.Rendering.GroundContactShadow.Attach(transform, height * .65f);
                 _animation = new PokemonVisuals.DirectionalAnimation(_renderer, sprite);
             }
             _renderer.enabled = true;

@@ -26,7 +26,10 @@ namespace Game.Pokemon
         Transform _visual;
         PokemonBillboardLayout _layout;
         PokemonVisuals.DirectionalAnimation _animation;
+        Sprite _source;
         Vector3 _lastPosition;
+
+        public float VisibleHeight => height;
 
         /// <summary>Añade el Pokémon a un enemigo recién creado.</summary>
         public static PokemonEnemyVisual Attach(GameObject enemy, Sprite sprite)
@@ -35,15 +38,15 @@ namespace Game.Pokemon
 
             var visual = enemy.GetComponent<PokemonEnemyVisual>();
             if (visual == null) visual = enemy.AddComponent<PokemonEnemyVisual>();
-            // Reused actors begin with the normal profile; bosses opt in after initialization.
-            visual.height = NormalHeight;
-            visual.maximumWidth = NormalMaximumWidth;
+            visual._source = sprite;
+            visual.height = PokemonPhysicalSize.HeightFor(sprite);
+            visual.maximumWidth = PokemonPhysicalSize.WidthFor(sprite, visual.height);
             visual.Build(sprite);
             return visual;
         }
 
         /// <summary>
-        /// Optional visual-only profile, applied immediately (e.g. bosses: 1.9f, 3.2f).
+        /// Optional visual-only profile, applied immediately.
         /// Call after Attach/InitializeRound; actor transforms and combat values are untouched.
         /// </summary>
         public void SetVisualProfile(float targetHeight, float maxWidth)
@@ -54,6 +57,13 @@ namespace Game.Pokemon
             _layout.SetProfile(height, maximumWidth);
             Game.Rendering.GroundContactShadow.Attach(transform, height * .65f);
             UpdatePosition();
+        }
+
+        // Bosses use the same species measurements; combat rank does not change physical size.
+        public void ApplySpeciesScale()
+        {
+            float speciesHeight = PokemonPhysicalSize.HeightFor(_source);
+            SetVisualProfile(speciesHeight, PokemonPhysicalSize.WidthFor(_source, speciesHeight));
         }
 
         void Build(Sprite sprite)

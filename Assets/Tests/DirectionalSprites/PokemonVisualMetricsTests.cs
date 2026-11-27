@@ -31,6 +31,19 @@ namespace Game.DirectionalSprites.Tests
             public Family[] families;
         }
 
+        [Serializable]
+        public class PhysicalSize
+        {
+            public string name;
+            public float heightMeters;
+        }
+
+        [Serializable]
+        public class PhysicalSizes
+        {
+            public PhysicalSize[] families;
+        }
+
         Type visuals, layoutType, animationType;
         Metrics metrics;
 
@@ -194,7 +207,7 @@ namespace Game.DirectionalSprites.Tests
         }
 
         [Test]
-        public void BossProfileAppliesImmediatelyAndDoesNotScaleActorOrChangeSourceIdentity()
+        public void SpeciesScaleRestoresAfterAnExplicitVisualOverride()
         {
             var actor = new GameObject("boss profile actor");
             try
@@ -204,20 +217,98 @@ namespace Game.DirectionalSprites.Tests
                 var visual = enemyType.GetMethod("Attach").Invoke(null, new object[] { actor, source });
                 var renderer = actor.GetComponentsInChildren<SpriteRenderer>().Single(r => r.sprite == source);
                 var family = metrics.families.Single(f => f.name == source.name);
-                AssertGeometry(renderer, family.source, 1.35f, 2.25f, 0f, "normal default");
+                AssertGeometry(renderer, family.source, 7f, 20f, 0f, "Rayquaza species height");
                 float normal = renderer.transform.localScale.x;
-                enemyType.GetMethod("SetVisualProfile").Invoke(visual, new object[] { 1.9f, 3.2f });
+                enemyType.GetMethod("SetVisualProfile").Invoke(visual, new object[] { 8f, 20f });
                 Assert.Greater(renderer.transform.localScale.x, normal);
                 Assert.AreSame(source, renderer.sprite);
                 Assert.AreEqual(Vector3.one, actor.transform.localScale);
-                AssertGeometry(renderer, family.source, 1.9f, 3.2f, 0f, "boss source");
+                AssertGeometry(renderer, family.source, 8f, 20f, 0f, "explicit override");
                 Step(Animation(renderer, source), null, Vector3.zero, 0f);
-                AssertGeometry(renderer, family.frames[0], 1.9f, 3.2f, 0f, "boss frame");
-                enemyType.GetMethod("SetVisualProfile").Invoke(visual, new object[] { 2f, 3.2f });
-                AssertGeometry(renderer, family.frames[0], 2f, 3.2f, 0f, "profile changed on animated frame");
-                float expected = Mathf.Min(2f * renderer.sprite.pixelsPerUnit / family.maxVisibleHeight,
-                                           3.2f * renderer.sprite.pixelsPerUnit / family.maxVisibleWidth);
+                AssertGeometry(renderer, family.frames[0], 8f, 20f, 0f, "animated override");
+                enemyType.GetMethod("ApplySpeciesScale").Invoke(visual, null);
+                AssertGeometry(renderer, family.frames[0], 7f, 20f, 0f, "species restored on animated frame");
+                float expected = 7f * renderer.sprite.pixelsPerUnit / family.maxVisibleHeight;
                 Assert.That(renderer.transform.localScale.x, Is.EqualTo(expected).Within(.00001f));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(actor); }
+        }
+
+        [Test]
+        public void EverySpeciesReachesItsPokedexHeightAndKeepsAllSixFramesGrounded()
+        {
+            var sizesAsset = Resources.Load<TextAsset>("PokemonPhysicalSizes");
+            Assert.IsNotNull(sizesAsset);
+            var sizes = JsonUtility.FromJson<PhysicalSizes>(sizesAsset.text).families;
+            CollectionAssert.AreEquivalent(metrics.families.Select(f => f.name), sizes.Select(f => f.name));
+            var sizeType = visuals.Assembly.GetType("Game.Pokemon.PokemonPhysicalSize");
+            var enemyType = visuals.Assembly.GetType("Game.Pokemon.PokemonEnemyVisual");
+            var cameraObject = new GameObject("physical size camera");
+            try
+            {
+                var camera = cameraObject.AddComponent<Camera>();
+                foreach (var family in metrics.families)
+                {
+                    var actor = new GameObject("size " + family.name);
+                    try
+                    {
+                        var source = Resources.Load<Sprite>(family.source.resource);
+                        float height = sizes.Single(s => s.name == family.name).heightMeters;
+                        float width = (float)sizeType.GetMethod("WidthFor").Invoke(null, new object[] { source, height });
+                        enemyType.GetMethod("Attach").Invoke(null, new object[] { actor, source });
+                        var renderer = actor.GetComponentsInChildren<SpriteRenderer>().Single(r => r.sprite == source);
+                        Assert.That(family.source.visibleHeight * renderer.transform.localScale.y / source.pixelsPerUnit,
+                                    Is.EqualTo(height).Within(.00001f), family.name);
+                        var animation = Animation(renderer, source);
+                        var directions = new[] { Vector3.back, Vector3.forward, Vector3.left };
+                        for (int view = 0; view < 3; view++)
+                        for (int phase = 0; phase < 2; phase++)
+                        {
+                            Step(animation, camera, directions[view], phase == 0 ? 0f : .17f);
+                            AssertGeometry(renderer, family.frames[view * 2 + phase], height, width, 0f, family.name);
+                            Assert.That(family.maxVisibleHeight * renderer.transform.localScale.y / source.pixelsPerUnit,
+                                        Is.EqualTo(height).Within(.00001f), family.name);
+                        }
+                        var shadow = actor.transform.Find("Ground Contact");
+                        Assert.That(shadow.localScale.x, Is.EqualTo(height * .65f).Within(.00001f), family.name);
+                        Assert.AreEqual(Vector3.one, actor.transform.localScale);
+                    }
+                    finally { UnityEngine.Object.DestroyImmediate(actor); }
+                }
+            }
+            finally { UnityEngine.Object.DestroyImmediate(cameraObject); }
+        }
+
+        [TestCase("species_ditto", .3f)]
+        [TestCase("species_charizard", 1.7f)]
+        [TestCase("species_gyarados", 6.5f)]
+        [TestCase("species_rayquaza", 7f)]
+        public void NormalAndBossInitializationKeepSpeciesHeightAndHealthBarAboveIt(string name, float height)
+        {
+            var family = metrics.families.Single(f => f.name == name);
+            var source = Resources.Load<Sprite>(family.source.resource);
+            var factory = visuals.Assembly.GetType("Game.Enemies.EnemyTriangleFactory");
+            var actor = (GameObject)factory.GetMethod("Create", new[] { typeof(int), typeof(Sprite) })
+                .Invoke(null, new object[] { 1, source });
+            try
+            {
+                var enemyType = visuals.Assembly.GetType("Game.Enemies.EnemyTriangle");
+                var enemy = actor.GetComponent(enemyType);
+                // EditMode AddComponent does not run this gameplay component's Awake.
+                if (actor.transform.Find("HealthBar") == null)
+                    enemyType.GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(enemy, null);
+                var reset = enemyType.GetMethod("ResetCombatState", BindingFlags.Instance | BindingFlags.NonPublic);
+                var renderer = actor.GetComponentsInChildren<SpriteRenderer>().Single(r => r.sprite == source);
+                foreach (bool boss in new[] { true, false, true })
+                {
+                    reset.Invoke(enemy, new object[] { boss, 1f });
+                    Assert.That(family.source.visibleHeight * renderer.transform.localScale.y / source.pixelsPerUnit,
+                                Is.EqualTo(height).Within(.00001f), name);
+                    Assert.That(actor.transform.Find("HealthBar").localPosition.y,
+                                Is.EqualTo(height + .27f).Within(.00001f), name);
+                    Assert.AreSame(source, renderer.sprite);
+                    Assert.AreEqual(Vector3.one, actor.transform.localScale);
+                }
             }
             finally { UnityEngine.Object.DestroyImmediate(actor); }
         }
