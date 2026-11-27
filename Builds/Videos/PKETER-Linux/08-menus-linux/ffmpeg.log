@@ -1,0 +1,4 @@
+[in#0/x11grab @ 0x559b1fe8c4c0] Stream #0: not enough frames to estimate rate; consider increasing probesize
+[aist#1:0/pcm_s16le @ 0x559b1fea1140] Guessed Channel Layout: stereo
+[aost#0:1/pcm_s16le @ 0x559b1fea6100] Non-monotonic DTS; previous: 47951, current: 47900; changing to 47951. This may result in incorrect timestamps in the output file.
+[aost#0:1/pcm_s16le @ 0x559b1fea6100] Non-monotonic DTS; previous: 55591, current: 55553; changing to 55591. This may result in incorrect timestamps in the output file.

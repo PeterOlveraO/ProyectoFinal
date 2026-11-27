@@ -1,0 +1,2 @@
+[in#0/x11grab @ 0x55cf264e04c0] Stream #0: not enough frames to estimate rate; consider increasing probesize
+[aist#1:0/pcm_s16le @ 0x55cf264f5140] Guessed Channel Layout: stereo

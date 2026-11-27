@@ -1,0 +1,15 @@
+{
+  "description": "Recorrido editado: se omiten esperas y pantallas sin interfaz del vídeo nativo.",
+  "ranges": [
+    [1.0, 3.0],
+    [9.4, 7.7],
+    [17.65, 2.6],
+    [20.65, 3.1],
+    [26.5, 4.0],
+    [31.1, 4.0],
+    [35.8, 2.2],
+    [38.6, 2.4],
+    [77.0, 4.0],
+    [1.0, 3.0]
+  ]
+}

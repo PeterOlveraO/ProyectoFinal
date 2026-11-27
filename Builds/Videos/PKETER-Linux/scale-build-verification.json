@@ -1,0 +1,34 @@
+[
+  {
+    "assembly": "Game.Runtime.dll",
+    "originalMethods": 1047,
+    "captureMethods": 1047,
+    "changed": [],
+    "removed": [],
+    "added": []
+  },
+  {
+    "assembly": "Pokemon.Combat.dll",
+    "originalMethods": 8,
+    "captureMethods": 8,
+    "changed": [],
+    "removed": [],
+    "added": []
+  },
+  {
+    "assembly": "Pokemon.Progression.dll",
+    "originalMethods": 78,
+    "captureMethods": 78,
+    "changed": [],
+    "removed": [],
+    "added": []
+  },
+  {
+    "assembly": "Game.Terrain.dll",
+    "originalMethods": 189,
+    "captureMethods": 189,
+    "changed": [],
+    "removed": [],
+    "added": []
+  }
+]

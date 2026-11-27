@@ -1,0 +1,8 @@
+file '01-jolteon-basico-soleado-mewtwo.mp4'
+file '02-charizard-rafaga-atardecer-ho-oh.mp4'
+file '03-vaporeon-abanico-lluvia.mp4'
+file '04-gengar-perforante-niebla-darkrai.mp4'
+file '05-lucario-precision-nublado-rayquaza.mp4'
+file '06-venusaur-bumeran-noche-lugia.mp4'
+file '07-blastoise-explosivo-lluvia.mp4'
+file '08-menus-linux.mp4'

@@ -1,0 +1,23 @@
+{
+  "platform": "LinuxPlayer",
+  "unity": "6000.5.11f1",
+  "executable": "/home/peter/Documentos/Uni/DE/Unity/ProyectoFinal/Builds/Linux/PKETER-Capture/PKETER.x86_64",
+  "species": "blastoise",
+  "isEditor": false,
+  "width": 1280,
+  "height": 720,
+  "activeTouchControls": 0,
+  "zone": 8,
+  "arena": {
+    "x": 40.5,
+    "y": 0.5,
+    "z": 40.5
+  },
+  "distanceFromSpawn": 124.45079040527344,
+  "sizeCatalogSHA256": "ac56457b252fc54c79f91852228cb6f36744f38df9ebb01c5db6ed482204da65",
+  "scaleSourceCommit": "13e84d586d7b8247007b0de387528251f63dc1a3",
+  "playerSHA256": "78fd4776b65e70e3e0ac9e2daf7af26b8c94372247ceaf0dd4edf8b1bb4d4096",
+  "windowId": "27262984",
+  "windowGeometry": "WINDOW=27262984\nX=104\nY=174\nWIDTH=1280\nHEIGHT=720\nSCREEN=0\n",
+  "recordingSeconds": 20.4991923330017
+}

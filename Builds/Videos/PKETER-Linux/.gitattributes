@@ -1,0 +1,2 @@
+# Original recordings use the same Git LFS storage as the exported MP4 videos.
+*.mkv filter=lfs diff=lfs merge=lfs -text

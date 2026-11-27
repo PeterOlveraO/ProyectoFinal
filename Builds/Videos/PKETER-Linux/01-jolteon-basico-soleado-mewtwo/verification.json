@@ -1,0 +1,29 @@
+{
+  "platform": "LinuxPlayer",
+  "unity": "6000.5.11f1",
+  "executable": "/home/peter/Documentos/Uni/DE/Unity/ProyectoFinal/Builds/Linux/PKETER-Capture/PKETER.x86_64",
+  "species": "jolteon",
+  "isEditor": false,
+  "width": 1280,
+  "height": 720,
+  "activeTouchControls": 0,
+  "zone": 2,
+  "arena": {
+    "x": 128.5,
+    "y": 0.5,
+    "z": 216.5
+  },
+  "distanceFromSpawn": 88.0,
+  "sizeCatalogSHA256": "ac56457b252fc54c79f91852228cb6f36744f38df9ebb01c5db6ed482204da65",
+  "scaleSourceCommit": "13e84d586d7b8247007b0de387528251f63dc1a3",
+  "playerSHA256": "78fd4776b65e70e3e0ac9e2daf7af26b8c94372247ceaf0dd4edf8b1bb4d4096",
+  "windowId": "27262984",
+  "windowGeometry": "WINDOW=27262984\nX=104\nY=174\nWIDTH=1280\nHEIGHT=720\nSCREEN=0\n",
+  "recordingSeconds": 21.537884510998992,
+  "file": "01-jolteon-basico-soleado-mewtwo.mp4",
+  "duration": 20,
+  "bytes": 10782546,
+  "sourceTrimSeconds": 0.7281154890010072,
+  "audioRms": 0.08276056236591434,
+  "decodedWithoutErrors": true
+}

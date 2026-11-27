@@ -1,0 +1,13 @@
+[in#0/x11grab @ 0x56282bb0e4c0] Stream #0: not enough frames to estimate rate; consider increasing probesize
+[aist#1:0/pcm_s16le @ 0x56282bb23140] Guessed Channel Layout: stereo
+[aost#0:1/pcm_s16le @ 0x56282bb28040] Non-monotonic DTS; previous: 6830, current: 6790; changing to 6830. This may result in incorrect timestamps in the output file.
+[aost#0:1/pcm_s16le @ 0x56282bb28040] Non-monotonic DTS; previous: 6830, current: 6776; changing to 6830. This may result in incorrect timestamps in the output file.
+[aost#0:1/pcm_s16le @ 0x56282bb28040] Non-monotonic DTS; previous: 6830, current: 6788; changing to 6830. This may result in incorrect timestamps in the output file.
+[aost#0:1/pcm_s16le @ 0x56282bb28040] Non-monotonic DTS; previous: 6830, current: 6822; changing to 6830. This may result in incorrect timestamps in the output file.
+[aost#0:1/pcm_s16le @ 0x56282bb28040] Non-monotonic DTS; previous: 7096, current: 7013; changing to 7096. This may result in incorrect timestamps in the output file.
+[aost#0:1/pcm_s16le @ 0x56282bb28040] Non-monotonic DTS; previous: 7096, current: 6922; changing to 7096. This may result in incorrect timestamps in the output file.
+[aost#0:1/pcm_s16le @ 0x56282bb28040] Non-monotonic DTS; previous: 7096, current: 6881; changing to 7096. This may result in incorrect timestamps in the output file.
+[aost#0:1/pcm_s16le @ 0x56282bb28040] Non-monotonic DTS; previous: 7096, current: 6883; changing to 7096. This may result in incorrect timestamps in the output file.
+[aost#0:1/pcm_s16le @ 0x56282bb28040] Non-monotonic DTS; previous: 7096, current: 6918; changing to 7096. This may result in incorrect timestamps in the output file.
+[aost#0:1/pcm_s16le @ 0x56282bb28040] Non-monotonic DTS; previous: 7096, current: 6972; changing to 7096. This may result in incorrect timestamps in the output file.
+[aost#0:1/pcm_s16le @ 0x56282bb28040] Non-monotonic DTS; previous: 7096, current: 7035; changing to 7096. This may result in incorrect timestamps in the output file.
